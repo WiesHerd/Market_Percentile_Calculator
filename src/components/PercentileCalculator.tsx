@@ -47,8 +47,43 @@ export default function PercentileCalculator() {
         let data: MarketData[] = storedData ? JSON.parse(storedData) : [];
         
         if (data.length === 0) {
-          const response = await fetch('/api/market-data');
-          data = await response.json();
+          try {
+            // First try to load the CSV file
+            const csvResponse = await fetch('/Market_Percentile_Calculator/data/market-reference-data.csv');
+            const csvText = await csvResponse.text();
+            
+            const parsedData: MarketData[] = [];
+            Papa.parse(csvText, {
+              header: true,
+              skipEmptyLines: true,
+              complete: (results) => {
+                results.data.forEach((row: any, index: number) => {
+                  const newData: MarketData = {
+                    id: `default_${index + 1}`,
+                    specialty: row.specialty,
+                    p25_total: parseFloat(row.p25_TCC || '0'),
+                    p50_total: parseFloat(row.p50_TCC || '0'),
+                    p75_total: parseFloat(row.p75_TCC || '0'),
+                    p90_total: parseFloat(row.p90_TCC || '0'),
+                    p25_wrvu: parseFloat(row.p25_wrvu || '0'),
+                    p50_wrvu: parseFloat(row.p50_wrvu || '0'),
+                    p75_wrvu: parseFloat(row.p75_wrvu || '0'),
+                    p90_wrvu: parseFloat(row.p90_wrvu || '0'),
+                    p25_cf: parseFloat(row.p25_cf || '0'),
+                    p50_cf: parseFloat(row.p50_cf || '0'),
+                    p75_cf: parseFloat(row.p75_cf || '0'),
+                    p90_cf: parseFloat(row.p90_cf || '0')
+                  };
+                  parsedData.push(newData);
+                });
+              }
+            });
+            data = parsedData;
+          } catch (csvError) {
+            // If CSV loading fails, fall back to JSON
+            const jsonResponse = await fetch('/Market_Percentile_Calculator/data/market-data.json');
+            data = await jsonResponse.json();
+          }
         }
         
         setMarketData(data);
