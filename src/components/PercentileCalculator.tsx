@@ -36,72 +36,169 @@ export default function PercentileCalculator() {
   const [physicianName, setPhysicianName] = useState('');
   const [notes, setNotes] = useState('');
   const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>([]);
+  const [showInitialChoice, setShowInitialChoice] = useState(true);
+  const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
 
-  // Load market data and calculation history on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        // Load market data
-        const storedData = localStorage.getItem('uploadedMarketData');
-        let data: MarketData[] = storedData ? JSON.parse(storedData) : [];
-        
-        if (data.length === 0) {
-          try {
-            // First try to load the CSV file
-            const csvResponse = await fetch('/Market_Percentile_Calculator/data/market-reference-data.csv');
-            const csvText = await csvResponse.text();
-            
-            const parsedData: MarketData[] = [];
-            Papa.parse(csvText, {
-              header: true,
-              skipEmptyLines: true,
-              complete: (results) => {
-                results.data.forEach((row: any, index: number) => {
-                  const newData: MarketData = {
-                    id: `default_${index + 1}`,
-                    specialty: row.specialty,
-                    p25_total: parseFloat(row.p25_TCC || '0'),
-                    p50_total: parseFloat(row.p50_TCC || '0'),
-                    p75_total: parseFloat(row.p75_TCC || '0'),
-                    p90_total: parseFloat(row.p90_TCC || '0'),
-                    p25_wrvu: parseFloat(row.p25_wrvu || '0'),
-                    p50_wrvu: parseFloat(row.p50_wrvu || '0'),
-                    p75_wrvu: parseFloat(row.p75_wrvu || '0'),
-                    p90_wrvu: parseFloat(row.p90_wrvu || '0'),
-                    p25_cf: parseFloat(row.p25_cf || '0'),
-                    p50_cf: parseFloat(row.p50_cf || '0'),
-                    p75_cf: parseFloat(row.p75_cf || '0'),
-                    p90_cf: parseFloat(row.p90_cf || '0')
-                  };
-                  parsedData.push(newData);
-                });
+  const handleUsePreloadedData = () => {
+    localStorage.setItem('dataChoiceMade', 'true');
+    setShowInitialChoice(false);
+    setHasUserMadeChoice(true);
+    loadData();
+  };
+
+  const handleInitialFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    setError(null);
+
+    if (!file.name.endsWith('.csv')) {
+      setError('Please upload a CSV file');
+      setIsProcessing(false);
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const processedData: MarketData[] = [];
+          let rowErrors: string[] = [];
+          
+          results.data.forEach((row: any, index: number) => {
+            const specialty = row.specialty?.trim();
+            if (!specialty) {
+              rowErrors.push(`Row ${index + 1}: Missing specialty`);
+              return;
+            }
+
+            try {
+              const newData: MarketData = {
+                id: `uploaded_${index}`,
+                specialty,
+                p25_total: parseFloat(row.p25_TCC || '0'),
+                p50_total: parseFloat(row.p50_TCC || '0'),
+                p75_total: parseFloat(row.p75_TCC || '0'),
+                p90_total: parseFloat(row.p90_TCC || '0'),
+                p25_wrvu: parseFloat(row.p25_wrvu || '0'),
+                p50_wrvu: parseFloat(row.p50_wrvu || '0'),
+                p75_wrvu: parseFloat(row.p75_wrvu || '0'),
+                p90_wrvu: parseFloat(row.p90_wrvu || '0'),
+                p25_cf: parseFloat(row.p25_cf || '0'),
+                p50_cf: parseFloat(row.p50_cf || '0'),
+                p75_cf: parseFloat(row.p75_cf || '0'),
+                p90_cf: parseFloat(row.p90_cf || '0')
+              };
+
+              // Validate the data
+              const hasValidData = 
+                !isNaN(newData.p25_total) && !isNaN(newData.p50_total) && 
+                !isNaN(newData.p75_total) && !isNaN(newData.p90_total) &&
+                !isNaN(newData.p25_wrvu) && !isNaN(newData.p50_wrvu) &&
+                !isNaN(newData.p75_wrvu) && !isNaN(newData.p90_wrvu) &&
+                !isNaN(newData.p25_cf) && !isNaN(newData.p50_cf) &&
+                !isNaN(newData.p75_cf) && !isNaN(newData.p90_cf);
+
+              if (hasValidData) {
+                processedData.push(newData);
+              } else {
+                rowErrors.push(`Row ${index + 1}: Invalid data format`);
               }
-            });
-            data = parsedData;
-          } catch (csvError) {
-            // If CSV loading fails, fall back to JSON
-            const jsonResponse = await fetch('/Market_Percentile_Calculator/data/market-data.json');
-            data = await jsonResponse.json();
+            } catch (err) {
+              rowErrors.push(`Row ${index + 1}: Error processing data`);
+            }
+          });
+
+          if (rowErrors.length > 0) {
+            setError(`Errors found in CSV:\n${rowErrors.join('\n')}`);
           }
-        }
-        
-        setMarketData(data);
 
-        // Load calculation history
-        const storedHistory = localStorage.getItem('calculationHistory');
-        if (storedHistory) {
-          setCalculationHistory(JSON.parse(storedHistory));
+          if (processedData.length > 0) {
+            localStorage.setItem('uploadedMarketData', JSON.stringify(processedData));
+            localStorage.setItem('dataChoiceMade', 'true');
+            setMarketData(processedData);
+            setShowInitialChoice(false);
+            setHasUserMadeChoice(true);
+          } else {
+            setError('No valid data found in the CSV file');
+          }
+          setIsProcessing(false);
+        },
+        error: (error: ParseError) => {
+          setError(`Error parsing file: ${error.message}`);
+          setIsProcessing(false);
         }
+      });
+    } catch (err) {
+      setError(`Error reading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setIsProcessing(false);
+    }
+  };
 
-        setError(null);
-      } catch (err) {
-        setError('Failed to load data. Please try again later.');
-      } finally {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const choiceMade = localStorage.getItem('dataChoiceMade');
+      if (!choiceMade) {
+        setShowInitialChoice(true);
         setLoading(false);
+        return;
       }
-    };
 
+      const storedData = localStorage.getItem('uploadedMarketData');
+      let data: MarketData[] = storedData ? JSON.parse(storedData) : [];
+      
+      if (data.length === 0) {
+        try {
+          const csvResponse = await fetch('/Market_Percentile_Calculator/data/market-reference-data.csv');
+          const csvText = await csvResponse.text();
+          
+          const parsedData: MarketData[] = [];
+          Papa.parse(csvText, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+              results.data.forEach((row: any, index: number) => {
+                const newData: MarketData = {
+                  id: `default_${index + 1}`,
+                  specialty: row.specialty,
+                  p25_total: parseFloat(row.p25_TCC || '0'),
+                  p50_total: parseFloat(row.p50_TCC || '0'),
+                  p75_total: parseFloat(row.p75_TCC || '0'),
+                  p90_total: parseFloat(row.p90_TCC || '0'),
+                  p25_wrvu: parseFloat(row.p25_wrvu || '0'),
+                  p50_wrvu: parseFloat(row.p50_wrvu || '0'),
+                  p75_wrvu: parseFloat(row.p75_wrvu || '0'),
+                  p90_wrvu: parseFloat(row.p90_wrvu || '0'),
+                  p25_cf: parseFloat(row.p25_cf || '0'),
+                  p50_cf: parseFloat(row.p50_cf || '0'),
+                  p75_cf: parseFloat(row.p75_cf || '0'),
+                  p90_cf: parseFloat(row.p90_cf || '0')
+                };
+                parsedData.push(newData);
+              });
+            }
+          });
+          data = parsedData;
+        } catch (csvError) {
+          const jsonResponse = await fetch('/Market_Percentile_Calculator/data/market-data.json');
+          data = await jsonResponse.json();
+        }
+      }
+      
+      setMarketData(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load data. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
 
@@ -451,6 +548,48 @@ export default function PercentileCalculator() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
+      {/* Initial Data Choice Modal */}
+      {showInitialChoice && !hasUserMadeChoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Data Source</h2>
+            <p className="text-gray-600 mb-6">
+              Would you like to use our preloaded market data or upload your own data?
+            </p>
+            <div className="space-y-4">
+              <button
+                onClick={handleUsePreloadedData}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Use Preloaded Market Data
+              </button>
+              <div className="relative">
+                <label className="w-full px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer flex items-center justify-center">
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleInitialFileUpload}
+                    className="hidden"
+                  />
+                  Upload My Own Data (CSV)
+                </label>
+              </div>
+            </div>
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 rounded-lg text-red-700 text-sm">
+                {error}
+              </div>
+            )}
+            {isProcessing && (
+              <div className="mt-4 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <span className="ml-3 text-gray-600">Processing...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Title Section */}
         <div className="text-center mb-8">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { MarketData } from '@/types/logs';
-import { ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowUpTrayIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
 export default function MarketDataPage() {
@@ -188,6 +188,13 @@ export default function MarketDataPage() {
     row.specialty.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleResetToDefault = () => {
+    // Clear uploaded data
+    localStorage.removeItem('uploadedMarketData');
+    // Force reload the page to load default data
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -196,12 +203,21 @@ export default function MarketDataPage() {
             <h1 className="text-3xl font-bold text-gray-900">Market Data</h1>
             <p className="mt-2 text-lg text-gray-600">View and manage compensation data across specialties</p>
           </div>
-          <Link
-            href="/"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Back to Calculator
-          </Link>
+          <div className="flex gap-4">
+            <button
+              onClick={handleResetToDefault}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <ArrowPathIcon className="w-4 h-4 mr-2" />
+              Reset to Default Data
+            </button>
+            <Link
+              href="/"
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Back to Calculator
+            </Link>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
