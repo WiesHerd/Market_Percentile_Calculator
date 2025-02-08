@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
-  basePath: '/Market_Percentile_Calculator',
+  basePath: process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '',
   images: {
     unoptimized: true,
   },
