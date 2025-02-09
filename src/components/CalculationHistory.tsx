@@ -1,9 +1,11 @@
 'use client';
 
 import { CalculationHistory, MarketData } from '@/types/logs';
-import { ClockIcon, TrashIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, TrashIcon, PrinterIcon, DocumentTextIcon, ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { format } from 'date-fns';
 import { useState } from 'react';
+import Link from 'next/link';
+import React from 'react';
 
 interface CalculationHistoryProps {
   history: CalculationHistory[];
@@ -21,6 +23,7 @@ export function CalculationHistoryView({
   getMetricLabel
 }: CalculationHistoryProps) {
   const [selectedReport, setSelectedReport] = useState<CalculationHistory | null>(null);
+  const [showComplianceDetails, setShowComplianceDetails] = useState<string | null>(null);
 
   const handlePrint = (calculation: CalculationHistory) => {
     // Store the data and open print preview
@@ -90,58 +93,124 @@ export function CalculationHistoryView({
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {history.map((calc) => (
-              <tr
-                key={calc.id}
-                className="hover:bg-gray-50 transition-colors"
-              >
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{calc.physicianName}</div>
-                    {calc.notes && (
-                      <div className="text-xs text-gray-500 mt-0.5 italic">{calc.notes}</div>
+              <React.Fragment key={calc.id}>
+                <tr
+                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => setShowComplianceDetails(showComplianceDetails === calc.id ? null : calc.id)}
+                >
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{calc.physicianName}</div>
+                      {calc.notes && (
+                        <div className="text-xs text-gray-500 mt-0.5 italic">{calc.notes}</div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{calc.specialty}</div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{getTableMetricLabel(calc.metric)}</div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <div className="text-sm font-medium text-gray-900">
+                      {formatValue(calc.value, calc.metric)}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right">
+                    <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {calc.percentile.toFixed(1)}th
+                    </div>
+                    {calc.complianceChecks && calc.complianceChecks.length > 0 && (
+                      <div className="inline-flex ml-2">
+                        {calc.complianceChecks.some(check => check.type === 'flag') && (
+                          <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                        )}
+                        {calc.complianceChecks.some(check => check.type === 'warning') && (
+                          <ExclamationTriangleIcon className="h-4 w-4 text-yellow-500" />
+                        )}
+                      </div>
                     )}
-                  </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{calc.specialty}</div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm text-gray-900">{getTableMetricLabel(calc.metric)}</div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-right">
-                  <div className="text-sm font-medium text-gray-900">
-                    {formatValue(calc.value, calc.metric)}
-                  </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-right">
-                  <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {calc.percentile.toFixed(1)}th
-                  </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <div className="text-sm text-gray-500">
-                    {format(new Date(calc.timestamp), 'MMM d, yyyy h:mm a')}
-                  </div>
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex items-center justify-end space-x-2">
-                    <button
-                      onClick={() => handlePrint(calc)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full p-1"
-                      title="Print report"
-                    >
-                      <PrinterIcon className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => onDelete(calc.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full p-1"
-                      title="Delete calculation"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="text-sm text-gray-500">
+                      {format(new Date(calc.timestamp), 'MMM d, yyyy h:mm a')}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePrint(calc);
+                        }}
+                        className="text-gray-400 hover:text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full p-1"
+                        title="Print report"
+                      >
+                        <PrinterIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete(calc.id);
+                        }}
+                        className="text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full p-1"
+                        title="Delete calculation"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {showComplianceDetails === calc.id && (
+                  (calc.complianceChecks?.length ?? 0) > 0 || calc.fairMarketValue
+                ) && (
+                  <tr className="bg-gray-50">
+                    <td colSpan={7} className="px-4 py-3">
+                      <div className="text-sm">
+                        {calc.complianceChecks?.map((check) => (
+                          <div
+                            key={check.id}
+                            className={`flex items-center space-x-2 mb-2 ${
+                              check.type === 'flag'
+                                ? 'text-red-700'
+                                : check.type === 'warning'
+                                ? 'text-yellow-700'
+                                : 'text-blue-700'
+                            }`}
+                          >
+                            {check.type === 'flag' ? (
+                              <ExclamationTriangleIcon className="h-4 w-4" />
+                            ) : check.type === 'warning' ? (
+                              <ExclamationTriangleIcon className="h-4 w-4" />
+                            ) : (
+                              <InformationCircleIcon className="h-4 w-4" />
+                            )}
+                            <span>{check.message}</span>
+                          </div>
+                        ))}
+                        {calc.fairMarketValue && (
+                          <div className="mt-2 text-gray-600">
+                            <span className="font-medium">Fair Market Value Range: </span>
+                            {calc.fairMarketValue.min.toLocaleString('en-US', {
+                              style: 'currency',
+                              currency: 'USD',
+                              maximumFractionDigits: 0,
+                            })} - {calc.fairMarketValue.max.toLocaleString('en-US', {
+                              style: 'currency',
+                              currency: 'USD',
+                              maximumFractionDigits: 0,
+                            })}
+                            <span className="text-gray-500 ml-2">
+                              (Source: {calc.fairMarketValue.source})
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>

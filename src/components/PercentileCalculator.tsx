@@ -10,6 +10,8 @@ import { CalculationHistoryView } from './CalculationHistory';
 import Papa from 'papaparse';
 import Link from 'next/link';
 import Image from 'next/image';
+import { performComplianceChecks, createAuditLog, getFairMarketValue, formatComplianceMessage } from '@/utils/compliance';
+import { ComplianceInfo } from './ComplianceInfo';
 
 interface UploadedData {
   specialty: string;
@@ -24,22 +26,66 @@ interface ParseError {
 
 export default function PercentileCalculator() {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>('total');
-  const [inputValue, setInputValue] = useState<string>('');
-  const [calculatedPercentile, setCalculatedPercentile] = useState<number | null>(null);
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>(() => 
+    localStorage.getItem('selectedSpecialty') || ''
+  );
+  const [selectedMetric, setSelectedMetric] = useState<MetricType>(() => 
+    (localStorage.getItem('selectedMetric') as MetricType) || 'total'
+  );
+  const [inputValue, setInputValue] = useState<string>(() => 
+    localStorage.getItem('inputValue') || ''
+  );
+  const [calculatedPercentile, setCalculatedPercentile] = useState<number | null>(() => {
+    const saved = localStorage.getItem('calculatedPercentile');
+    return saved ? parseFloat(saved) : null;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadedData, setUploadedData] = useState<UploadedData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDataTable, setShowDataTable] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [physicianName, setPhysicianName] = useState('');
-  const [notes, setNotes] = useState('');
-  const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>([]);
+  const [physicianName, setPhysicianName] = useState<string>(() => 
+    localStorage.getItem('physicianName') || ''
+  );
+  const [notes, setNotes] = useState<string>(() => 
+    localStorage.getItem('notes') || ''
+  );
+  const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>(() => {
+    const saved = localStorage.getItem('calculationHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showInitialChoice, setShowInitialChoice] = useState(true);
   const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
   const [showTemplateGuide, setShowTemplateGuide] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('selectedSpecialty', selectedSpecialty);
+  }, [selectedSpecialty]);
+
+  useEffect(() => {
+    localStorage.setItem('selectedMetric', selectedMetric);
+  }, [selectedMetric]);
+
+  useEffect(() => {
+    localStorage.setItem('inputValue', inputValue);
+  }, [inputValue]);
+
+  useEffect(() => {
+    if (calculatedPercentile !== null) {
+      localStorage.setItem('calculatedPercentile', calculatedPercentile.toString());
+    } else {
+      localStorage.removeItem('calculatedPercentile');
+    }
+  }, [calculatedPercentile]);
+
+  useEffect(() => {
+    localStorage.setItem('physicianName', physicianName);
+  }, [physicianName]);
+
+  useEffect(() => {
+    localStorage.setItem('notes', notes);
+  }, [notes]);
 
   const handleUsePreloadedData = () => {
     localStorage.setItem('dataChoiceMade', 'true');
@@ -391,6 +437,28 @@ export default function PercentileCalculator() {
     }
 
     percentile = Math.min(100, Math.max(0, percentile));
+
+    // Perform compliance checks
+    const complianceChecks = performComplianceChecks(
+      selectedSpecialty,
+      selectedMetric,
+      value,
+      percentile,
+      marketData
+    );
+
+    // Get Fair Market Value data if available
+    const fairMarketValue = getFairMarketValue(selectedSpecialty);
+
+    // Create audit log
+    const auditLog = createAuditLog('calculation', {
+      specialty: selectedSpecialty,
+      metric: selectedMetric,
+      value,
+      percentile,
+      complianceFlags: complianceChecks,
+      fairMarketValue,
+    });
     
     // Save calculation to history
     const newCalculation: CalculationHistory = {
@@ -401,15 +469,25 @@ export default function PercentileCalculator() {
       value,
       percentile,
       timestamp: new Date().toISOString(),
-      notes: notes.trim() || undefined
+      notes: notes.trim() || undefined,
+      complianceChecks,
+      fairMarketValue,
+      auditId: auditLog.id
     };
 
     const updatedHistory = [newCalculation, ...calculationHistory];
     setCalculationHistory(updatedHistory);
     localStorage.setItem('calculationHistory', JSON.stringify(updatedHistory));
-    
     setCalculatedPercentile(percentile);
-    setError(null);
+
+    // Show compliance alerts if any
+    if (complianceChecks.length > 0) {
+      const messages = complianceChecks.map(formatComplianceMessage);
+      messages.forEach(message => {
+        // You can implement a toast or alert system here
+        console.log(`${message.title}: ${message.description} (${message.severity})`);
+      });
+    }
   };
 
   const clearInputs = () => {
@@ -420,6 +498,14 @@ export default function PercentileCalculator() {
     setPhysicianName('');
     setNotes('');
     setError(null);
+    
+    // Clear related localStorage items
+    localStorage.removeItem('selectedSpecialty');
+    localStorage.removeItem('selectedMetric');
+    localStorage.removeItem('inputValue');
+    localStorage.removeItem('calculatedPercentile');
+    localStorage.removeItem('physicianName');
+    localStorage.removeItem('notes');
   };
 
   const deleteCalculation = (id: string) => {
@@ -562,6 +648,19 @@ export default function PercentileCalculator() {
     );
   }, [marketData, searchTerm]);
 
+  const clearAllData = () => {
+    // Clear all states
+    clearInputs();
+    setCalculationHistory([]);
+    setMarketData([]);
+    
+    // Clear all localStorage
+    localStorage.clear();
+    
+    // Reload the page to reset the app to its initial state
+    window.location.reload();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       {/* Initial Data Choice Modal */}
@@ -657,19 +756,19 @@ export default function PercentileCalculator() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Title Section */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-4 mb-6">
+        <div className="text-center mb-6">
+          <div className="flex items-center justify-center gap-3 mb-4">
             <Image
               src="/WH Logo.webp"
               alt="WH Logo"
-              width={64}
-              height={64}
+              width={48}
+              height={48}
               className="rounded-lg shadow-sm"
               priority
             />
-            <h1 className="text-3xl font-bold text-gray-900">Provider Percentile Calculator</h1>
+            <h1 className="text-2xl font-semibold text-gray-900">Provider Percentile Calculator</h1>
           </div>
-          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+          <p className="text-base text-gray-600 text-center">
             Calculate and analyze provider compensation percentiles across specialties
           </p>
         </div>
@@ -687,7 +786,7 @@ export default function PercentileCalculator() {
                 </div>
                 <Link
                   href="/market-data"
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center justify-center w-[180px] px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <TableCellsIcon className="w-4 h-4 mr-2" />
                   View Market Data
@@ -819,9 +918,9 @@ export default function PercentileCalculator() {
                 <button
                   type="button"
                   onClick={clearInputs}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <XMarkIcon className="w-4 h-4 mr-2" />
+                  <XMarkIcon className="w-4 h-4 mr-1.5" />
                   Clear
                 </button>
                 <button
@@ -830,7 +929,7 @@ export default function PercentileCalculator() {
                   disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <CalculatorIcon className="w-4 h-4 mr-2" />
+                  <CalculatorIcon className="w-4 h-4 mr-1.5" />
                   Calculate Percentile
                 </button>
               </div>
@@ -866,6 +965,15 @@ export default function PercentileCalculator() {
                   formatValue={formatValue}
                   getMetricLabel={getMetricLabel}
                 />
+
+                {/* Compliance Information */}
+                {calculationHistory[0] && (
+                  <ComplianceInfo
+                    complianceChecks={calculationHistory[0].complianceChecks || []}
+                    fairMarketValue={calculationHistory[0].fairMarketValue}
+                    metric={selectedMetric}
+                  />
+                )}
               </div>
             </div>
           )}
