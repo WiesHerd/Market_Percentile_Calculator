@@ -9,7 +9,8 @@ const nextConfig = {
     // Disable ESLint during build
     ignoreDuringBuilds: true,
   },
-  trailingSlash: false,
+  trailingSlash: true,
+  assetPrefix: process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '',
 }
 
 export default nextConfig;
