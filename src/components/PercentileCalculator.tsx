@@ -994,15 +994,17 @@ export default function PercentileCalculator() {
                 </div>
 
                 {/* Graph */}
-                <PercentileGraph
-                  marketData={marketData}
-                  selectedSpecialty={selectedSpecialty}
-                  selectedMetric={selectedMetric}
-                  inputValue={inputValue}
-                  calculatedPercentile={calculatedPercentile}
-                  formatValue={formatValue}
-                  getMetricLabel={getMetricLabel}
-                />
+                {calculatedPercentile !== null && marketData.length > 0 && selectedSpecialty && (
+                  <PercentileGraph
+                    marketData={marketData}
+                    selectedSpecialty={selectedSpecialty}
+                    selectedMetric={selectedMetric}
+                    inputValue={inputValue}
+                    calculatedPercentile={calculatedPercentile}
+                    formatValue={formatValue}
+                    getMetricLabel={getMetricLabel}
+                  />
+                )}
 
                 {/* Compliance Information */}
                 {calculationHistory[0] && (

@@ -1,0 +1,5 @@
+[33me3e6b83[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Enhanced graph visualization: Added red reference line with value labels, improved styling and fixed conditional rendering
+[33mcc83e1b[m Fix: Update market data link to use basePath
+[33m3f6a3d3[m Fix: Remove duplicate path prefix in Next.js config
+[33m3201bdb[m Fix: Update Next.js config for correct path handling
+[33m9397618[m Fix: Update print report to show correct metric label in summary stats
