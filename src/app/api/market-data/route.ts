@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { MarketData } from '@/types/logs';
 
+// Add this line to make it work with static exports
+export const dynamic = 'force-static';
+
 const sampleMarketData: MarketData[] = [
   {
     id: '1',

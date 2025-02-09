@@ -26,38 +26,43 @@ interface ParseError {
 
 export default function PercentileCalculator() {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
-  const [selectedSpecialty, setSelectedSpecialty] = useState<string>(() => 
-    localStorage.getItem('selectedSpecialty') || ''
-  );
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>(() => 
-    (localStorage.getItem('selectedMetric') as MetricType) || 'total'
-  );
-  const [inputValue, setInputValue] = useState<string>(() => 
-    localStorage.getItem('inputValue') || ''
-  );
-  const [calculatedPercentile, setCalculatedPercentile] = useState<number | null>(() => {
-    const saved = localStorage.getItem('calculatedPercentile');
-    return saved ? parseFloat(saved) : null;
-  });
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
+  const [selectedMetric, setSelectedMetric] = useState<MetricType>('total');
+  const [inputValue, setInputValue] = useState<string>('');
+  const [calculatedPercentile, setCalculatedPercentile] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadedData, setUploadedData] = useState<UploadedData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showDataTable, setShowDataTable] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [physicianName, setPhysicianName] = useState<string>(() => 
-    localStorage.getItem('physicianName') || ''
-  );
-  const [notes, setNotes] = useState<string>(() => 
-    localStorage.getItem('notes') || ''
-  );
-  const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>(() => {
-    const saved = localStorage.getItem('calculationHistory');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [physicianName, setPhysicianName] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>([]);
   const [showInitialChoice, setShowInitialChoice] = useState(true);
   const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
   const [showTemplateGuide, setShowTemplateGuide] = useState(false);
+
+  // Load initial values from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSelectedSpecialty(localStorage.getItem('selectedSpecialty') || '');
+      setSelectedMetric((localStorage.getItem('selectedMetric') as MetricType) || 'total');
+      setInputValue(localStorage.getItem('inputValue') || '');
+      setPhysicianName(localStorage.getItem('physicianName') || '');
+      setNotes(localStorage.getItem('notes') || '');
+      
+      const savedPercentile = localStorage.getItem('calculatedPercentile');
+      if (savedPercentile) {
+        setCalculatedPercentile(parseFloat(savedPercentile));
+      }
+      
+      const savedHistory = localStorage.getItem('calculationHistory');
+      if (savedHistory) {
+        setCalculationHistory(JSON.parse(savedHistory));
+      }
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('selectedSpecialty', selectedSpecialty);
