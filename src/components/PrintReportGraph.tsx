@@ -30,6 +30,11 @@ export function PrintReportGraph({
   formatValue,
   getMetricLabel
 }: PrintReportGraphProps) {
+  // Early return if any required props are missing
+  if (!marketData || !selectedSpecialty || !selectedMetric || !inputValue || calculatedPercentile === null) {
+    return null;
+  }
+
   const data = marketData.find(d => d.specialty === selectedSpecialty);
   if (!data) return null;
 
@@ -37,6 +42,12 @@ export function PrintReportGraph({
   const p50 = data[`p50_${selectedMetric}` as keyof MarketData] as number;
   const p75 = data[`p75_${selectedMetric}` as keyof MarketData] as number;
   const p90 = data[`p90_${selectedMetric}` as keyof MarketData] as number;
+
+  // Validate that all required values are present
+  if ([p25, p50, p75, p90].some(v => v === undefined || v === null || isNaN(v))) {
+    console.error('Missing or invalid market data values');
+    return null;
+  }
 
   // Create curve data points for smooth visualization
   const curveData = [
@@ -49,8 +60,14 @@ export function PrintReportGraph({
   ];
 
   const inputValueNum = parseFloat(inputValue.replace(/[^0-9.]/g, ''));
+  if (isNaN(inputValueNum)) {
+    console.error('Invalid input value');
+    return null;
+  }
 
   const formatYAxis = (value: number) => {
+    if (typeof value !== 'number' || isNaN(value)) return '';
+    
     if (selectedMetric === 'wrvu') {
       return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
     } else if (selectedMetric === 'total') {

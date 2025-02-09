@@ -221,9 +221,11 @@ export default function PercentileCalculator() {
       
       if (data.length === 0) {
         try {
-          const csvResponse = await fetch('/Market_Percentile_Calculator/data/market-reference-data.csv');
+          const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+          const csvResponse = await fetch(`${basePath}/data/market-reference-data.csv`);
           const csvText = await csvResponse.text();
           
+          const Papa = (await import('papaparse')).default;
           const parsedData: MarketData[] = [];
           Papa.parse(csvText, {
             header: true,
@@ -248,11 +250,12 @@ export default function PercentileCalculator() {
                 };
                 parsedData.push(newData);
               });
+              data = parsedData;
             }
           });
-          data = parsedData;
         } catch (csvError) {
-          const jsonResponse = await fetch('/Market_Percentile_Calculator/data/market-data.json');
+          const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+          const jsonResponse = await fetch(`${basePath}/data/market-data.json`);
           data = await jsonResponse.json();
         }
       }
@@ -260,7 +263,8 @@ export default function PercentileCalculator() {
       setMarketData(data);
       setError(null);
     } catch (err) {
-      setError('Failed to load data. Please try again later.');
+      setError('Failed to load market data. Please try again later.');
+      console.error('Error loading market data:', err);
     } finally {
       setLoading(false);
     }
