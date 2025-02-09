@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { MarketData, MetricType } from '@/types/logs';
 import {
   AreaChart,
@@ -52,21 +53,6 @@ export function PercentileGraph({
   ];
 
   const inputValueNum = parseFloat(inputValue.replace(/[^0-9.]/g, ''));
-
-  // Calculate the value at the calculated percentile using linear interpolation
-  const getValueAtPercentile = (percentile: number) => {
-    if (percentile <= 25) {
-      return p25 * 0.8 + (p25 - p25 * 0.8) * (percentile / 25);
-    } else if (percentile <= 50) {
-      return p25 + (p50 - p25) * ((percentile - 25) / 25);
-    } else if (percentile <= 75) {
-      return p50 + (p75 - p50) * ((percentile - 50) / 25);
-    } else if (percentile <= 90) {
-      return p75 + (p90 - p75) * ((percentile - 75) / 15);
-    } else {
-      return p90 + (p90 * 0.1) * ((percentile - 90) / 10);
-    }
-  };
 
   const formatYAxis = (value: number) => {
     if (selectedMetric === 'wrvu') {
@@ -155,63 +141,47 @@ export function PercentileGraph({
 
       {/* Graph */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <ResponsiveContainer width="100%" height={500}>
-          <AreaChart data={curveData} margin={{ top: 20, right: 20, left: 60, bottom: 20 }}>
+        <div className="text-base font-semibold text-gray-900 mb-3">
+          DISTRIBUTION ANALYSIS
+        </div>
+        <ResponsiveContainer width="100%" height={400}>
+          <AreaChart data={curveData} margin={{ top: 20, right: 20, left: 40, bottom: 20 }}>
             <defs>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1}/>
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05}/>
               </linearGradient>
             </defs>
 
-            {/* Background shading for percentile ranges */}
-            <ReferenceArea x1={0} x2={25} fill="#f8fafc" fillOpacity={0.4} />
-            <ReferenceArea x1={25} x2={50} fill="#f1f5f9" fillOpacity={0.4} />
-            <ReferenceArea x1={50} x2={75} fill="#f8fafc" fillOpacity={0.4} />
-            <ReferenceArea x1={75} x2={90} fill="#f1f5f9" fillOpacity={0.4} />
-            <ReferenceArea x1={90} x2={100} fill="#f8fafc" fillOpacity={0.4} />
+            {/* Background shading */}
+            <ReferenceArea x1={0} x2={100} fill="#f8fafc" fillOpacity={0.2} />
             
             <XAxis 
               dataKey="percentile" 
               type="number"
               domain={[0, 100]}
-              tick={{ fontSize: 13, fill: '#64748b' }}
+              tick={{ fontSize: 12, fill: '#64748b' }}
               ticks={[0, 25, 50, 75, 90, 100]}
-              axisLine={{ stroke: '#cbd5e1' }}
-              tickLine={{ stroke: '#cbd5e1' }}
-              label={{ 
-                value: 'Percentile', 
-                position: 'insideBottom',
-                offset: -20,
-                style: { 
-                  textAnchor: 'middle',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  fill: '#475569'
-                }
-              }}
+              axisLine={{ stroke: '#e2e8f0' }}
+              tickLine={{ stroke: '#e2e8f0' }}
             />
             
             <YAxis
-              tick={{ fontSize: 13, fill: '#64748b' }}
+              tick={{ fontSize: 12, fill: '#64748b' }}
               tickFormatter={formatYAxis}
-              axisLine={{ stroke: '#cbd5e1' }}
-              tickLine={{ stroke: '#cbd5e1' }}
+              axisLine={{ stroke: '#e2e8f0' }}
+              tickLine={{ stroke: '#e2e8f0' }}
               width={70}
-              label={{ 
-                value: getMetricLabel(selectedMetric),
-                angle: -90,
-                position: 'left',
-                offset: 50,
-                style: { 
-                  textAnchor: 'middle',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  fill: '#475569'
-                }
-              }}
             />
-            
+
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="#6366f1"
+              strokeWidth={1.5}
+              fill="url(#colorValue)"
+            />
+
             {/* Key percentile markers */}
             {[25, 50, 75, 90].map((percentile) => {
               const value = data[`p${percentile}_${selectedMetric}` as keyof MarketData] as number;
@@ -230,87 +200,50 @@ export function PercentileGraph({
                     position="top"
                     offset={10}
                     style={{
-                      fontSize: '13px',
-                      fill: '#4f46e5',
-                      fontWeight: 500,
-                      filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))',
-                      backgroundColor: 'white',
-                      padding: '3px 6px',
-                      borderRadius: '3px'
+                      fontSize: '12px',
+                      fill: '#6366f1',
+                      fontWeight: 500
                     }}
                   />
                 </ReferenceDot>
               );
             })}
             
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke="#6366f1"
-              strokeWidth={2.5}
-              fill="url(#colorValue)"
+            {/* User's value reference line */}
+            <ReferenceLine
+              x={calculatedPercentile}
+              stroke="#dc2626"
+              strokeWidth={1.5}
+              strokeDasharray="3 3"
+              label={{
+                value: `${formatYAxis(inputValueNum)} (${calculatedPercentile.toFixed(1)}th)`,
+                position: 'bottom',
+                fill: '#dc2626',
+                fontSize: 12,
+                fontWeight: 500,
+                dy: 10
+              }}
             />
-            
-            {/* Reference line for calculated percentile */}
-            {calculatedPercentile !== null && (
-              <g>
-                <ReferenceLine
-                  segment={[
-                    { x: calculatedPercentile, y: 0 },
-                    { x: calculatedPercentile, y: getValueAtPercentile(calculatedPercentile) }
-                  ]}
-                  stroke="#dc2626"
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  label={{
-                    position: 'insideBottomRight',
-                    offset: 15,
-                    value: selectedMetric === 'total' 
-                      ? `$${(inputValueNum / 1000).toFixed(0)}K (${calculatedPercentile.toFixed(1)}th)`
-                      : `${formatValue(inputValueNum)} (${calculatedPercentile.toFixed(1)}th)`,
-                    fill: '#dc2626',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    style: {
-                      backgroundColor: 'white',
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))'
-                    }
-                  }}
-                />
-                <circle
-                  cx={calculatedPercentile}
-                  cy={getValueAtPercentile(calculatedPercentile)}
-                  r={5}
-                  fill="#dc2626"
-                  stroke="#ffffff"
-                  strokeWidth={2}
-                />
-              </g>
-            )}
-            
-            <Tooltip 
-              formatter={(value: number) => [formatValue(value), getMetricLabel(selectedMetric)]}
+            <ReferenceDot
+              x={calculatedPercentile}
+              y={inputValueNum}
+              r={4}
+              fill="#dc2626"
+              stroke="#ffffff"
+              strokeWidth={2}
+            />
+
+            {/* Tooltips */}
+            <Tooltip
+              formatter={(value: number) => [formatYAxis(value)]}
               labelFormatter={(label: number) => `${label}th Percentile`}
               contentStyle={{
                 backgroundColor: 'white',
                 border: '1px solid #e2e8f0',
-                borderRadius: '0.5rem',
-                padding: '0.75rem 1rem',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                fontSize: '13px'
+                borderRadius: '0.375rem',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.875rem'
               }}
-              itemStyle={{
-                color: '#1e293b',
-                fontSize: '13px'
-              }}
-              labelStyle={{
-                color: '#64748b',
-                fontSize: '12px',
-                marginBottom: '0.25rem'
-              }}
-              cursor={{ stroke: '#94a3b8', strokeWidth: 1 }}
             />
           </AreaChart>
         </ResponsiveContainer>

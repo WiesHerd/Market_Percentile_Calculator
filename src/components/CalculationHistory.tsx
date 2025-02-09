@@ -101,7 +101,9 @@ export function CalculationHistoryView({
                 >
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">{calc.physicianName}</div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {calc.physicianName}
+                      </div>
                       {calc.notes && (
                         <div className="text-xs text-gray-500 mt-0.5 italic">{calc.notes}</div>
                       )}
@@ -114,8 +116,23 @@ export function CalculationHistoryView({
                     <div className="text-sm text-gray-900">{getTableMetricLabel(calc.metric)}</div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">
-                    <div className="text-sm font-medium text-gray-900">
-                      {formatValue(calc.value, calc.metric)}
+                    <div className="text-sm space-y-1">
+                      <div>
+                        <span className="font-medium text-gray-900">
+                          {formatValue(calc.actualValue, calc.metric)}
+                        </span>
+                        <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          {calc.fte.toFixed(2)} FTE
+                        </span>
+                      </div>
+                      {(calc.metric === 'total' || calc.metric === 'wrvu') && calc.fte !== 1.0 && (
+                        <div className="flex items-center justify-end text-xs">
+                          <span className="text-blue-600 font-medium">
+                            {formatValue(calc.value, calc.metric)}
+                          </span>
+                          <span className="ml-1 text-gray-500">normalized @ 1.0 FTE</span>
+                        </div>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">

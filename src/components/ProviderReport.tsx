@@ -57,6 +57,48 @@ export function ProviderReport({
           )}
         </div>
 
+        {/* Value Summary */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="bg-white rounded border border-gray-300 p-3 shadow-sm">
+            <div className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {calculation.metric === 'total' ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                ) : calculation.metric === 'wrvu' ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                )}
+              </svg>
+              {getMetricLabel(calculation.metric)} at {calculation.fte.toFixed(2)} FTE
+            </div>
+            <div className="text-xl font-bold text-gray-900 mt-1">
+              {formatValue(calculation.actualValue, calculation.metric)}
+            </div>
+            {(calculation.metric === 'total' || calculation.metric === 'wrvu') && calculation.fte !== 1.0 && (
+              <div className="text-sm text-blue-600 mt-1">
+                {formatValue(calculation.value, calculation.metric)} @ 1.0 FTE
+              </div>
+            )}
+          </div>
+          <div className="bg-white rounded border border-gray-300 p-3 shadow-sm">
+            <div className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+              Percentile Result
+            </div>
+            <div className="text-xl font-bold text-blue-600 mt-1">
+              {calculation.percentile.toFixed(1)}th
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              {calculation.metric === 'cf' ? 
+                'Conversion Factor is compared directly' : 
+                'Based on 1.0 FTE equivalent value'}
+            </div>
+          </div>
+        </div>
+
         {/* Graph */}
         <div className="mb-6" style={{ height: '450px' }}>
           <PercentileGraph

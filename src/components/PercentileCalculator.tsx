@@ -42,6 +42,7 @@ export default function PercentileCalculator() {
   const [showInitialChoice, setShowInitialChoice] = useState(true);
   const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
   const [showTemplateGuide, setShowTemplateGuide] = useState(false);
+  const [fte, setFte] = useState('1.0');
 
   // Load initial values from localStorage on mount
   useEffect(() => {
@@ -471,7 +472,9 @@ export default function PercentileCalculator() {
       physicianName,
       specialty: selectedSpecialty,
       metric: selectedMetric,
-      value,
+      value: parseFloat(cleanValue) / parseFloat(fte),
+      actualValue: parseFloat(cleanValue),
+      fte: parseFloat(fte),
       percentile,
       timestamp: new Date().toISOString(),
       notes: notes.trim() || undefined,
@@ -761,21 +764,21 @@ export default function PercentileCalculator() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Title Section */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Image
-              src={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/WH Logo.webp' : '/WH Logo.webp'}
-              alt="WH Logo"
-              width={48}
-              height={48}
-              className="rounded-lg shadow-sm"
-              priority
-            />
+        <div className="flex items-center justify-between mb-6">
+          <div>
             <h1 className="text-2xl font-semibold text-gray-900">Provider Percentile Calculator</h1>
+            <p className="text-base text-gray-600 mt-1">
+              Calculate and analyze provider compensation percentiles across specialties
+            </p>
           </div>
-          <p className="text-base text-gray-600 text-center">
-            Calculate and analyze provider compensation percentiles across specialties
-          </p>
+          <Image
+            src={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/WH Logo.webp' : '/WH Logo.webp'}
+            alt="WH Logo"
+            width={48}
+            height={48}
+            className="rounded-lg shadow-sm"
+            priority
+          />
         </div>
 
         <div className="space-y-6">
@@ -790,7 +793,7 @@ export default function PercentileCalculator() {
                   </div>
                 </div>
                 <Link
-                  href="/market-data"
+                  href={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/market-data' : '/market-data'}
                   className="inline-flex items-center justify-center w-[180px] px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <TableCellsIcon className="w-4 h-4 mr-2" />
@@ -798,7 +801,7 @@ export default function PercentileCalculator() {
                 </Link>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 {/* Physician Name */}
                 <div className="space-y-1.5">
                   <label htmlFor="physicianName" className="block text-sm font-medium text-gray-700">
@@ -813,6 +816,36 @@ export default function PercentileCalculator() {
                     className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
                     placeholder="Enter physician name"
                   />
+                </div>
+
+                {/* FTE Input */}
+                <div className="space-y-1.5">
+                  <label htmlFor="fte" className="block text-sm font-medium text-gray-700">
+                    FTE
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    id="fte"
+                    value={fte}
+                    onChange={(e) => setFte(e.target.value)}
+                    onBlur={() => {
+                      const fteNum = parseFloat(fte);
+                      if (isNaN(fteNum) || fteNum < 0.1 || fteNum > 1.0) {
+                        setFte('1.00');
+                      } else {
+                        setFte(fteNum.toFixed(2));
+                      }
+                    }}
+                    min="0.10"
+                    max="1.00"
+                    step="0.01"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
+                    placeholder="1.00"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter a value between 0.00 and 1.00
+                  </p>
                 </div>
 
                 {/* Notes */}

@@ -45,6 +45,8 @@ export interface AuditLog {
     specialty?: string;
     metric?: MetricType;
     value?: number;
+    actualValue?: number;
+    fte?: number;
     percentile?: number;
     complianceFlags?: ComplianceCheck[];
     fairMarketValue?: FairMarketValue;
@@ -58,6 +60,8 @@ export interface CalculationHistory {
   specialty: string;
   metric: MetricType;
   value: number;
+  actualValue: number;
+  fte: number;
   percentile: number;
   timestamp: string;
   notes?: string;
