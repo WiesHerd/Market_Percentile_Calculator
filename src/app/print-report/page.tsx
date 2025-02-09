@@ -10,17 +10,53 @@ export default function PrintReport() {
     calculation: CalculationHistory;
     marketData: MarketData[];
   } | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedData = sessionStorage.getItem('printCalculation');
-    if (storedData) {
+    try {
+      const storedData = sessionStorage.getItem('printCalculation');
+      if (!storedData) {
+        setError('No calculation data found. Please try generating a new report.');
+        return;
+      }
       setData(JSON.parse(storedData));
       sessionStorage.removeItem('printCalculation');
+    } catch (err) {
+      setError('Error loading calculation data. Please try again.');
+      console.error('Error loading print data:', err);
     }
   }, []);
 
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-lg w-full space-y-8">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">Error</h1>
+            <p className="text-gray-600 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.href = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '/'}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Back to Calculator
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!data) {
-    return <div>Loading...</div>;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-lg w-full space-y-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <h2 className="mt-4 text-xl font-medium text-gray-900">Loading report...</h2>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const { calculation, marketData } = data;
@@ -61,6 +97,8 @@ export default function PrintReport() {
     window.print();
   };
 
+  const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+
   return (
     <div className="print-container">
       <div className="print-content max-w-[8.5in] mx-auto">
@@ -69,7 +107,7 @@ export default function PrintReport() {
           <div className="flex justify-between">
             {/* Back Button */}
             <button
-              onClick={() => window.location.href = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '/'}
+              onClick={() => window.location.href = `${basePath}/`}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -103,7 +141,7 @@ export default function PrintReport() {
               </div>
             </div>
             <img 
-              src={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/WH Logo.webp' : '/WH Logo.webp'}
+              src={`${basePath}/WH Logo.webp`}
               alt="WH Logo" 
               className="h-16 object-contain"
             />

@@ -26,17 +26,15 @@ export function CalculationHistoryView({
   const [showComplianceDetails, setShowComplianceDetails] = useState<string | null>(null);
 
   const handlePrint = (calculation: CalculationHistory) => {
-    // Store the data and open print preview
+    // Store the calculation data in sessionStorage
     sessionStorage.setItem('printCalculation', JSON.stringify({
       calculation,
       marketData
     }));
-    
-    // Open in new window and focus
-    const printWindow = window.open('/print-report', '_blank');
-    if (printWindow) {
-      printWindow.focus();
-    }
+
+    // Open the print report in a new window/tab
+    const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+    const printWindow = window.open(`${basePath}/print-report`, '_blank');
   };
 
   const getTableMetricLabel = (metric: 'total' | 'wrvu' | 'cf'): string => {
