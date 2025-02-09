@@ -1,6 +1,6 @@
-# Physician Compensation Calculator
+# Provider Percentile Calculator
 
-A modern web application that helps physicians and healthcare professionals analyze compensation data across different specialties. Calculate where your compensation falls within industry percentiles for Total Cash Compensation, Work RVUs, and Conversion Factors.
+A modern web application that helps healthcare providers analyze compensation data across different specialties. Calculate where your compensation falls within industry percentiles for Total Cash Compensation, Work RVUs, and Conversion Factors.
 
 ## Features
 

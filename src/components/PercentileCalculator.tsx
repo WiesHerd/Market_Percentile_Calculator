@@ -4,11 +4,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { MarketData, MetricType, MarketDataPercentileKey, CalculationHistory } from '@/types/logs';
-import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import { PercentileGraph } from './PercentileGraph';
 import { CalculationHistoryView } from './CalculationHistory';
 import Papa from 'papaparse';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface UploadedData {
   specialty: string;
@@ -38,12 +39,27 @@ export default function PercentileCalculator() {
   const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>([]);
   const [showInitialChoice, setShowInitialChoice] = useState(true);
   const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
+  const [showTemplateGuide, setShowTemplateGuide] = useState(false);
 
   const handleUsePreloadedData = () => {
     localStorage.setItem('dataChoiceMade', 'true');
     setShowInitialChoice(false);
     setHasUserMadeChoice(true);
     loadData();
+  };
+
+  const downloadSampleCSV = () => {
+    const headers = 'specialty,p25_TCC,p50_TCC,p75_TCC,p90_TCC,p25_wrvu,p50_wrvu,p75_wrvu,p90_wrvu,p25_cf,p50_cf,p75_cf,p90_cf\n';
+    const sampleData = 'Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25\n';
+    const blob = new Blob([headers + sampleData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'market_data_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   const handleInitialFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -551,7 +567,14 @@ export default function PercentileCalculator() {
       {/* Initial Data Choice Modal */}
       {showInitialChoice && !hasUserMadeChoice && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
+            <button
+              onClick={() => setShowInitialChoice(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              <XMarkIcon className="h-6 w-6" />
+              <span className="sr-only">Close</span>
+            </button>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Data Source</h2>
             <p className="text-gray-600 mb-6">
               Would you like to use our preloaded market data or upload your own data?
@@ -574,7 +597,49 @@ export default function PercentileCalculator() {
                   Upload My Own Data (CSV)
                 </label>
               </div>
+              <button
+                onClick={() => setShowTemplateGuide(!showTemplateGuide)}
+                className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center"
+              >
+                <DocumentTextIcon className="w-4 h-4 mr-2" />
+                {showTemplateGuide ? 'Hide CSV Guide' : 'View CSV Template & Guide'}
+              </button>
             </div>
+
+            {showTemplateGuide && (
+              <div className="mt-6 border-t border-gray-200 pt-6">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">CSV File Format</h3>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="font-medium text-gray-700 mb-2">Required Columns:</div>
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <div>• specialty (text)</div>
+                          <div>• p25_TCC, p50_TCC, p75_TCC, p90_TCC (numbers)</div>
+                          <div>• p25_wrvu, p50_wrvu, p75_wrvu, p90_wrvu (numbers)</div>
+                          <div>• p25_cf, p50_cf, p75_cf, p90_cf (decimals)</div>
+                        </div>
+                      </div>
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="font-medium text-blue-900 mb-2">Example Row:</div>
+                        <code className="text-xs bg-white p-2 rounded block overflow-x-auto">
+                          Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25
+                        </code>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={downloadSampleCSV}
+                    className="w-full px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
+                  >
+                    <ArrowUpTrayIcon className="w-4 h-4 mr-2" />
+                    Download Sample CSV
+                  </button>
+                </div>
+              </div>
+            )}
+
             {error && (
               <div className="mt-4 p-4 bg-red-50 rounded-lg text-red-700 text-sm">
                 {error}
@@ -593,8 +658,20 @@ export default function PercentileCalculator() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Title Section */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Physician Compensation Calculator</h1>
-          <p className="mt-2 text-lg text-gray-600">Calculate and analyze physician compensation percentiles across specialties</p>
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <Image
+              src="/WH Logo.webp"
+              alt="WH Logo"
+              width={64}
+              height={64}
+              className="rounded-lg shadow-sm"
+              priority
+            />
+            <h1 className="text-3xl font-bold text-gray-900">Provider Percentile Calculator</h1>
+          </div>
+          <p className="text-lg text-gray-600 max-w-3xl mx-auto">
+            Calculate and analyze provider compensation percentiles across specialties
+          </p>
         </div>
 
         <div className="space-y-6">
@@ -602,7 +679,12 @@ export default function PercentileCalculator() {
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Calculate Percentile</h2>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Calculate Percentile</h2>
+                  <div className="text-sm text-red-500 mt-1">
+                    Fields marked with an asterisk (*) are required.
+                  </div>
+                </div>
                 <Link
                   href="/market-data"
                   className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -765,15 +847,13 @@ export default function PercentileCalculator() {
           {/* Results Section */}
           {calculatedPercentile !== null && (
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="p-6 space-y-6">
-                <h2 className="text-lg font-semibold text-gray-900">Results</h2>
-                
-                {/* Results Message */}
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <p className="text-blue-900">
-                    {physicianName}'s {getMetricLabel(selectedMetric)} of {formatValue(inputValue)} for {selectedSpecialty} is at the{' '}
-                    <span className="font-semibold">{calculatedPercentile.toFixed(1)}th</span> percentile.
-                  </p>
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-lg font-semibold text-gray-900">Results</h2>
+                  <div className="text-blue-900">
+                    {physicianName}'s {getMetricLabel(selectedMetric)} of {formatValue(inputValue)} is at the{' '}
+                    <span className="font-semibold">{calculatedPercentile.toFixed(1)}th</span> percentile
+                  </div>
                 </div>
 
                 {/* Graph */}

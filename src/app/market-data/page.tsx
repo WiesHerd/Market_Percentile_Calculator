@@ -11,6 +11,7 @@ export default function MarketDataPage() {
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     const loadMarketData = async () => {
@@ -24,7 +25,8 @@ export default function MarketDataPage() {
         if (data.length === 0) {
           try {
             // First try to load the CSV file
-            const csvResponse = await fetch('/Market_Percentile_Calculator/data/market-reference-data.csv');
+            const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+            const csvResponse = await fetch(`${basePath}/data/market-reference-data.csv`);
             const csvText = await csvResponse.text();
             
             const Papa = (await import('papaparse')).default;
@@ -58,7 +60,8 @@ export default function MarketDataPage() {
             data = parsedData;
           } catch (csvError) {
             // If CSV loading fails, fall back to JSON
-            const response = await fetch('/Market_Percentile_Calculator/data/market-data.json');
+            const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+            const response = await fetch(`${basePath}/data/market-data.json`);
             data = await response.json();
           }
         }
@@ -215,7 +218,7 @@ export default function MarketDataPage() {
         <div className="mb-8 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Market Data</h1>
-            <p className="mt-2 text-lg text-gray-600">View and manage compensation data across specialties</p>
+            <p className="mt-2 text-lg text-gray-600">View and manage provider compensation data across specialties</p>
           </div>
           <div className="flex gap-4">
             <button
@@ -238,11 +241,22 @@ export default function MarketDataPage() {
           {/* CSV Format Guide */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
+              <div className="flex items-center justify-between">
+                <button 
+                  onClick={() => setShowGuide(!showGuide)} 
+                  className="flex items-center text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors"
+                >
                   <InformationCircleIcon className="h-5 w-5 text-blue-500 mr-2" />
-                  <h2 className="text-lg font-semibold text-gray-900">CSV File Format Guide</h2>
-                </div>
+                  CSV File Format Guide
+                  <svg 
+                    className={`w-5 h-5 ml-2 transition-transform ${showGuide ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
                 <button
                   onClick={downloadSampleCSV}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -251,69 +265,63 @@ export default function MarketDataPage() {
                   Download Template
                 </button>
               </div>
-              
-              <div className="prose prose-sm max-w-none">
-                <p className="text-gray-600 mb-4">
-                  To upload your own market data, please ensure your CSV file follows this format:
-                </p>
-                
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Required Columns:</h3>
-                  <ul className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                    <li className="space-y-1">
-                      <div className="font-medium text-gray-700">Specialty Information:</div>
-                      <div className="ml-4 text-gray-600">
+
+              {showGuide && (
+                <div className="mt-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="font-medium text-gray-700 mb-2">Specialty</div>
+                      <div className="text-sm text-gray-600">
                         • specialty (text)
                       </div>
-                    </li>
-                    <li className="space-y-1">
-                      <div className="font-medium text-gray-700">Total Cash Compensation (TCC):</div>
-                      <div className="ml-4 text-gray-600">
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="font-medium text-gray-700 mb-2">Total Cash Compensation</div>
+                      <div className="text-sm text-gray-600">
                         • p25_TCC (number)<br />
                         • p50_TCC (number)<br />
                         • p75_TCC (number)<br />
                         • p90_TCC (number)
                       </div>
-                    </li>
-                    <li className="space-y-1">
-                      <div className="font-medium text-gray-700">Work RVUs:</div>
-                      <div className="ml-4 text-gray-600">
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="font-medium text-gray-700 mb-2">Work RVUs</div>
+                      <div className="text-sm text-gray-600">
                         • p25_wrvu (number)<br />
                         • p50_wrvu (number)<br />
                         • p75_wrvu (number)<br />
                         • p90_wrvu (number)
                       </div>
-                    </li>
-                    <li className="space-y-1">
-                      <div className="font-medium text-gray-700">Conversion Factors:</div>
-                      <div className="ml-4 text-gray-600">
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="font-medium text-gray-700 mb-2">Conversion Factors</div>
+                      <div className="text-sm text-gray-600">
                         • p25_cf (decimal)<br />
                         • p50_cf (decimal)<br />
                         • p75_cf (decimal)<br />
                         • p90_cf (decimal)
                       </div>
-                    </li>
-                  </ul>
-                </div>
+                    </div>
+                  </div>
 
-                <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                  <h3 className="text-sm font-medium text-blue-900 mb-2">Important Notes:</h3>
-                  <ul className="list-disc ml-4 text-sm text-blue-800 space-y-1">
-                    <li>All column names must match exactly as shown above</li>
-                    <li>TCC values should be whole numbers (e.g., 250000)</li>
-                    <li>Work RVU values can have decimals (e.g., 4800.50)</li>
-                    <li>Conversion Factor values should have decimals (e.g., 48.75)</li>
-                    <li>The specialty column cannot be empty</li>
-                  </ul>
-                </div>
+                  <div className="mt-4 bg-blue-50 rounded-lg p-3">
+                    <div className="font-medium text-blue-900 mb-2">Important Notes:</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-sm text-blue-800">
+                      <div>• Column names must match exactly</div>
+                      <div>• TCC values should be whole numbers</div>
+                      <div>• Work RVU values can have decimals</div>
+                      <div>• Specialty cannot be empty</div>
+                    </div>
+                  </div>
 
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Example Row:</h3>
-                  <code className="text-xs bg-white p-2 rounded block overflow-x-auto">
-                    Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25
-                  </code>
+                  <div className="mt-4 bg-gray-50 rounded-lg p-3">
+                    <div className="font-medium text-gray-700 mb-2">Example Row:</div>
+                    <code className="text-xs bg-white p-2 rounded block overflow-x-auto">
+                      Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25
+                    </code>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 

@@ -28,7 +28,7 @@ export default function PrintReport() {
 
   const formatValue = (value: number, metric: 'total' | 'wrvu' | 'cf'): string => {
     if (metric === 'wrvu') {
-      return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
     } else if (metric === 'total') {
       return value.toLocaleString('en-US', {
         style: 'currency',
@@ -93,7 +93,7 @@ export default function PrintReport() {
 
         {/* Header */}
         <div className="text-center mb-6 border-b border-gray-300 pb-3">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Physician Compensation Analysis</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Provider Compensation Analysis</h1>
           <div className="flex items-center justify-center gap-2 text-base">
             <span className="font-medium text-gray-800">{calculation.physicianName}</span>
             <span className="text-gray-400">•</span>
@@ -178,25 +178,31 @@ export default function PrintReport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {[25, 50, 75, 90].map((percentile) => (
-                    <tr 
-                      key={percentile} 
-                      className={percentile === 90 ? 'bg-blue-50' : 'bg-white'}
-                    >
-                      <td className="px-3 py-2 text-sm font-medium text-gray-900 border-r border-gray-200">
-                        {percentile}th Percentile
-                      </td>
-                      <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right border-r border-gray-200">
-                        {formatValue(Number(specialtyData[`p${percentile}_total` as keyof MarketData]), 'total')}
-                      </td>
-                      <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right border-r border-gray-200">
-                        {formatValue(Number(specialtyData[`p${percentile}_wrvu` as keyof MarketData]), 'wrvu')}
-                      </td>
-                      <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right">
-                        {formatValue(Number(specialtyData[`p${percentile}_cf` as keyof MarketData]), 'cf')}
-                      </td>
-                    </tr>
-                  ))}
+                  {[25, 50, 75, 90].map((percentile) => {
+                    const total = Number(specialtyData[`p${percentile}_total` as keyof MarketData]);
+                    const wrvu = Number(specialtyData[`p${percentile}_wrvu` as keyof MarketData]);
+                    const cf = Number(specialtyData[`p${percentile}_cf` as keyof MarketData]);
+                    
+                    return (
+                      <tr 
+                        key={percentile} 
+                        className={percentile === 90 ? 'bg-blue-50' : 'bg-white'}
+                      >
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900 border-r border-gray-200">
+                          {percentile}th Percentile
+                        </td>
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right border-r border-gray-200">
+                          {formatValue(total, 'total')}
+                        </td>
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right border-r border-gray-200">
+                          {wrvu.toLocaleString('en-US', { maximumFractionDigits: 1 })}
+                        </td>
+                        <td className="px-3 py-2 text-sm font-medium text-gray-900 text-right">
+                          ${cf.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -206,7 +212,7 @@ export default function PrintReport() {
         {/* Footer */}
         <div className="mt-2 pt-2 border-t border-gray-300">
           <div className="flex justify-between items-center text-xs text-gray-500">
-            <div className="font-medium">Physician Compensation Calculator</div>
+            <div className="font-medium">Provider Percentile Calculator</div>
             <div>Generated on {format(new Date(), 'MMMM d, yyyy h:mm a')}</div>
           </div>
         </div>
