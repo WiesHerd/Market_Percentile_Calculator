@@ -9,6 +9,7 @@ const nextConfig = {
     // Disable ESLint during build
     ignoreDuringBuilds: true,
   },
+  trailingSlash: false,
 }
 
 export default nextConfig;

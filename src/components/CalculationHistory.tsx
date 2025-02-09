@@ -32,9 +32,12 @@ export function CalculationHistoryView({
       marketData
     }));
 
-    // Open the print report in a new window/tab
+    // Open the print report in a new window/tab with the correct base path
     const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
     const printWindow = window.open(`${basePath}/print-report`, '_blank');
+    if (printWindow) {
+      printWindow.focus();
+    }
   };
 
   const getTableMetricLabel = (metric: 'total' | 'wrvu' | 'cf'): string => {
