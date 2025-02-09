@@ -764,7 +764,7 @@ export default function PercentileCalculator() {
         <div className="text-center mb-6">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Image
-              src="/WH Logo.webp"
+              src={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/WH Logo.webp' : '/WH Logo.webp'}
               alt="WH Logo"
               width={48}
               height={48}

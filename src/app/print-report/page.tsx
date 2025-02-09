@@ -103,7 +103,7 @@ export default function PrintReport() {
               </div>
             </div>
             <img 
-              src="/WH Logo.webp" 
+              src={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/WH Logo.webp' : '/WH Logo.webp'}
               alt="WH Logo" 
               className="h-16 object-contain"
             />
