@@ -81,7 +81,7 @@ export function PercentileGraph({
   return (
     <div className="space-y-4">
       {/* Market Data Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mx-3">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <div className="text-base font-semibold text-gray-900 mb-3">
           Market Reference Data - <span className="text-blue-600">{selectedSpecialty}</span>
         </div>
@@ -154,9 +154,9 @@ export function PercentileGraph({
       </div>
 
       {/* Graph */}
-      <div className="w-full h-[500px] bg-white rounded-lg shadow-sm border border-gray-200 p-4 mx-3">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={curveData} margin={{ top: 30, right: 45, left: 80, bottom: 35 }}>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <ResponsiveContainer width="100%" height={500}>
+          <AreaChart data={curveData} margin={{ top: 20, right: 20, left: 60, bottom: 20 }}>
             <defs>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#6366f1" stopOpacity={0.15}/>

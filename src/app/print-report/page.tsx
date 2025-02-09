@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CalculationHistory, MarketData } from '@/types/logs';
 import { format } from 'date-fns';
-import { PercentileGraph } from '@/components/PercentileGraph';
+import { PrintReportGraph } from '@/components/PrintReportGraph';
 
 export default function PrintReport() {
   const [data, setData] = useState<{
@@ -65,8 +65,8 @@ export default function PrintReport() {
     <div className="print-container">
       <div className="print-content max-w-[8.5in] mx-auto">
         {/* Navigation Buttons - Hidden in print */}
-        <div className="screen-only fixed top-4 w-full max-w-[8.5in]">
-          <div className="flex justify-between px-4">
+        <div className="screen-only mb-6">
+          <div className="flex justify-between">
             {/* Back Button */}
             <button
               onClick={() => window.location.href = '/'}
@@ -92,12 +92,21 @@ export default function PrintReport() {
         </div>
 
         {/* Header */}
-        <div className="text-center mb-6 border-b border-gray-300 pb-3">
-          <h1 className="text-2xl font-bold text-gray-900 mb-1">Provider Compensation Analysis</h1>
-          <div className="flex items-center justify-center gap-2 text-base">
-            <span className="font-medium text-gray-800">{calculation.physicianName}</span>
-            <span className="text-gray-400">•</span>
-            <span className="text-gray-600">{calculation.specialty}</span>
+        <div className="mb-6 border-b border-gray-300 pb-3">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-1 text-left">Provider Compensation Analysis</h1>
+              <div className="flex items-center gap-2 text-base">
+                <span className="font-medium text-gray-800">{calculation.physicianName}</span>
+                <span className="text-gray-400">•</span>
+                <span className="text-gray-600">{calculation.specialty}</span>
+              </div>
+            </div>
+            <img 
+              src="/WH Logo.webp" 
+              alt="WH Logo" 
+              className="h-16 object-contain"
+            />
           </div>
         </div>
 
@@ -129,33 +138,31 @@ export default function PrintReport() {
         </div>
 
         {/* Graph Section */}
-        <div className="mb-8 bg-white rounded border border-gray-300 shadow-sm overflow-hidden">
+        <div className="mb-8 bg-white rounded border border-gray-300 shadow-sm overflow-hidden w-full">
           <div className="px-3 py-2 border-b border-gray-300 bg-gray-50">
             <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Distribution Analysis</div>
           </div>
-          <div className="p-3">
+          <div className="p-2">
             <div className="h-[300px] w-full">
-              <div className="w-full h-full" style={{ marginLeft: '-10px' }}>
-                <PercentileGraph
-                  marketData={marketData}
-                  selectedSpecialty={calculation.specialty}
-                  selectedMetric={calculation.metric}
-                  inputValue={calculation.value.toString()}
-                  calculatedPercentile={calculation.percentile}
-                  formatValue={(value) => {
-                    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-                    return formatValue(numValue, calculation.metric);
-                  }}
-                  getMetricLabel={getMetricLabel}
-                />
-              </div>
+              <PrintReportGraph
+                marketData={marketData}
+                selectedSpecialty={calculation.specialty}
+                selectedMetric={calculation.metric}
+                inputValue={calculation.value.toString()}
+                calculatedPercentile={calculation.percentile}
+                formatValue={(value) => {
+                  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+                  return formatValue(numValue, calculation.metric);
+                }}
+                getMetricLabel={getMetricLabel}
+              />
             </div>
           </div>
         </div>
 
-        {/* Market Data Section */}
+        {/* Market Reference Data Section */}
         {specialtyData && (
-          <div className="mt-auto mb-8 bg-white rounded border border-gray-300 shadow-sm overflow-hidden">
+          <div className="mb-8 bg-white rounded border border-gray-300 shadow-sm overflow-hidden w-full">
             <div className="px-3 py-2 border-b border-gray-300 bg-gray-50">
               <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Market Reference Data</div>
             </div>
@@ -224,8 +231,8 @@ export default function PrintReport() {
             background: #f8fafc;
             min-height: 11in;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin: 2rem auto;
-            padding: 0.5in;
+            margin: 0 auto;
+            padding: 1rem;
           }
           .print-content {
             display: flex;
