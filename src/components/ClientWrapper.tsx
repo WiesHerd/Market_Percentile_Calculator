@@ -28,7 +28,7 @@ export function ClientWrapper() {
                 <p className="text-base text-gray-600 mt-1">Calculate and analyze provider compensation percentiles</p>
               </div>
               <Image 
-                src="/WH Logo.webp"
+                src={`${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH Logo.webp`}
                 alt="WH Logo"
                 width={64}
                 height={64}
