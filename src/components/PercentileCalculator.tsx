@@ -712,16 +712,28 @@ export default function PercentileCalculator() {
   const handleSaveToHistory = () => {
     if (calculatedPercentile === null || !marketData || !inputValue) return;
     
+    const cleanValue = inputValue.replace(/[^0-9.]/g, '');
+    const actualValue = parseFloat(cleanValue);
+    const fteValue = parseFloat(fte);
+    let normalizedValue = actualValue;
+    
+    // Normalize the value to 1.0 FTE if it's TCC or wRVU
+    if ((selectedMetric === 'total' || selectedMetric === 'wrvu') && fteValue > 0 && fteValue < 1.0) {
+      normalizedValue = actualValue / fteValue;
+    }
+    
     const newHistoryItem: CalculationHistory = {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
       physicianName: physicianName || 'Unknown',
       specialty: selectedSpecialty || 'Unknown',
       metric: selectedMetric,
-      value: parseFloat(inputValue),
-      actualValue: parseFloat(inputValue),
-      fte: 1.0,
+      value: normalizedValue,
+      actualValue: actualValue,
+      normalizedValue: normalizedValue,
+      fte: fteValue,
       percentile: calculatedPercentile,
+      notes: notes || undefined
     };
 
     setCalculationHistory(prev => [newHistoryItem, ...prev]);
