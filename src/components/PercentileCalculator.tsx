@@ -865,7 +865,7 @@ export default function PercentileCalculator() {
               {/* FTE Input */}
               <div className="space-y-1.5">
                 <label htmlFor="fte" className="block text-sm font-medium text-gray-700">
-                  FTE
+                  FTE (0.10 - 1.00)
                   <span className="text-red-500 ml-1">*</span>
                 </label>
                 <input
@@ -887,9 +887,14 @@ export default function PercentileCalculator() {
                   className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
                   placeholder="1.00"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter a value between 0.00 and 1.00
-                </p>
+                {(selectedMetric === 'total' || selectedMetric === 'wrvu') && (
+                  <div className="text-xs text-gray-500 flex items-center">
+                    <svg className="w-4 h-4 text-gray-400 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Values will be normalized to 1.0 FTE
+                  </div>
+                )}
               </div>
 
               {/* Notes */}
@@ -1028,7 +1033,19 @@ export default function PercentileCalculator() {
         {/* Results Section */}
         {calculatedPercentile !== null && (
           <div className="text-lg leading-relaxed text-gray-900">
-            <span className="font-medium">{physicianName}</span> ranks in the <span className="text-blue-600 font-semibold">{calculatedPercentile.toFixed(1)}th percentile</span> for {selectedSpecialty.toLowerCase()} compensation{fte !== '1.0' ? ` (${formatValue(inputValue)} at ${fte} FTE)` : ` at ${formatValue(inputValue)}`}.
+            <span className="font-medium">{physicianName}</span> ranks in the <span className="text-blue-600 font-semibold">{(calculatedPercentile || 0).toFixed(1)}th percentile</span> for {selectedSpecialty.toLowerCase()} compensation{fte !== '1.0' ? ` (${formatValue(inputValue)} at ${parseFloat(fte).toFixed(2)} FTE)` : ` at ${formatValue(inputValue)}`}.
+            {(selectedMetric === 'total' || selectedMetric === 'wrvu') && fte !== '1.0' && (
+              <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg flex items-start">
+                <svg className="w-5 h-5 text-blue-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <span className="font-medium">Normalized to 1.0 FTE for comparison:</span> {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
+                  <br />
+                  <span className="text-sm text-gray-500">Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

@@ -150,12 +150,13 @@ export function PrintReportGraph({
           strokeWidth={1.5}
           strokeDasharray="3 3"
           label={{
-            value: `${formatYAxis(inputValueNum)} (${calculatedPercentile.toFixed(1)}th)`,
-            position: 'right',
+            value: `${formatYAxis(inputValueNum)} (${(calculatedPercentile || 0).toFixed(1)}th)`,
+            position: 'left',
             fill: '#dc2626',
             fontSize: 12,
             fontWeight: 500,
-            dx: 5
+            dx: -10,
+            dy: -10
           }}
         />
         <ReferenceDot

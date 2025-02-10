@@ -1,26 +1,6 @@
-﻿'use client';
-
-import { useState, useEffect } from 'react';
-import PercentileCalculator from '@/components/PercentileCalculator';
+﻿import { ClientWrapper } from '@/components/ClientWrapper';
 
 export default function Home() {
-  const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
-
-  useEffect(() => {
-    const choiceMade = localStorage.getItem('dataChoiceMade');
-    setHasUserMadeChoice(!!choiceMade);
-  }, []);
-
-  // If no choice has been made, only show the initial choice dialog
-  if (!hasUserMadeChoice) {
-    return (
-      <div className="min-h-screen bg-white">
-        <PercentileCalculator />
-      </div>
-    );
-  }
-
-  // After choice is made, show the full app layout
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -36,7 +16,7 @@ export default function Home() {
           />
         </header>
         <main>
-          <PercentileCalculator />
+          <ClientWrapper />
         </main>
       </div>
     </div>

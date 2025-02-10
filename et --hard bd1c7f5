@@ -1,0 +1,5 @@
+[33mfd391ab[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m fix: add missing normalizedValue to CalculationHistory
+[33m25ef08d[m fix: handle FTE normalization in print report page
+[33m5b17f12[m refactor: improve header layout and spacing - adjust title/logo positioning, increase logo size, align with content
+[33mbd1c7f5[m[33m ([m[1;32mfix-build[m[33m)[m Fix: Resolve build and runtime issues - Remove Turbopack and fix PostCSS config - Update Next.js configuration for better TypeScript support - Clean up dependencies and build artifacts - Fix hydration issues in PercentileCalculator component
+[33mfe8b2b1[m Fix: Add robust error handling and fix market data loading

@@ -75,9 +75,9 @@ export function PercentileGraph({
     if (selectedMetric === 'wrvu') {
       return value.toLocaleString('en-US', { maximumFractionDigits: 1 });
     } else if (selectedMetric === 'total') {
-      return `$${(value / 1000).toFixed(0)}K`;
+      return `$${((value || 0) / 1000).toFixed(0)}K`;
     } else {
-      return `$${value.toFixed(2)}`;
+      return `$${(value || 0).toFixed(2)}`;
     }
   };
 
@@ -233,12 +233,13 @@ export function PercentileGraph({
               strokeWidth={1.5}
               strokeDasharray="3 3"
               label={{
-                value: `${formatYAxis(inputValueNum)} (${calculatedPercentile.toFixed(1)}th)`,
-                position: 'bottom',
+                value: `${formatYAxis(inputValueNum)} (${(calculatedPercentile || 0).toFixed(1)}th)`,
+                position: 'left',
                 fill: '#dc2626',
                 fontSize: 12,
                 fontWeight: 500,
-                dy: 10
+                dx: -10,
+                dy: -10
               }}
             />
             <ReferenceDot
