@@ -103,25 +103,25 @@ export default function PrintReport() {
     <div className="print-container">
       <div className="print-content max-w-[8.5in] mx-auto">
         {/* Navigation Buttons - Hidden in print */}
-        <div className="screen-only mb-6">
-          <div className="flex justify-between">
-            {/* Back Button */}
+        <div className="screen-only mb-8">
+          <div className="flex justify-between items-center">
+            {/* Back Button - Secondary Action */}
             <button
               onClick={() => window.location.href = `${basePath}/`}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="w-40 inline-flex items-center justify-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              Back to Calculator
+              Back
             </button>
 
-            {/* Print Button */}
+            {/* Print Button - Primary Action */}
             <button
               onClick={handlePrint}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="w-40 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
               </svg>
               Print Report
@@ -161,11 +161,16 @@ export default function PrintReport() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 )}
               </svg>
-              {getMetricLabel(calculation.metric)}
+              {getMetricLabel(calculation.metric)} at {calculation.fte.toFixed(2)} FTE
             </div>
             <div className="text-xl font-bold text-gray-900 mt-1">
-              {formatValue(calculation.value, calculation.metric)}
+              {formatValue(calculation.actualValue, calculation.metric)}
             </div>
+            {(calculation.metric === 'total' || calculation.metric === 'wrvu') && calculation.fte !== 1.0 && (
+              <div className="text-sm text-blue-600 mt-1">
+                {formatValue(calculation.normalizedValue || calculation.value, calculation.metric)} @ 1.0 FTE
+              </div>
+            )}
           </div>
           <div className="bg-white rounded border border-gray-300 p-3 shadow-sm">
             <div className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -192,7 +197,7 @@ export default function PrintReport() {
                 marketData={marketData}
                 selectedSpecialty={calculation.specialty}
                 selectedMetric={calculation.metric}
-                inputValue={calculation.value.toString()}
+                inputValue={(calculation.normalizedValue || calculation.value).toString()}
                 calculatedPercentile={calculation.percentile}
                 formatValue={(value) => {
                   const numValue = typeof value === 'string' ? parseFloat(value) : value;

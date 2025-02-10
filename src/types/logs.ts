@@ -46,6 +46,7 @@ export interface AuditLog {
     metric?: MetricType;
     value?: number;
     actualValue?: number;
+    normalizedValue?: number;
     fte?: number;
     percentile?: number;
     complianceFlags?: ComplianceCheck[];
@@ -61,6 +62,7 @@ export interface CalculationHistory {
   metric: MetricType;
   value: number;
   actualValue: number;
+  normalizedValue: number;
   fte: number;
   percentile: number;
   timestamp: string;

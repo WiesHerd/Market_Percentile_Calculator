@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { MarketData, MetricType, MarketDataPercentileKey, CalculationHistory } from '@/types/logs';
-import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { PercentileGraph } from './PercentileGraph';
 import { CalculationHistoryView } from './CalculationHistory';
 import Papa from 'papaparse';
@@ -209,6 +209,7 @@ export default function PercentileCalculator() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setError(null);
       const choiceMade = localStorage.getItem('dataChoiceMade');
       if (!choiceMade) {
         setShowInitialChoice(true);
@@ -223,41 +224,61 @@ export default function PercentileCalculator() {
         try {
           const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
           const csvResponse = await fetch(`${basePath}/data/market-reference-data.csv`);
+          if (!csvResponse.ok) {
+            throw new Error(`Failed to fetch CSV data: ${csvResponse.statusText}`);
+          }
           const csvText = await csvResponse.text();
           
           const Papa = (await import('papaparse')).default;
           const parsedData: MarketData[] = [];
-          Papa.parse(csvText, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-              results.data.forEach((row: any, index: number) => {
-                const newData: MarketData = {
-                  id: `default_${index + 1}`,
-                  specialty: row.specialty,
-                  p25_total: parseFloat(row.p25_TCC || '0'),
-                  p50_total: parseFloat(row.p50_TCC || '0'),
-                  p75_total: parseFloat(row.p75_TCC || '0'),
-                  p90_total: parseFloat(row.p90_TCC || '0'),
-                  p25_wrvu: parseFloat(row.p25_wrvu || '0'),
-                  p50_wrvu: parseFloat(row.p50_wrvu || '0'),
-                  p75_wrvu: parseFloat(row.p75_wrvu || '0'),
-                  p90_wrvu: parseFloat(row.p90_wrvu || '0'),
-                  p25_cf: parseFloat(row.p25_cf || '0'),
-                  p50_cf: parseFloat(row.p50_cf || '0'),
-                  p75_cf: parseFloat(row.p75_cf || '0'),
-                  p90_cf: parseFloat(row.p90_cf || '0')
-                };
-                parsedData.push(newData);
-              });
-              data = parsedData;
-            }
+          
+          await new Promise<void>((resolve) => {
+            Papa.parse(csvText, {
+              header: true,
+              skipEmptyLines: true,
+              complete: (results) => {
+                results.data.forEach((row: any, index: number) => {
+                  if (!row.specialty) return;
+                  
+                  const newData: MarketData = {
+                    id: `default_${index + 1}`,
+                    specialty: row.specialty,
+                    p25_total: parseFloat(row.p25_TCC || '0'),
+                    p50_total: parseFloat(row.p50_TCC || '0'),
+                    p75_total: parseFloat(row.p75_TCC || '0'),
+                    p90_total: parseFloat(row.p90_TCC || '0'),
+                    p25_wrvu: parseFloat(row.p25_wrvu || '0'),
+                    p50_wrvu: parseFloat(row.p50_wrvu || '0'),
+                    p75_wrvu: parseFloat(row.p75_wrvu || '0'),
+                    p90_wrvu: parseFloat(row.p90_wrvu || '0'),
+                    p25_cf: parseFloat(row.p25_cf || '0'),
+                    p50_cf: parseFloat(row.p50_cf || '0'),
+                    p75_cf: parseFloat(row.p75_cf || '0'),
+                    p90_cf: parseFloat(row.p90_cf || '0')
+                  };
+                  parsedData.push(newData);
+                });
+                data = parsedData;
+                resolve();
+              },
+              error: (error: ParseError) => {
+                throw new Error(`Failed to parse CSV: ${error.message}`);
+              }
+            });
           });
         } catch (csvError) {
+          console.warn('Failed to load CSV, falling back to JSON:', csvError);
           const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
           const jsonResponse = await fetch(`${basePath}/data/market-data.json`);
+          if (!jsonResponse.ok) {
+            throw new Error(`Failed to fetch JSON data: ${jsonResponse.statusText}`);
+          }
           data = await jsonResponse.json();
         }
+      }
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('No valid market data available');
       }
       
       setMarketData(data);
@@ -420,11 +441,19 @@ export default function PercentileCalculator() {
     }
 
     const cleanValue = inputValue.replace(/[^0-9.]/g, '');
-    const value = parseFloat(cleanValue);
+    let value = parseFloat(cleanValue);
+    const fteValue = parseFloat(fte);
     
-    if (isNaN(value)) {
-      setError('Please enter a valid number');
+    if (isNaN(value) || isNaN(fteValue)) {
+      setError('Please enter valid numbers');
       return;
+    }
+
+    // Normalize the value to 1.0 FTE if it's TCC or wRVU
+    if (selectedMetric === 'total' || selectedMetric === 'wrvu') {
+      if (fteValue > 0 && fteValue < 1.0) {
+        value = value / fteValue; // Normalize to 1.0 FTE equivalent
+      }
     }
 
     const p25 = specialtyData[`p25_${selectedMetric}` as keyof MarketData] as number;
@@ -448,11 +477,15 @@ export default function PercentileCalculator() {
 
     percentile = Math.min(100, Math.max(0, percentile));
 
-    // Perform compliance checks
+    // Store both actual and normalized values for history
+    const actualValue = parseFloat(cleanValue);
+    const normalizedValue = value;
+
+    // Perform compliance checks with normalized value
     const complianceChecks = performComplianceChecks(
       selectedSpecialty,
       selectedMetric,
-      value,
+      normalizedValue,
       percentile,
       marketData
     );
@@ -460,28 +493,31 @@ export default function PercentileCalculator() {
     // Get Fair Market Value data if available
     const fairMarketValue = getFairMarketValue(selectedSpecialty);
 
-    // Create audit log
+    // Create audit log with both actual and normalized values
     const auditLog = createAuditLog('calculation', {
       specialty: selectedSpecialty,
       metric: selectedMetric,
-      value,
+      actualValue,
+      normalizedValue,
+      fte: fteValue,
       percentile,
       complianceFlags: complianceChecks,
       fairMarketValue,
     });
     
-    // Save calculation to history
+    // Save calculation to history with both values
     const newCalculation: CalculationHistory = {
       id: Date.now().toString(),
       physicianName,
       specialty: selectedSpecialty,
       metric: selectedMetric,
-      value: parseFloat(cleanValue) / parseFloat(fte),
-      actualValue: parseFloat(cleanValue),
-      fte: parseFloat(fte),
+      value: normalizedValue,
+      actualValue,
+      normalizedValue,
+      fte: fteValue,
       percentile,
       timestamp: new Date().toISOString(),
-      notes: notes.trim() || undefined,
+      notes: notes || undefined,
       complianceChecks,
       fairMarketValue,
       auditId: auditLog.id
@@ -673,19 +709,30 @@ export default function PercentileCalculator() {
     window.location.reload();
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      {/* Initial Data Choice Modal */}
-      {showInitialChoice && !hasUserMadeChoice && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 relative">
-            <button
-              onClick={() => setShowInitialChoice(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none"
-            >
-              <XMarkIcon className="h-6 w-6" />
-              <span className="sr-only">Close</span>
-            </button>
+  const handleSaveToHistory = () => {
+    if (calculatedPercentile === null || !marketData || !inputValue) return;
+    
+    const newHistoryItem: CalculationHistory = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      physicianName: physicianName || 'Unknown',
+      specialty: selectedSpecialty || 'Unknown',
+      metric: selectedMetric,
+      value: parseFloat(inputValue),
+      actualValue: parseFloat(inputValue),
+      fte: 1.0,
+      percentile: calculatedPercentile,
+    };
+
+    setCalculationHistory(prev => [newHistoryItem, ...prev]);
+    localStorage.setItem('calculationHistory', JSON.stringify([newHistoryItem, ...calculationHistory]));
+  };
+
+  if (showInitialChoice) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-white">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-white rounded-lg p-8 shadow-lg border border-gray-200">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Data Source</h2>
             <p className="text-gray-600 mb-6">
               Would you like to use our preloaded market data or upload your own data?
@@ -764,265 +811,232 @@ export default function PercentileCalculator() {
             )}
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Title Section */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Provider Percentile Calculator</h1>
-            <p className="text-base text-gray-600 mt-1">
-              Calculate and analyze provider compensation percentiles across specialties
-            </p>
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-sm text-red-500">
+                Fields marked with an asterisk (*) are required.
+              </div>
+              <Link
+                href={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/market-data' : '/market-data'}
+                className="inline-flex items-center justify-center w-[180px] px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <TableCellsIcon className="w-4 h-4 mr-2" />
+                View Market Data
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+              {/* Physician Name */}
+              <div className="space-y-1.5">
+                <label htmlFor="physicianName" className="block text-sm font-medium text-gray-700">
+                  Physician Name
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="physicianName"
+                  value={physicianName}
+                  onChange={(e) => setPhysicianName(e.target.value)}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
+                  placeholder="Enter physician name"
+                />
+              </div>
+
+              {/* FTE Input */}
+              <div className="space-y-1.5">
+                <label htmlFor="fte" className="block text-sm font-medium text-gray-700">
+                  FTE
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <input
+                  type="number"
+                  id="fte"
+                  value={fte}
+                  onChange={(e) => setFte(e.target.value)}
+                  onBlur={() => {
+                    const fteNum = parseFloat(fte);
+                    if (isNaN(fteNum) || fteNum < 0.1 || fteNum > 1.0) {
+                      setFte('1.00');
+                    } else {
+                      setFte(fteNum.toFixed(2));
+                    }
+                  }}
+                  min="0.10"
+                  max="1.00"
+                  step="0.01"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
+                  placeholder="1.00"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter a value between 0.00 and 1.00
+                </p>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1.5">
+                <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
+                  Notes
+                </label>
+                <input
+                  type="text"
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
+                  placeholder="Optional notes"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Specialty Select */}
+              <div className="space-y-1.5">
+                <label htmlFor="specialty" className="block text-sm font-medium text-gray-700">
+                  Specialty
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    id="specialty"
+                    value={selectedSpecialty}
+                    onChange={(e) => {
+                      setSelectedSpecialty(e.target.value);
+                      setCalculatedPercentile(null);
+                    }}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm appearance-none"
+                  >
+                    <option value="">Select a specialty</option>
+                    {marketData.map((data) => (
+                      <option key={data.id} value={data.specialty}>
+                        {data.specialty}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metric Select */}
+              <div className="space-y-1.5">
+                <label htmlFor="metric" className="block text-sm font-medium text-gray-700">
+                  Metric
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    id="metric"
+                    value={selectedMetric}
+                    onChange={(e) => {
+                      setSelectedMetric(e.target.value as MetricType);
+                      setCalculatedPercentile(null);
+                    }}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm appearance-none"
+                  >
+                    <option value="total">Total Cash Compensation</option>
+                    <option value="wrvu">Work RVUs</option>
+                    <option value="cf">Conversion Factor</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Value Input */}
+              <div className="space-y-1.5">
+                <label htmlFor="value" className="block text-sm font-medium text-gray-700">
+                  Value
+                  <span className="text-red-500 ml-1">*</span>
+                </label>
+                <div className="relative rounded-lg shadow-sm">
+                  {selectedMetric !== 'wrvu' && (
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                      <span className="text-gray-500 sm:text-sm">$</span>
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    id="value"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onBlur={handleInputBlur}
+                    className={`block w-full rounded-lg border border-gray-300 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm ${
+                      selectedMetric !== 'wrvu' ? 'pl-7' : 'pl-3'
+                    }`}
+                    placeholder={selectedMetric === 'wrvu' ? 'Enter RVUs' : 'Enter value'}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Calculate Button */}
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={clearInputs}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <XMarkIcon className="w-4 h-4 mr-1.5" />
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={calculatePercentile}
+                disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CalculatorIcon className="w-4 h-4 mr-1.5" />
+                Calculate Percentile
+              </button>
+            </div>
           </div>
-          <Image
-            src={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/WH Logo.webp' : '/WH Logo.webp'}
-            alt="WH Logo"
-            width={48}
-            height={48}
-            className="rounded-lg shadow-sm"
-            priority
-          />
         </div>
 
-        <div className="space-y-6">
-          {/* Input Card */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Calculate Percentile</h2>
-                  <div className="text-sm text-red-500 mt-1">
-                    Fields marked with an asterisk (*) are required.
-                  </div>
-                </div>
-                <Link
-                  href={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/market-data' : '/market-data'}
-                  className="inline-flex items-center justify-center w-[180px] px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <TableCellsIcon className="w-4 h-4 mr-2" />
-                  View Market Data
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                {/* Physician Name */}
-                <div className="space-y-1.5">
-                  <label htmlFor="physicianName" className="block text-sm font-medium text-gray-700">
-                    Physician Name
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="physicianName"
-                    value={physicianName}
-                    onChange={(e) => setPhysicianName(e.target.value)}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
-                    placeholder="Enter physician name"
-                  />
-                </div>
-
-                {/* FTE Input */}
-                <div className="space-y-1.5">
-                  <label htmlFor="fte" className="block text-sm font-medium text-gray-700">
-                    FTE
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    id="fte"
-                    value={fte}
-                    onChange={(e) => setFte(e.target.value)}
-                    onBlur={() => {
-                      const fteNum = parseFloat(fte);
-                      if (isNaN(fteNum) || fteNum < 0.1 || fteNum > 1.0) {
-                        setFte('1.00');
-                      } else {
-                        setFte(fteNum.toFixed(2));
-                      }
-                    }}
-                    min="0.10"
-                    max="1.00"
-                    step="0.01"
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
-                    placeholder="1.00"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter a value between 0.00 and 1.00
-                  </p>
-                </div>
-
-                {/* Notes */}
-                <div className="space-y-1.5">
-                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                    Notes
-                  </label>
-                  <input
-                    type="text"
-                    id="notes"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
-                    placeholder="Optional notes"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Specialty Select */}
-                <div className="space-y-1.5">
-                  <label htmlFor="specialty" className="block text-sm font-medium text-gray-700">
-                    Specialty
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="specialty"
-                      value={selectedSpecialty}
-                      onChange={(e) => {
-                        setSelectedSpecialty(e.target.value);
-                        setCalculatedPercentile(null);
-                      }}
-                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm appearance-none"
-                    >
-                      <option value="">Select a specialty</option>
-                      {marketData.map((data) => (
-                        <option key={data.id} value={data.specialty}>
-                          {data.specialty}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                      <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Metric Select */}
-                <div className="space-y-1.5">
-                  <label htmlFor="metric" className="block text-sm font-medium text-gray-700">
-                    Metric
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="relative">
-                    <select
-                      id="metric"
-                      value={selectedMetric}
-                      onChange={(e) => {
-                        setSelectedMetric(e.target.value as MetricType);
-                        setCalculatedPercentile(null);
-                      }}
-                      className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm appearance-none"
-                    >
-                      <option value="total">Total Cash Compensation</option>
-                      <option value="wrvu">Work RVUs</option>
-                      <option value="cf">Conversion Factor</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                      <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                        <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Value Input */}
-                <div className="space-y-1.5">
-                  <label htmlFor="value" className="block text-sm font-medium text-gray-700">
-                    Value
-                    <span className="text-red-500 ml-1">*</span>
-                  </label>
-                  <div className="relative rounded-lg shadow-sm">
-                    {selectedMetric !== 'wrvu' && (
-                      <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                        <span className="text-gray-500 sm:text-sm">$</span>
-                      </div>
-                    )}
-                    <input
-                      type="text"
-                      id="value"
-                      value={inputValue}
-                      onChange={handleInputChange}
-                      onBlur={handleInputBlur}
-                      className={`block w-full rounded-lg border border-gray-300 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm ${
-                        selectedMetric !== 'wrvu' ? 'pl-7' : 'pl-3'
-                      }`}
-                      placeholder={selectedMetric === 'wrvu' ? 'Enter RVUs' : 'Enter value'}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Calculate Button */}
-              <div className="mt-6 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={clearInputs}
-                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <XMarkIcon className="w-4 h-4 mr-1.5" />
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={calculatePercentile}
-                  disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <CalculatorIcon className="w-4 h-4 mr-1.5" />
-                  Calculate Percentile
-                </button>
-              </div>
-            </div>
+        {/* Error Display */}
+        {error && (
+          <div className="p-4 bg-red-50 rounded-lg text-red-700 text-sm">
+            {error}
           </div>
+        )}
 
-          {/* Error Display */}
-          {error && (
-            <div className="p-4 bg-red-50 rounded-lg text-red-700 text-sm">
-              {error}
-            </div>
-          )}
+        {/* Results Section */}
+        {calculatedPercentile !== null && (
+          <div className="text-lg leading-relaxed text-gray-900">
+            <span className="font-medium">{physicianName}</span> ranks in the <span className="text-blue-600 font-semibold">{calculatedPercentile.toFixed(1)}th percentile</span> for {selectedSpecialty.toLowerCase()} compensation{fte !== '1.0' ? ` (${formatValue(inputValue)} at ${fte} FTE)` : ` at ${formatValue(inputValue)}`}.
+          </div>
+        )}
 
-          {/* Results Section */}
-          {calculatedPercentile !== null && (
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Results</h2>
-                  <div className="text-blue-900">
-                    {physicianName}'s {getMetricLabel(selectedMetric)} of {formatValue(inputValue)} is at the{' '}
-                    <span className="font-semibold">{calculatedPercentile.toFixed(1)}th</span> percentile
-                  </div>
-                </div>
+        {/* Market Data Graph */}
+        {calculatedPercentile !== null && marketData && marketData.length > 0 && (
+          <div className="mt-6 bg-white rounded-lg shadow-sm">
+            <PercentileGraph
+              marketData={marketData}
+              selectedSpecialty={selectedSpecialty}
+              selectedMetric={selectedMetric}
+              inputValue={inputValue}
+              calculatedPercentile={calculatedPercentile}
+              formatValue={formatValue}
+              getMetricLabel={getMetricLabel}
+            />
+          </div>
+        )}
 
-                {/* Graph */}
-                {calculatedPercentile !== null && marketData.length > 0 && selectedSpecialty && (
-                  <PercentileGraph
-                    marketData={marketData}
-                    selectedSpecialty={selectedSpecialty}
-                    selectedMetric={selectedMetric}
-                    inputValue={inputValue}
-                    calculatedPercentile={calculatedPercentile}
-                    formatValue={formatValue}
-                    getMetricLabel={getMetricLabel}
-                  />
-                )}
-
-                {/* Compliance Information */}
-                {calculationHistory[0] && (
-                  <ComplianceInfo
-                    complianceChecks={calculationHistory[0].complianceChecks || []}
-                    fairMarketValue={calculationHistory[0].fairMarketValue}
-                    metric={selectedMetric}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Calculation History */}
+        {/* Calculation History */}
+        {calculationHistory.length > 0 && (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
@@ -1044,7 +1058,7 @@ export default function PercentileCalculator() {
               />
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

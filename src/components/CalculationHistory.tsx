@@ -119,16 +119,16 @@ export function CalculationHistoryView({
                     <div className="text-sm space-y-1">
                       <div>
                         <span className="font-medium text-gray-900">
-                          {formatValue(calc.actualValue, calc.metric)}
+                          {typeof calc.actualValue === 'number' && !isNaN(calc.actualValue) ? formatValue(calc.actualValue, calc.metric) : 'N/A'}
                         </span>
                         <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                          {calc.fte.toFixed(2)} FTE
+                          {typeof calc.fte === 'number' && !isNaN(calc.fte) ? `${calc.fte.toFixed(2)} FTE` : '1.00 FTE'}
                         </span>
                       </div>
                       {(calc.metric === 'total' || calc.metric === 'wrvu') && calc.fte !== 1.0 && (
                         <div className="flex items-center justify-end text-xs">
                           <span className="text-blue-600 font-medium">
-                            {formatValue(calc.value, calc.metric)}
+                            {typeof calc.value === 'number' && !isNaN(calc.value) ? formatValue(calc.value, calc.metric) : 'N/A'}
                           </span>
                           <span className="ml-1 text-gray-500">normalized @ 1.0 FTE</span>
                         </div>
@@ -137,7 +137,7 @@ export function CalculationHistoryView({
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-right">
                     <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {calc.percentile.toFixed(1)}th
+                      {typeof calc.percentile === 'number' && !isNaN(calc.percentile) ? `${calc.percentile.toFixed(1)}th` : 'N/A'}
                     </div>
                     {calc.complianceChecks && calc.complianceChecks.length > 0 && (
                       <div className="inline-flex ml-2">
@@ -210,17 +210,17 @@ export function CalculationHistoryView({
                         {calc.fairMarketValue && (
                           <div className="mt-2 text-gray-600">
                             <span className="font-medium">Fair Market Value Range: </span>
-                            {calc.fairMarketValue.min.toLocaleString('en-US', {
+                            {calc.fairMarketValue.min?.toLocaleString('en-US', {
                               style: 'currency',
                               currency: 'USD',
                               maximumFractionDigits: 0,
-                            })} - {calc.fairMarketValue.max.toLocaleString('en-US', {
+                            }) || 'N/A'} - {calc.fairMarketValue.max?.toLocaleString('en-US', {
                               style: 'currency',
                               currency: 'USD',
                               maximumFractionDigits: 0,
-                            })}
+                            }) || 'N/A'}
                             <span className="text-gray-500 ml-2">
-                              (Source: {calc.fairMarketValue.source})
+                              (Source: {calc.fairMarketValue.source || 'Unknown'})
                             </span>
                           </div>
                         )}
