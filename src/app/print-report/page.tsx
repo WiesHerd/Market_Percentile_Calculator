@@ -9,21 +9,71 @@ export default function PrintReport() {
   const [data, setData] = useState<{
     calculation: CalculationHistory;
     marketData: MarketData[];
+    timestamp: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const storedData = sessionStorage.getItem('printCalculation');
-      if (!storedData) {
-        setError('No calculation data found. Please try generating a new report.');
+      // Get the data from URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const encodedData = urlParams.get('data');
+
+      if (!encodedData) {
+        console.error('No data parameter found in URL');
+        setError(
+          'No calculation data found. This page cannot be accessed directly.\n\n' +
+          'To generate a report:\n' +
+          '1. Go to the calculator page\n' +
+          '2. Find your calculation in the history\n' +
+          '3. Click the printer icon next to it\n\n' +
+          'If you clicked the print icon and still see this message, please:\n' +
+          '• Check if pop-ups are blocked\n' +
+          '• Try clicking the print icon again\n' +
+          '• Ensure your browser allows pop-ups'
+        );
         return;
       }
-      setData(JSON.parse(storedData));
-      sessionStorage.removeItem('printCalculation');
+
+      // Decode and parse the data
+      const decodedData = JSON.parse(atob(encodedData));
+      
+      if (!decodedData.calculation || !decodedData.marketData || !decodedData.timestamp) {
+        console.error('Invalid data structure:', decodedData);
+        setError(
+          'Invalid data format.\n\n' +
+          'This could be due to:\n' +
+          '• Corrupted URL parameters\n' +
+          '• Invalid data format\n\n' +
+          'Please try generating a new report from the calculator page.'
+        );
+        return;
+      }
+
+      // Check if the data is too old (more than 5 minutes)
+      const now = new Date().getTime();
+      if (now - decodedData.timestamp > 5 * 60 * 1000) {
+        setError(
+          'The print data has expired.\n\n' +
+          'For security reasons, print data is only valid for 5 minutes.\n' +
+          'Please generate a new report from the calculator page.'
+        );
+        return;
+      }
+
+      // Set the data
+      setData(decodedData);
+
     } catch (err) {
-      setError('Error loading calculation data. Please try again.');
       console.error('Error loading print data:', err);
+      setError(
+        'Error loading calculation data.\n\n' +
+        'This could be due to:\n' +
+        '• Invalid URL parameters\n' +
+        '• Corrupted data\n' +
+        '• Browser limitations\n\n' +
+        'Please try generating a new report from the calculator page.'
+      );
     }
   }, []);
 
@@ -32,13 +82,13 @@ export default function PrintReport() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="max-w-lg w-full space-y-8">
           <div className="text-center">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">Error</h1>
-            <p className="text-gray-600 mb-6">{error}</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">Cannot Generate Report</h1>
+            <div className="text-gray-600 mb-6 whitespace-pre-line">{error}</div>
             <button
               onClick={() => window.location.href = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '/'}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              Back to Calculator
+              Go to Calculator
             </button>
           </div>
         </div>
@@ -130,8 +180,8 @@ export default function PrintReport() {
         </div>
 
         {/* Header */}
-        <div className="mb-6 border-b border-gray-300 pb-3">
-          <div className="flex justify-between items-center mb-4">
+        <div className="mb-4 border-b border-gray-300 pb-2">
+          <div className="flex justify-between items-center mb-2">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-1 text-left">Provider Compensation Analysis</h1>
               <div className="flex items-center gap-2 text-base">
@@ -140,17 +190,15 @@ export default function PrintReport() {
                 <span className="text-gray-600">{calculation.specialty}</span>
               </div>
             </div>
-            <img 
-              src={`${basePath}/WH Logo.webp`}
-              alt="WH Logo" 
-              className="h-16 object-contain"
-            />
+            <div className="flex items-center justify-center bg-blue-600 w-12 h-12 rounded-lg">
+              <span className="text-white font-bold text-xl">WH</span>
+            </div>
           </div>
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-white rounded border border-gray-300 p-3 shadow-sm">
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="bg-white rounded border border-gray-300 p-2 shadow-sm">
             <div className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {calculation.metric === 'total' ? (
@@ -167,7 +215,7 @@ export default function PrintReport() {
               {formatValue(calculation.value || 0, calculation.metric)}
             </div>
           </div>
-          <div className="bg-white rounded border border-gray-300 p-3 shadow-sm">
+          <div className="bg-white rounded border border-gray-300 p-2 shadow-sm">
             <div className="flex items-center gap-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
@@ -182,12 +230,12 @@ export default function PrintReport() {
         </div>
 
         {/* Graph Section */}
-        <div className="mb-8 bg-white rounded border border-gray-300 shadow-sm overflow-hidden w-full">
-          <div className="px-3 py-2 border-b border-gray-300 bg-gray-50">
+        <div className="mb-4 bg-white rounded border border-gray-300 shadow-sm overflow-hidden w-full">
+          <div className="px-2 py-1 border-b border-gray-300 bg-gray-50">
             <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Distribution Analysis</div>
           </div>
           <div className="p-2">
-            <div className="h-[300px] w-full">
+            <div className="h-[280px] w-full">
               <PrintReportGraph
                 marketData={marketData}
                 selectedSpecialty={calculation.specialty}
@@ -206,8 +254,8 @@ export default function PrintReport() {
 
         {/* Market Reference Data Section */}
         {specialtyData && (
-          <div className="mb-8 bg-white rounded border border-gray-300 shadow-sm overflow-hidden w-full">
-            <div className="px-3 py-2 border-b border-gray-300 bg-gray-50">
+          <div className="mb-4 bg-white rounded border border-gray-300 shadow-sm overflow-hidden w-full">
+            <div className="px-2 py-1 border-b border-gray-300 bg-gray-50">
               <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Market Reference Data</div>
             </div>
             <div className="p-2">
@@ -260,8 +308,23 @@ export default function PrintReport() {
           </div>
         )}
 
+        {/* FTE Normalization Disclosure */}
+        {calculation.fte !== 1.0 && (calculation.metric === 'total' || calculation.metric === 'wrvu') && (
+          <div className="mb-4 bg-blue-50 rounded border border-blue-200 p-2">
+            <div className="text-sm text-blue-800">
+              <div className="font-medium mb-1">FTE Normalization Note:</div>
+              <p>
+                The entered value of {formatValue(calculation.actualValue || 0, calculation.metric)} 
+                at {calculation.fte.toFixed(2)} FTE has been normalized to {formatValue(calculation.value || 0, calculation.metric)} 
+                at 1.0 FTE for market comparison purposes.
+                {calculation.metric === 'wrvu' ? ' (Work RVUs)' : ' (Total Cash Compensation)'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
-        <div className="mt-2 pt-2 border-t border-gray-300">
+        <div className="mt-2 pt-1 border-t border-gray-300">
           <div className="flex justify-between items-center text-xs text-gray-500">
             <div className="font-medium">Provider Percentile Calculator</div>
             <div>Generated on {format(new Date(), 'MMMM d, yyyy h:mm a')}</div>
@@ -276,7 +339,7 @@ export default function PrintReport() {
             min-height: 11in;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
             margin: 0 auto;
-            padding: 1rem;
+            padding: 0.75rem;
           }
           .print-content {
             display: flex;
@@ -292,7 +355,7 @@ export default function PrintReport() {
         @media print {
           @page {
             size: letter portrait;
-            margin: 0.4in;
+            margin: 0.3in;
           }
           
           body {
