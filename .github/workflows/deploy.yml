@@ -34,12 +34,12 @@ jobs:
       - name: Build
         run: |
           npm run build
-          touch out/.nojekyll
+          cp .nojekyll out/
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./out
+          path: out
 
   deploy:
     environment:
