@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { MarketData, MetricType, MarketDataPercentileKey, CalculationHistory } from '@/types/logs';
-import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon, ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon, ExclamationTriangleIcon, ArrowPathIcon, PlusCircleIcon } from '@heroicons/react/24/outline';
 import { PercentileGraph } from './PercentileGraph';
 import { CalculationHistoryView } from './CalculationHistory';
 import Papa from 'papaparse';
@@ -28,6 +28,22 @@ interface Props {
   onDataSourceSelected?: () => void;
 }
 
+interface CustomMarketData {
+  specialty: string;
+  p25_total: number;
+  p50_total: number;
+  p75_total: number;
+  p90_total: number;
+  p25_wrvu: number;
+  p50_wrvu: number;
+  p75_wrvu: number;
+  p90_wrvu: number;
+  p25_cf: number;
+  p50_cf: number;
+  p75_cf: number;
+  p90_cf: number;
+}
+
 export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('');
@@ -47,6 +63,22 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
   const [showTemplateGuide, setShowTemplateGuide] = useState(false);
   const [fte, setFte] = useState('1.0');
+  const [showCustomDataModal, setShowCustomDataModal] = useState(false);
+  const [customDataForm, setCustomDataForm] = useState<CustomMarketData>({
+    specialty: '',
+    p25_total: 0,
+    p50_total: 0,
+    p75_total: 0,
+    p90_total: 0,
+    p25_wrvu: 0,
+    p50_wrvu: 0,
+    p75_wrvu: 0,
+    p90_wrvu: 0,
+    p25_cf: 0,
+    p50_cf: 0,
+    p75_cf: 0,
+    p90_cf: 0
+  });
 
   // Load initial values from localStorage on mount
   useEffect(() => {
@@ -751,6 +783,181 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     localStorage.setItem('calculationHistory', JSON.stringify([newHistoryItem, ...calculationHistory]));
   };
 
+  const handleCustomDataChange = (field: keyof CustomMarketData, value: string | number) => {
+    if (field === 'specialty') {
+      setCustomDataForm(prev => ({
+        ...prev,
+        [field]: String(value)
+      }));
+    } else {
+      const numericValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
+      setCustomDataForm(prev => ({
+        ...prev,
+        [field]: numericValue
+      }));
+    }
+  };
+
+  const handleCustomDataSubmit = () => {
+    if (!customDataForm.specialty) {
+      setError('Specialty name is required');
+      return;
+    }
+
+    const newData: MarketData = {
+      id: `custom_${Date.now()}`,
+      ...customDataForm
+    };
+
+    const updatedData = [...marketData];
+    const existingIndex = updatedData.findIndex(d => d.specialty === customDataForm.specialty);
+    
+    if (existingIndex !== -1) {
+      updatedData[existingIndex] = newData;
+    } else {
+      updatedData.push(newData);
+    }
+
+    setMarketData(updatedData);
+    localStorage.setItem('uploadedMarketData', JSON.stringify(updatedData));
+    setShowCustomDataModal(false);
+    setCustomDataForm({
+      specialty: '',
+      p25_total: 0,
+      p50_total: 0,
+      p75_total: 0,
+      p90_total: 0,
+      p25_wrvu: 0,
+      p50_wrvu: 0,
+      p75_wrvu: 0,
+      p90_wrvu: 0,
+      p25_cf: 0,
+      p50_cf: 0,
+      p75_cf: 0,
+      p90_cf: 0
+    });
+  };
+
+  const CustomDataModal = () => (
+    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white rounded-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-gray-900">Add Custom Market Data</h2>
+            <button
+              onClick={() => setShowCustomDataModal(false)}
+              className="text-gray-400 hover:text-gray-500"
+            >
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-6">
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Specialty Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                defaultValue={customDataForm.specialty}
+                onBlur={(e) => handleCustomDataChange('specialty', e.target.value)}
+                className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                placeholder="Enter specialty name"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Total Cash Compensation */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-900">Total Cash Compensation</h3>
+                <div className="space-y-3">
+                  {['25th', '50th', '75th', '90th'].map((percentile, index) => (
+                    <div key={`tcc-${percentile}`}>
+                      <label className="block text-sm text-gray-700 mb-1">{percentile} Percentile</label>
+                      <div className="relative rounded-lg">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                          <span className="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input
+                          type="number"
+                          defaultValue={customDataForm[`p${percentile.slice(0, 2)}_total` as keyof CustomMarketData]}
+                          onBlur={(e) => handleCustomDataChange(`p${percentile.slice(0, 2)}_total` as keyof CustomMarketData, e.target.value)}
+                          className="block w-full rounded-lg border border-gray-300 pl-7 pr-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Work RVUs */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-900">Work RVUs</h3>
+                <div className="space-y-3">
+                  {['25th', '50th', '75th', '90th'].map((percentile) => (
+                    <div key={`wrvu-${percentile}`}>
+                      <label className="block text-sm text-gray-700 mb-1">{percentile} Percentile</label>
+                      <input
+                        type="number"
+                        defaultValue={customDataForm[`p${percentile.slice(0, 2)}_wrvu` as keyof CustomMarketData]}
+                        onBlur={(e) => handleCustomDataChange(`p${percentile.slice(0, 2)}_wrvu` as keyof CustomMarketData, e.target.value)}
+                        className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Conversion Factor */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-gray-900">Conversion Factor</h3>
+                <div className="space-y-3">
+                  {['25th', '50th', '75th', '90th'].map((percentile) => (
+                    <div key={`cf-${percentile}`}>
+                      <label className="block text-sm text-gray-700 mb-1">{percentile} Percentile</label>
+                      <div className="relative rounded-lg">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                          <span className="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={customDataForm[`p${percentile.slice(0, 2)}_cf` as keyof CustomMarketData]}
+                          onBlur={(e) => handleCustomDataChange(`p${percentile.slice(0, 2)}_cf` as keyof CustomMarketData, e.target.value)}
+                          className="block w-full rounded-lg border border-gray-300 pl-7 pr-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+          <button
+            onClick={() => setShowCustomDataModal(false)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCustomDataSubmit}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Save Market Data
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (showInitialChoice) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
@@ -839,45 +1046,69 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="space-y-6">
-        <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="text-sm text-red-500">
-                Fields marked with an asterisk (*) are required.
-              </div>
-              <Link
-                href={process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator/market-data/' : '/market-data/'}
-                className="inline-flex items-center justify-center w-[180px] px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <TableCellsIcon className="w-4 h-4 mr-2" />
-                View Market Data
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              {/* Physician Name */}
-              <div className="space-y-1.5">
-                <label htmlFor="physicianName" className="block text-sm font-medium text-gray-700">
-                  Physician Name
-                  <span className="text-red-500 ml-1">*</span>
+    <div className="space-y-8">
+      {/* Calculator Form */}
+      <div className="grid grid-cols-12 gap-8">
+        {/* First Column */}
+        <div className="col-span-4">
+          <div className="bg-white rounded-lg border border-gray-200 h-[280px] p-6">
+            <h3 className="text-sm font-medium text-gray-900 mb-4">Provider Information</h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="physician" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Physician Name <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  id="physicianName"
+                  id="physician"
                   value={physicianName}
                   onChange={(e) => setPhysicianName(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
+                  className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
                   placeholder="Enter physician name"
                 />
+                <div className="mb-10"></div>
               </div>
 
-              {/* FTE Input */}
-              <div className="space-y-1.5">
-                <label htmlFor="fte" className="block text-sm font-medium text-gray-700">
-                  FTE (0.10 - 1.00)
-                  <span className="text-red-500 ml-1">*</span>
+              <div>
+                <label htmlFor="specialty" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Specialty <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    id="specialty"
+                    value={selectedSpecialty}
+                    onChange={(e) => {
+                      setSelectedSpecialty(e.target.value);
+                      setCalculatedPercentile(null);
+                    }}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-gray-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm appearance-none shadow-sm"
+                  >
+                    <option value="">Select a specialty</option>
+                    {filteredSpecialties.map((row) => (
+                      <option key={row.specialty} value={row.specialty}>
+                        {row.specialty}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Second Column */}
+        <div className="col-span-4">
+          <div className="bg-white rounded-lg border border-gray-200 h-[280px] p-6">
+            <h3 className="text-sm font-medium text-gray-900 mb-4">Compensation Details</h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="fte" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  FTE (0.10 - 1.00) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -895,72 +1126,15 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                   min="0.10"
                   max="1.00"
                   step="0.01"
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
+                  className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
                   placeholder="1.00"
                 />
-                {(selectedMetric === 'total' || selectedMetric === 'wrvu') && (
-                  <div className="text-xs text-gray-500 flex items-center">
-                    <svg className="w-4 h-4 text-gray-400 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Values will be normalized to 1.0 FTE
-                  </div>
-                )}
+                <div className="mb-10"></div>
               </div>
 
-              {/* Notes */}
-              <div className="space-y-1.5">
-                <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                  Notes
-                </label>
-                <input
-                  type="text"
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm"
-                  placeholder="Optional notes"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Specialty Select */}
-              <div className="space-y-1.5">
-                <label htmlFor="specialty" className="block text-sm font-medium text-gray-700">
-                  Specialty
-                  <span className="text-red-500 ml-1">*</span>
-                </label>
-                <div className="relative">
-                  <select
-                    id="specialty"
-                    value={selectedSpecialty}
-                    onChange={(e) => {
-                      setSelectedSpecialty(e.target.value);
-                      setCalculatedPercentile(null);
-                    }}
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm appearance-none"
-                  >
-                    <option value="">Select a specialty</option>
-                    {marketData.map((data) => (
-                      <option key={data.id} value={data.specialty}>
-                        {data.specialty}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                    <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
-                      <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Metric Select */}
-              <div className="space-y-1.5">
-                <label htmlFor="metric" className="block text-sm font-medium text-gray-700">
-                  Metric
-                  <span className="text-red-500 ml-1">*</span>
+              <div>
+                <label htmlFor="metric" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Metric <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <select
@@ -970,29 +1144,35 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                       setSelectedMetric(e.target.value as MetricType);
                       setCalculatedPercentile(null);
                     }}
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm appearance-none"
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-gray-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm appearance-none shadow-sm"
                   >
                     <option value="total">Total Cash Compensation</option>
                     <option value="wrvu">Work RVUs</option>
                     <option value="cf">Conversion Factor</option>
                   </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
                     <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
                       <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
                     </svg>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
 
-              {/* Value Input */}
-              <div className="space-y-1.5">
-                <label htmlFor="value" className="block text-sm font-medium text-gray-700">
-                  Value
-                  <span className="text-red-500 ml-1">*</span>
+        {/* Third Column */}
+        <div className="col-span-4">
+          <div className="bg-white rounded-lg border border-gray-200 h-[280px] p-6">
+            <h3 className="text-sm font-medium text-gray-900 mb-4">Value & Notes</h3>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="value" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Value <span className="text-rose-500">*</span>
                 </label>
-                <div className="relative rounded-lg shadow-sm">
+                <div className="relative rounded-lg">
                   {selectedMetric !== 'wrvu' && (
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                       <span className="text-gray-500 sm:text-sm">$</span>
                     </div>
                   )}
@@ -1002,67 +1182,113 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                     value={inputValue}
                     onChange={handleInputChange}
                     onBlur={handleInputBlur}
-                    className={`block w-full rounded-lg border border-gray-300 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600 sm:text-sm ${
-                      selectedMetric !== 'wrvu' ? 'pl-7' : 'pl-3'
+                    className={`block w-full rounded-lg border border-gray-300 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm ${
+                      selectedMetric !== 'wrvu' ? 'pl-8 pr-4' : 'px-4'
                     }`}
                     placeholder={selectedMetric === 'wrvu' ? 'Enter RVUs' : 'Enter value'}
                   />
                 </div>
+                <div className="mb-10"></div>
               </div>
-            </div>
 
-            {/* Calculate Button */}
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={clearInputs}
-                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                <XMarkIcon className="w-4 h-4 mr-1.5" />
-                Clear
-              </button>
-              <button
-                type="button"
-                onClick={calculatePercentile}
-                disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <CalculatorIcon className="w-4 h-4 mr-1.5" />
-                Calculate Percentile
-              </button>
+              <div>
+                <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Notes
+                </label>
+                <textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm resize-none"
+                  placeholder="Optional notes"
+                />
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="p-4 bg-red-50 rounded-lg text-red-700 text-sm">
-            {error}
+      {/* Add Custom Market Data Button */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowCustomDataModal(true)}
+          className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+        >
+          <PlusCircleIcon className="w-5 h-5 mr-2" />
+          Add Custom Market Data
+        </button>
+      </div>
+
+      {showCustomDataModal && <CustomDataModal />}
+
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onClick={clearInputs}
+          className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
+        >
+          <XMarkIcon className="w-4 h-4 mr-2" />
+          Clear
+        </button>
+        <button
+          type="button"
+          onClick={calculatePercentile}
+          disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
+          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <CalculatorIcon className="w-4 h-4 mr-2" />
+          Calculate Percentile
+        </button>
+      </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="p-4 bg-rose-50 rounded-lg border border-rose-200">
+          <div className="flex">
+            <ExclamationTriangleIcon className="h-5 w-5 text-rose-400 mr-2" />
+            <div className="text-sm text-rose-700">{error}</div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Results Section */}
-        {calculatedPercentile !== null && (
-          <div className="text-lg leading-relaxed text-gray-900">
-            <span className="font-medium">{physicianName}</span> ranks in the <span className="text-blue-600 font-semibold">{(calculatedPercentile || 0).toFixed(1)}th percentile</span> for {selectedSpecialty.toLowerCase()} compensation{fte !== '1.0' ? ` (${formatValue(inputValue)} at ${parseFloat(fte).toFixed(2)} FTE)` : ` at ${formatValue(inputValue)}`}.
+      {/* Results Section */}
+      {calculatedPercentile !== null && selectedSpecialty && physicianName && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="space-y-4">
+            <div className="text-lg leading-relaxed text-gray-900">
+              <span className="font-medium">{physicianName}</span> ranks in the{' '}
+              <span className="text-blue-600 font-semibold">{(calculatedPercentile || 0).toFixed(1)}th percentile</span> for{' '}
+              {selectedSpecialty.toLowerCase()} compensation
+              {fte !== '1.0' ? ` (${formatValue(inputValue)} at ${parseFloat(fte).toFixed(2)} FTE)` : ` at ${formatValue(inputValue)}`}.
+            </div>
+
             {(selectedMetric === 'total' || selectedMetric === 'wrvu') && fte !== '1.0' && (
-              <div className="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg flex items-start">
-                <svg className="w-5 h-5 text-blue-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div>
-                  <span className="font-medium">Normalized to 1.0 FTE for comparison:</span> {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
-                  <br />
-                  <span className="text-sm text-gray-500">Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.</span>
+              <div className="bg-blue-50 rounded-lg p-4">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-blue-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-blue-900">
+                      Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
+                    </div>
+                    <p className="mt-1 text-sm text-blue-700">
+                      Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Market Data Graph */}
-        {calculatedPercentile !== null && marketData && marketData.length > 0 && (
-          <div className="mt-6 bg-white rounded-lg shadow-sm">
+      {/* Market Data Graph */}
+      {calculatedPercentile !== null && marketData && marketData.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6">
             <PercentileGraph
               marketData={marketData}
               selectedSpecialty={selectedSpecialty}
@@ -1073,33 +1299,33 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
               getMetricLabel={getMetricLabel}
             />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Calculation History */}
-        {calculationHistory.length > 0 && (
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Calculation History</h2>
-                <button
-                  onClick={() => setCalculationHistory([])}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <TrashIcon className="h-4 w-4 mr-2" />
-                  Clear History
-                </button>
-              </div>
-              <CalculationHistoryView
-                history={calculationHistory}
-                onDelete={deleteCalculation}
-                formatValue={formatValue}
-                getMetricLabel={getMetricLabel}
-                marketData={marketData}
-              />
+      {/* Calculation History */}
+      {calculationHistory.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Calculation History</h2>
+              <button
+                onClick={() => setCalculationHistory([])}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                <TrashIcon className="h-4 w-4 mr-2" />
+                Clear History
+              </button>
             </div>
+            <CalculationHistoryView
+              history={calculationHistory}
+              onDelete={deleteCalculation}
+              formatValue={formatValue}
+              getMetricLabel={getMetricLabel}
+              marketData={marketData}
+            />
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 } 

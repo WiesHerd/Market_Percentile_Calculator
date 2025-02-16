@@ -25,18 +25,32 @@ export function CalculationHistoryView({
   const [selectedReport, setSelectedReport] = useState<CalculationHistory | null>(null);
   const [showComplianceDetails, setShowComplianceDetails] = useState<string | null>(null);
 
-  const handlePrint = (calculation: CalculationHistory) => {
-    // Store the calculation data in sessionStorage
-    sessionStorage.setItem('printCalculation', JSON.stringify({
-      calculation,
-      marketData
-    }));
+  const handlePrint = async (calculation: CalculationHistory) => {
+    try {
+      // Prepare the data
+      const printData = {
+        calculation,
+        marketData,
+        timestamp: new Date().getTime()
+      };
 
-    // Open the print report in a new window/tab with the correct base path
-    const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
-    const printWindow = window.open(`${basePath}/print-report`, '_blank');
-    if (printWindow) {
+      // Convert data to base64 to safely pass through URL
+      const encodedData = btoa(JSON.stringify(printData));
+
+      // Open the print report in a new window/tab
+      const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+      const printWindow = window.open(`${basePath}/print-report?data=${encodedData}`, '_blank');
+      
+      if (!printWindow) {
+        throw new Error('Pop-up window was blocked. Please allow pop-ups for this site.');
+      }
+
+      // Focus the new window
       printWindow.focus();
+
+    } catch (error) {
+      console.error('Error preparing print report:', error);
+      alert('There was an error preparing the print report: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
