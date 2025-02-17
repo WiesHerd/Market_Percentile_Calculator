@@ -57,7 +57,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       icon: ({ className }: { className?: string }) => (
         <div className={`relative w-5 h-5 rounded-full overflow-hidden ${className}`}>
           <Image
-            src="/WH.jpg"
+            src={`${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH.jpg`}
             alt="Wieslaw Herdzik"
             fill
             style={{ objectFit: 'cover' }}
@@ -68,7 +68,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="absolute left-full ml-2 -mt-8 bg-white rounded-lg shadow-lg border border-gray-200 p-2 hidden group-hover:block">
           <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-blue-100">
             <Image
-              src="/WH.jpg"
+              src={`${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH.jpg`}
               alt="Wieslaw Herdzik"
               fill
               style={{ objectFit: 'cover' }}

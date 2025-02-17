@@ -7,7 +7,7 @@ import Link from 'next/link';
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-[1920px] mx-auto px-8">
         {/* Header Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
           <div className="px-6 py-5 border-b border-gray-200">
@@ -27,7 +27,7 @@ export default function AboutPage() {
             <div className="flex flex-col items-center text-center">
               <div className="relative w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-blue-100">
                 <Image
-                  src="/WH.jpg"
+                  src={`${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH.jpg`}
                   alt="Wieslaw Herdzik"
                   fill
                   style={{ objectFit: 'cover' }}
