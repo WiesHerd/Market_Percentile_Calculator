@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { 
   ChartBarIcon, 
@@ -13,7 +14,8 @@ import {
   DocumentTextIcon,
   QuestionMarkCircleIcon,
   ChevronDoubleLeftIcon,
-  ChevronDoubleRightIcon
+  ChevronDoubleRightIcon,
+  UserIcon
 } from '@heroicons/react/24/outline';
 
 interface AppLayoutProps {
@@ -49,7 +51,33 @@ export function AppLayout({ children }: AppLayoutProps) {
     { name: 'View Market Data', href: '/market-data', icon: DocumentChartBarIcon },
     { name: 'Compare Specialties', href: '/compare', icon: ArrowsRightLeftIcon },
     { name: 'Documentation', href: '/docs', icon: DocumentTextIcon },
-    { name: 'Help & Support', href: '/help', icon: QuestionMarkCircleIcon },
+    { 
+      name: 'About Me', 
+      href: '/help', 
+      icon: ({ className }: { className?: string }) => (
+        <div className={`relative w-5 h-5 rounded-full overflow-hidden ${className}`}>
+          <Image
+            src="/WH.jpg"
+            alt="Wieslaw Herdzik"
+            fill
+            style={{ objectFit: 'cover' }}
+          />
+        </div>
+      ),
+      tooltip: (
+        <div className="absolute left-full ml-2 -mt-8 bg-white rounded-lg shadow-lg border border-gray-200 p-2 hidden group-hover:block">
+          <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-blue-100">
+            <Image
+              src="/WH.jpg"
+              alt="Wieslaw Herdzik"
+              fill
+              style={{ objectFit: 'cover' }}
+              className="hover:scale-105 transition-transform duration-300"
+            />
+          </div>
+        </div>
+      )
+    },
   ];
 
   return (
@@ -97,7 +125,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Navigation Links */}
           <nav className="flex-1 p-4 space-y-1">
             {navigationItems.map((item) => (
-              <div key={item.name}>
+              <div key={item.name} className="relative group">
                 <Link
                   href={item.href}
                   className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -111,6 +139,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     pathname === item.href ? 'text-blue-700' : 'text-gray-500 group-hover:text-gray-700'
                   } ${isCollapsed ? '' : 'mr-3'}`} />
                   {!isCollapsed && <span>{item.name}</span>}
+                  {isCollapsed && item.tooltip}
                 </Link>
                 
                 {/* Sub-items for Market Data */}
