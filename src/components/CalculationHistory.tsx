@@ -34,12 +34,12 @@ export function CalculationHistoryView({
         timestamp: new Date().getTime()
       };
 
-      // Convert data to base64 to safely pass through URL
-      const encodedData = btoa(JSON.stringify(printData));
+      // Store data in localStorage instead of URL
+      localStorage.setItem('printReportData', JSON.stringify(printData));
 
       // Open the print report in a new window/tab
       const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
-      const printWindow = window.open(`${basePath}/print-report?data=${encodedData}`, '_blank');
+      const printWindow = window.open(`${basePath}/print-report`, '_blank');
       
       if (!printWindow) {
         throw new Error('Pop-up window was blocked. Please allow pop-ups for this site.');

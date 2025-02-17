@@ -15,12 +15,11 @@ export default function PrintReport() {
 
   useEffect(() => {
     try {
-      // Get the data from URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const encodedData = urlParams.get('data');
+      // Get the data from localStorage
+      const storedData = localStorage.getItem('printReportData');
 
-      if (!encodedData) {
-        console.error('No data parameter found in URL');
+      if (!storedData) {
+        console.error('No print data found in localStorage');
         setError(
           'No calculation data found. This page cannot be accessed directly.\n\n' +
           'To generate a report:\n' +
@@ -35,16 +34,16 @@ export default function PrintReport() {
         return;
       }
 
-      // Decode and parse the data
-      const decodedData = JSON.parse(atob(encodedData));
+      // Parse the data
+      const decodedData = JSON.parse(storedData);
       
       if (!decodedData.calculation || !decodedData.marketData || !decodedData.timestamp) {
         console.error('Invalid data structure:', decodedData);
         setError(
           'Invalid data format.\n\n' +
           'This could be due to:\n' +
-          '• Corrupted URL parameters\n' +
-          '• Invalid data format\n\n' +
+          '• Corrupted data format\n' +
+          '• Invalid data structure\n\n' +
           'Please try generating a new report from the calculator page.'
         );
         return;
@@ -64,13 +63,16 @@ export default function PrintReport() {
       // Set the data
       setData(decodedData);
 
+      // Clear the print data from localStorage
+      localStorage.removeItem('printReportData');
+
     } catch (err) {
       console.error('Error loading print data:', err);
       setError(
         'Error loading calculation data.\n\n' +
         'This could be due to:\n' +
-        '• Invalid URL parameters\n' +
         '• Corrupted data\n' +
+        '• Invalid data format\n' +
         '• Browser limitations\n\n' +
         'Please try generating a new report from the calculator page.'
       );
