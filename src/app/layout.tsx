@@ -8,17 +8,19 @@ export const metadata = {
   icons: {
     icon: [
       {
-        url: '/favicon.ico',
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH Logo.jpg`,
         sizes: 'any'
-      },
+      }
+    ],
+    shortcut: [
       {
-        url: '/icon.svg',
-        type: 'image/svg+xml'
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH Logo.jpg`,
+        type: 'image/jpeg'
       }
     ],
     apple: {
-      url: '/apple-touch-icon.png',
-      sizes: '180x180'
+      url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH Logo.jpg`,
+      type: 'image/jpeg'
     }
   }
 };
