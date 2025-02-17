@@ -166,8 +166,13 @@ export function AppLayout({ children }: AppLayoutProps) {
               {!isCollapsed && (
                 <>
                   <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-                      <ChartBarIcon className="h-4 w-4 text-blue-600" />
+                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-sm">
+                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
+                        {/* W */}
+                        <path d="M3 7l3 10l3-10l3 10l3-10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        {/* H */}
+                        <path d="M15 7v10M21 7v10M15 12h6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                     </div>
                   </div>
                   <div>
