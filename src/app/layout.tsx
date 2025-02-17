@@ -8,20 +8,20 @@ export const metadata = {
   icons: {
     icon: [
       {
-        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/wh-icon.png`,
-        type: 'image/png'
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/icon.svg`,
+        type: 'image/svg+xml'
       }
     ],
     shortcut: [
       {
-        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/wh-icon.png`,
-        type: 'image/png'
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/icon.svg`,
+        type: 'image/svg+xml'
       }
     ],
     apple: [
       {
-        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/wh-icon.png`,
-        type: 'image/png'
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/icon.svg`,
+        type: 'image/svg+xml'
       }
     ]
   }
