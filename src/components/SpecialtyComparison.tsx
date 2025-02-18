@@ -924,7 +924,7 @@ export function SpecialtyComparison({
                           y="50"
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          className="text-2xl font-bold"
+                          className="text-xl font-bold"
                           fill="#1f2937"
                         >
                           {unifiedMetrics.correlations.tccWrvu.toFixed(1)}%
@@ -932,7 +932,7 @@ export function SpecialtyComparison({
                       </svg>
                     </div>
                     <div className="text-sm font-medium text-gray-900 mt-2 flex items-center justify-center min-w-0">
-                      <div className="truncate">Work Output vs. TCC</div>
+                      <div className="truncate">RVUs vs TCC</div>
                       <div className="relative flex-shrink-0">
                         <InfoIcon onClick={() => handleTooltipClick('tccWrvu')} />
                         <MetricTooltip
@@ -982,7 +982,7 @@ export function SpecialtyComparison({
                           y="50"
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          className="text-2xl font-bold"
+                          className="text-xl font-bold"
                           fill="#1f2937"
                         >
                           {unifiedMetrics.correlations.tccCf.toFixed(1)}%
@@ -990,7 +990,7 @@ export function SpecialtyComparison({
                       </svg>
                     </div>
                     <div className="text-sm font-medium text-gray-900 mt-2 flex items-center justify-center min-w-0">
-                      <div className="truncate">Pay Rate vs. TCC</div>
+                      <div className="truncate">CF vs TCC</div>
                       <div className="relative flex-shrink-0">
                         <InfoIcon onClick={() => handleTooltipClick('tccCf')} />
                         <MetricTooltip
@@ -1037,7 +1037,7 @@ export function SpecialtyComparison({
                           y="50"
                           textAnchor="middle"
                           dominantBaseline="middle"
-                          className="text-2xl font-bold"
+                          className="text-xl font-bold"
                           fill="#1f2937"
                         >
                           {unifiedMetrics.correlations.wrvuCf.toFixed(1)}%
@@ -1045,7 +1045,7 @@ export function SpecialtyComparison({
                       </svg>
                     </div>
                     <div className="text-sm font-medium text-gray-900 mt-2 flex items-center justify-center min-w-0">
-                      <div className="truncate">Work Volume vs. Pay Rate</div>
+                      <div className="truncate">RVUs vs CF</div>
                       <div className="relative flex-shrink-0">
                         <InfoIcon onClick={() => handleTooltipClick('wrvuCf')} />
                         <MetricTooltip
@@ -1069,22 +1069,20 @@ export function SpecialtyComparison({
 
             {/* Dollars per Work Unit section */}
             <div className="bg-white rounded-lg p-4 border border-gray-200 group relative">
-              <div className="flex justify-between items-center mb-3">
-                <div className="text-base font-medium text-gray-900 flex items-center">
-                  Dollars per Work Unit
-                  <div className="relative">
-                    <InfoIcon onClick={() => handleTooltipClick('ratioDistribution')} />
-                    <MetricTooltip
-                      title="Dollars per Work Unit Analysis"
-                      description="Shows the distribution of compensation rates (Total Cash Compensation divided by Work RVUs) across different market percentiles."
-                      calculation="• 25th: Lower market range\n• 50th: Typical market rate\n• 75th: Upper market range\n• 90th: Top tier rate"
-                      interpretation="Higher values indicate better compensation per unit of work. The spread between percentiles shows market variation. Typical ranges vary by specialty. Compare to specialty benchmarks for context. Values above 75th percentile generally indicate favorable compensation structure"
-                      isVisible={activeTooltip === 'ratioDistribution'}
-                      onClose={() => handleTooltipClick('ratioDistribution')}
-                    />
-                  </div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center">
+                  <h3 className="text-lg font-semibold text-gray-900">Conversion Factor ($/RVU)</h3>
+                  <InfoIcon onClick={() => handleTooltipClick('dollarsPerUnit')} />
+                  <MetricTooltip
+                    title="Conversion Factor"
+                    description="Shows how much is paid per work RVU (Total Compensation divided by Work RVUs)"
+                    calculation="Total Cash Compensation (TCC) ÷ Work RVUs = Dollars per RVU"
+                    interpretation="Higher values indicate better compensation relative to work output"
+                    isVisible={activeTooltip === 'dollarsPerUnit'}
+                    onClose={() => handleTooltipClick('dollarsPerUnit')}
+                  />
                 </div>
-                <div className="text-xs text-gray-500">Based on TCC/wRVU ratio</div>
+                <div className="text-sm text-gray-600">Based on TCC/wRVU ratio</div>
               </div>
               <div className="grid grid-cols-4 gap-4">
                 {[

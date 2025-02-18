@@ -1,15 +1,13 @@
 'use client';
 
-
-
-import { useState, useEffect, useMemo } from 'react';
-import { MarketData, MetricType, MarketDataPercentileKey, CalculationHistory } from '@/types/logs';
-import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon, ExclamationTriangleIcon, ArrowPathIcon, PlusCircleIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useMemo } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import Papa from 'papaparse';
+import { MarketData, MetricType, CustomMarketData } from '@/types/market-data';
+import { CalculationHistory as BaseCalculationHistory, ComplianceCheck, FairMarketValue } from '@/types/logs';
+import { CalculatorIcon, XMarkIcon, ArrowUpTrayIcon, TableCellsIcon, DocumentArrowUpIcon, TrashIcon, DocumentTextIcon, ExclamationTriangleIcon, ArrowPathIcon, PlusCircleIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { PercentileGraph } from './PercentileGraph';
 import { CalculationHistoryView } from './CalculationHistory';
-import Papa from 'papaparse';
-import Link from 'next/link';
-import Image from 'next/image';
 import { performComplianceChecks, createAuditLog, getFairMarketValue, formatComplianceMessage } from '@/utils/compliance';
 import { ComplianceInfo } from './ComplianceInfo';
 
@@ -24,24 +22,22 @@ interface ParseError {
   message: string;
 }
 
-interface Props {
-  onDataSourceSelected?: () => void;
+interface TCCComponent {
+  id: string;
+  name: string;
+  value: string;
+  notes: string;
+  normalize: boolean;
+  isPercentage?: boolean;
+  baseComponentId?: string;
 }
 
-interface CustomMarketData {
-  specialty: string;
-  p25_total: number;
-  p50_total: number;
-  p75_total: number;
-  p90_total: number;
-  p25_wrvu: number;
-  p50_wrvu: number;
-  p75_wrvu: number;
-  p90_wrvu: number;
-  p25_cf: number;
-  p50_cf: number;
-  p75_cf: number;
-  p90_cf: number;
+interface CalculationHistory extends BaseCalculationHistory {
+  tccComponents?: TCCComponent[];
+}
+
+interface Props {
+  onDataSourceSelected?: () => void;
 }
 
 export default function PercentileCalculator({ onDataSourceSelected }: Props) {
@@ -79,6 +75,9 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     p75_cf: 0,
     p90_cf: 0
   });
+  const [tccComponents, setTccComponents] = useState<TCCComponent[]>([
+    { id: '1', name: 'Base Pay', value: '', notes: '', normalize: true, isPercentage: false }
+  ]);
 
   // Load initial values from localStorage on mount
   useEffect(() => {
@@ -367,108 +366,54 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Reset states
-    setIsProcessing(true);
-    setError(null);
-    setUploadedData([]);
+    Papa.parse(file, {
+      complete: (results) => {
+        try {
+          const parsedData = results.data as any[];
+          const validData = parsedData
+            .filter(row => row.specialty && row.p50_total)
+            .map(row => ({
+              id: uuidv4(),
+              specialty: row.specialty,
+              p25_total: parseFloat(row.p25_total) || 0,
+              p50_total: parseFloat(row.p50_total) || 0,
+              p75_total: parseFloat(row.p75_total) || 0,
+              p90_total: parseFloat(row.p90_total) || 0,
+              p25_wrvu: parseFloat(row.p25_wrvu) || 0,
+              p50_wrvu: parseFloat(row.p50_wrvu) || 0,
+              p75_wrvu: parseFloat(row.p75_wrvu) || 0,
+              p90_wrvu: parseFloat(row.p90_wrvu) || 0,
+              p25_cf: parseFloat(row.p25_cf) || 0,
+              p50_cf: parseFloat(row.p50_cf) || 0,
+              p75_cf: parseFloat(row.p75_cf) || 0,
+              p90_cf: parseFloat(row.p90_cf) || 0
+            }));
 
-    // Validate file type
-    if (!file.name.endsWith('.csv')) {
-      setError('Please upload a CSV file');
-      setIsProcessing(false);
-      return;
-    }
+          if (validData.length === 0) {
+            setError('No valid data found in the file');
+            return;
+          }
 
-    try {
-      const text = await file.text();
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          const processedData: MarketData[] = [];
-          let rowErrors: string[] = [];
-          
-          results.data.forEach((row: any, index: number) => {
-            const specialty = row.specialty?.trim();
-            if (!specialty) {
-              rowErrors.push(`Row ${index + 1}: Missing specialty`);
-              return;
-            }
-
-            try {
-              const newData: MarketData = {
-                id: `uploaded_${index}`,
-                specialty,
-                p25_total: parseFloat(row.p25_TCC || '0'),
-                p50_total: parseFloat(row.p50_TCC || '0'),
-                p75_total: parseFloat(row.p75_TCC || '0'),
-                p90_total: parseFloat(row.p90_TCC || '0'),
-                p25_wrvu: parseFloat(row.p25_wrvu || '0'),
-                p50_wrvu: parseFloat(row.p50_wrvu || '0'),
-                p75_wrvu: parseFloat(row.p75_wrvu || '0'),
-                p90_wrvu: parseFloat(row.p90_wrvu || '0'),
-                p25_cf: parseFloat(row.p25_cf || '0'),
-                p50_cf: parseFloat(row.p50_cf || '0'),
-                p75_cf: parseFloat(row.p75_cf || '0'),
-                p90_cf: parseFloat(row.p90_cf || '0')
-              };
-
-              // Validate the data
-              const hasValidData = 
-                !isNaN(newData.p25_total) && !isNaN(newData.p50_total) && 
-                !isNaN(newData.p75_total) && !isNaN(newData.p90_total) &&
-                !isNaN(newData.p25_wrvu) && !isNaN(newData.p50_wrvu) &&
-                !isNaN(newData.p75_wrvu) && !isNaN(newData.p90_wrvu) &&
-                !isNaN(newData.p25_cf) && !isNaN(newData.p50_cf) &&
-                !isNaN(newData.p75_cf) && !isNaN(newData.p90_cf);
-
-              if (hasValidData) {
-                processedData.push(newData);
-              } else {
-                rowErrors.push(`Row ${index + 1}: Invalid data format`);
-              }
-            } catch (err) {
-              rowErrors.push(`Row ${index + 1}: Error processing data`);
-            }
+          setMarketData(prev => {
+            const updated = [...prev.filter(d => !validData.some(vd => vd.specialty === d.specialty)), ...validData];
+            localStorage.setItem('marketData', JSON.stringify(updated));
+            return updated;
           });
 
-          if (rowErrors.length > 0) {
-            setError(`Errors found in CSV:\n${rowErrors.join('\n')}`);
+          if (onDataSourceSelected) {
+            onDataSourceSelected();
           }
-
-          if (processedData.length === 0) {
-            setError((prev) => prev ? `${prev}\nNo valid data found in the CSV file` : 'No valid data found in the CSV file');
-          } else {
-            // Merge the uploaded data with existing market data
-            const mergedData = [...marketData];
-            
-            processedData.forEach(newData => {
-              const existingIndex = mergedData.findIndex(d => d.specialty === newData.specialty);
-              if (existingIndex !== -1) {
-                mergedData[existingIndex] = newData;
-              } else {
-                mergedData.push(newData);
-              }
-            });
-
-            setMarketData(mergedData);
-            setShowDataTable(true);
-          }
-          setIsProcessing(false);
-        },
-        error: (error: ParseError) => {
-          setError(`Error parsing file: ${error.message}`);
-          setIsProcessing(false);
+        } catch (error) {
+          console.error('Error parsing file:', error);
+          setError('Error parsing file. Please check the format and try again.');
         }
-      });
-    } catch (err) {
-      setError(`Error reading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setIsProcessing(false);
-    }
+      },
+      header: true
+    });
   };
 
   const calculatePercentile = () => {
@@ -563,7 +508,8 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
       notes: notes || undefined,
       complianceChecks,
       fairMarketValue,
-      auditId: auditLog.id
+      auditId: auditLog.id,
+      tccComponents: selectedMetric === 'total' ? tccComponents : undefined
     };
 
     const updatedHistory = [newCalculation, ...calculationHistory];
@@ -644,10 +590,10 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     const specialtyData = marketData.find(d => d.specialty === data.specialty);
     if (!specialtyData) return null;
 
-    const p25Key = `p25_${data.metric}` as MarketDataPercentileKey;
-    const p50Key = `p50_${data.metric}` as MarketDataPercentileKey;
-    const p75Key = `p75_${data.metric}` as MarketDataPercentileKey;
-    const p90Key = `p90_${data.metric}` as MarketDataPercentileKey;
+    const p25Key = `p25_${data.metric}` as keyof MarketData;
+    const p50Key = `p50_${data.metric}` as keyof MarketData;
+    const p75Key = `p75_${data.metric}` as keyof MarketData;
+    const p90Key = `p90_${data.metric}` as keyof MarketData;
 
     const p25 = Number(specialtyData[p25Key]);
     const p50 = Number(specialtyData[p50Key]);
@@ -776,7 +722,8 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
       normalizedValue: normalizedValue,
       fte: fteValue,
       percentile: calculatedPercentile,
-      notes: notes || undefined
+      notes: notes || undefined,
+      tccComponents: selectedMetric === 'total' ? tccComponents : undefined
     };
 
     setCalculationHistory(prev => [newHistoryItem, ...prev]);
@@ -800,42 +747,23 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
 
   const handleCustomDataSubmit = () => {
     if (!customDataForm.specialty) {
-      setError('Specialty name is required');
+      setError('Please enter a specialty name');
       return;
     }
 
-    const newData: MarketData = {
-      id: `custom_${Date.now()}`,
+    const newMarketData: MarketData = {
+      id: uuidv4(),
       ...customDataForm
     };
 
-    const updatedData = [...marketData];
-    const existingIndex = updatedData.findIndex(d => d.specialty === customDataForm.specialty);
-    
-    if (existingIndex !== -1) {
-      updatedData[existingIndex] = newData;
-    } else {
-      updatedData.push(newData);
-    }
-
-    setMarketData(updatedData);
-    localStorage.setItem('uploadedMarketData', JSON.stringify(updatedData));
-    setShowCustomDataModal(false);
-    setCustomDataForm({
-      specialty: '',
-      p25_total: 0,
-      p50_total: 0,
-      p75_total: 0,
-      p90_total: 0,
-      p25_wrvu: 0,
-      p50_wrvu: 0,
-      p75_wrvu: 0,
-      p90_wrvu: 0,
-      p25_cf: 0,
-      p50_cf: 0,
-      p75_cf: 0,
-      p90_cf: 0
+    setMarketData(prev => {
+      const updated = [...prev.filter(d => d.specialty !== newMarketData.specialty), newMarketData];
+      localStorage.setItem('marketData', JSON.stringify(updated));
+      return updated;
     });
+
+    setShowCustomDataModal(false);
+    setSelectedSpecialty(newMarketData.specialty);
   };
 
   const CustomDataModal = () => (
@@ -958,6 +886,144 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     </div>
   );
 
+  const addTccComponent = () => {
+    setTccComponents((prev: TCCComponent[]) => [
+      ...prev,
+      { id: uuidv4(), name: '', value: '', notes: '', normalize: true, isPercentage: false }
+    ]);
+  };
+
+  const removeTccComponent = (id: string) => {
+    setTccComponents((prev: TCCComponent[]) => prev.filter(comp => comp.id !== id));
+    updateTotalTcc();
+  };
+
+  const handleTccValueChange = (id: string, value: string) => {
+    // Allow numbers, decimal point, and percentage symbol
+    const cleanValue = value.replace(/[^0-9.%]/g, '');
+    
+    // Prevent multiple decimal points
+    const decimalCount = (cleanValue.match(/\./g) || []).length;
+    if (decimalCount > 1) return;
+    
+    // Update the component with the cleaned value
+    updateTccComponent(id, 'value', cleanValue);
+  };
+
+  const handleTccValueBlur = (id: string, value: string) => {
+    const component = tccComponents.find(comp => comp.id === id);
+    if (!component) return;
+
+    // Remove any non-numeric characters except dots and percentage
+    const cleanValue = value.replace(/[^0-9.%]/g, '');
+    const isPercentage = component.isPercentage;
+    
+    // Parse the numeric value
+    let numericValue = parseFloat(cleanValue) || 0;
+    
+    // If it's a percentage, ensure it's within reasonable bounds
+    if (isPercentage) {
+      numericValue = Math.min(Math.max(numericValue, 0), 100);
+    }
+    
+    // Format with commas for display
+    const formattedValue = isPercentage 
+      ? `${numericValue.toFixed(1)}%`
+      : numericValue.toLocaleString('en-US', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+    
+    updateTccComponent(id, 'value', formattedValue);
+    setTimeout(updateTotalTcc, 0);
+  };
+
+  const updateTccComponent = (id: string, field: keyof TCCComponent, value: string) => {
+    setTccComponents((prev: TCCComponent[]) => 
+      prev.map(comp => 
+        comp.id === id ? { ...comp, [field]: value } : comp
+      )
+    );
+  };
+
+  const updateTotalTcc = () => {
+    const fteValue = parseFloat(fte);
+    let total = 0;
+    
+    // First, get the base pay value
+    const baseComponent = tccComponents.find(comp => comp.name.toLowerCase().includes('base'));
+    const basePayValue = baseComponent 
+      ? parseFloat(baseComponent.value.replace(/[^0-9.]/g, '')) || 0 
+      : 0;
+
+    // Calculate total including percentage-based components
+    tccComponents.forEach(comp => {
+      const cleanValue = comp.value.replace(/[^0-9.%]/g, '');
+      let value = 0;
+
+      if (comp.isPercentage) {
+        // If it's a percentage, calculate based on base pay
+        const percentage = parseFloat(cleanValue) || 0;
+        value = (basePayValue * percentage) / 100;
+      } else {
+        // If it's a dollar value, use it directly
+        value = parseFloat(cleanValue) || 0;
+      }
+      
+      // Apply FTE normalization if needed
+      if (comp.normalize && fteValue > 0 && fteValue < 1.0) {
+        value = value / fteValue;
+      }
+      
+      total += value;
+    });
+    
+    // Format the total with proper number formatting
+    const formattedTotal = total.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    setInputValue(formattedTotal);
+  };
+
+  const toggleValueType = (id: string) => {
+    setTccComponents(prev => prev.map(component => {
+      if (component.id === id) {
+        const isCurrentlyPercentage = component.value.includes('%');
+        const numericValue = parseFloat(component.value.replace(/[^0-9.]/g, '') || '0');
+        
+        // Find base component to calculate percentage/value
+        const baseComponent = prev.find(c => c.name.toLowerCase().includes('base'));
+        const baseValue = baseComponent ? parseFloat(baseComponent.value.replace(/[^0-9.]/g, '') || '0') : 0;
+        
+        let newValue;
+        if (isCurrentlyPercentage) {
+          // Converting from percentage to dollar
+          newValue = ((numericValue / 100) * baseValue).toString();
+        } else {
+          // Converting from dollar to percentage
+          newValue = ((numericValue / baseValue) * 100).toFixed(1);
+        }
+        
+        return {
+          ...component,
+          value: newValue,
+          isPercentage: !isCurrentlyPercentage
+        };
+      }
+      return component;
+    }));
+  };
+
+  const toggleNormalization = (id: string) => {
+    setTccComponents((prev: TCCComponent[]) => 
+      prev.map(comp => 
+        comp.id === id ? { ...comp, normalize: !comp.normalize } : comp
+      )
+    );
+    setTimeout(updateTotalTcc, 0);
+  };
+
   if (showInitialChoice) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
@@ -1048,10 +1114,10 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   return (
     <div className="space-y-8">
       {/* Calculator Form */}
-      <div className="grid grid-cols-12 gap-8">
-        {/* First Column */}
-        <div className="col-span-4">
-          <div className="bg-white rounded-lg border border-gray-200 h-[280px] p-6">
+      <div className="space-y-6 sm:space-y-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+          {/* First Column */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
             <h3 className="text-sm font-medium text-gray-900 mb-4">Provider Information</h3>
             <div className="space-y-4">
               <div>
@@ -1063,7 +1129,7 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                   id="physician"
                   value={physicianName}
                   onChange={(e) => setPhysicianName(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm"
+                  className="block w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors duration-200 ease-in-out sm:text-sm shadow-sm"
                   placeholder="Enter physician name"
                 />
                 <div className="mb-10"></div>
@@ -1081,7 +1147,7 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                       setSelectedSpecialty(e.target.value);
                       setCalculatedPercentile(null);
                     }}
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-gray-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm appearance-none shadow-sm"
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors duration-200 ease-in-out sm:text-sm shadow-sm appearance-none"
                   >
                     <option value="">Select a specialty</option>
                     {filteredSpecialties.map((row) => (
@@ -1099,11 +1165,9 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Second Column */}
-        <div className="col-span-4">
-          <div className="bg-white rounded-lg border border-gray-200 h-[280px] p-6">
+          {/* Second Column */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
             <h3 className="text-sm font-medium text-gray-900 mb-4">Compensation Details</h3>
             <div className="space-y-4">
               <div>
@@ -1144,7 +1208,7 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                       setSelectedMetric(e.target.value as MetricType);
                       setCalculatedPercentile(null);
                     }}
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-gray-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm appearance-none shadow-sm"
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-10 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-colors duration-200 ease-in-out sm:text-sm shadow-sm appearance-none"
                   >
                     <option value="total">Total Cash Compensation</option>
                     <option value="wrvu">Work RVUs</option>
@@ -1159,16 +1223,14 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Third Column */}
-        <div className="col-span-4">
-          <div className="bg-white rounded-lg border border-gray-200 h-[280px] p-6">
+          {/* Third Column */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
             <h3 className="text-sm font-medium text-gray-900 mb-4">Value & Notes</h3>
             <div className="space-y-4">
               <div>
                 <label htmlFor="value" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Value <span className="text-rose-500">*</span>
+                  {getMetricLabel(selectedMetric)} <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative rounded-lg">
                   {selectedMetric !== 'wrvu' && (
@@ -1182,13 +1244,13 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                     value={inputValue}
                     onChange={handleInputChange}
                     onBlur={handleInputBlur}
-                    className={`block w-full rounded-lg border border-gray-300 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm ${
+                    className={`block w-full rounded-lg border border-gray-300 py-2 text-gray-900 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm ${
                       selectedMetric !== 'wrvu' ? 'pl-8 pr-4' : 'px-4'
                     }`}
                     placeholder={selectedMetric === 'wrvu' ? 'Enter RVUs' : 'Enter value'}
+                    readOnly={selectedMetric === 'total'}
                   />
                 </div>
-                <div className="mb-10"></div>
               </div>
 
               <div>
@@ -1199,133 +1261,249 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                   id="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
+                  rows={4}
                   className="block w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:ring-blue-500 sm:text-sm shadow-sm resize-none"
-                  placeholder="Optional notes"
+                  placeholder="Add any notes about this calculation..."
                 />
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Add Custom Market Data Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={() => setShowCustomDataModal(true)}
-          className="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-        >
-          <PlusCircleIcon className="w-5 h-5 mr-2" />
-          Add Custom Market Data
-        </button>
-      </div>
-
-      {showCustomDataModal && <CustomDataModal />}
-
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-2">
-        <button
-          type="button"
-          onClick={clearInputs}
-          className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
-        >
-          <XMarkIcon className="w-4 h-4 mr-2" />
-          Clear
-        </button>
-        <button
-          type="button"
-          onClick={calculatePercentile}
-          disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
-          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          <CalculatorIcon className="w-4 h-4 mr-2" />
-          Calculate Percentile
-        </button>
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="p-4 bg-rose-50 rounded-lg border border-rose-200">
-          <div className="flex">
-            <ExclamationTriangleIcon className="h-5 w-5 text-rose-400 mr-2" />
-            <div className="text-sm text-rose-700">{error}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Results Section */}
-      {calculatedPercentile !== null && selectedSpecialty && physicianName && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="space-y-4">
-            <div className="text-lg leading-relaxed text-gray-900">
-              <span className="font-medium">{physicianName}</span> ranks in the{' '}
-              <span className="text-blue-600 font-semibold">{(calculatedPercentile || 0).toFixed(1)}th percentile</span> for{' '}
-              {selectedSpecialty.toLowerCase()} compensation
-              {fte !== '1.0' ? ` (${formatValue(inputValue)} at ${parseFloat(fte).toFixed(2)} FTE)` : ` at ${formatValue(inputValue)}`}.
-            </div>
-
-            {(selectedMetric === 'total' || selectedMetric === 'wrvu') && fte !== '1.0' && (
-              <div className="bg-blue-50 rounded-lg p-4">
-                <div className="flex items-start">
-                  <svg className="w-5 h-5 text-blue-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-blue-900">
-                      Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
-                    </div>
-                    <p className="mt-1 text-sm text-blue-700">
-                      Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
-                    </p>
-                  </div>
-                </div>
+        {/* TCC Components Section */}
+        {selectedMetric === 'total' && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 overflow-x-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Total Cash Compensation Components</h3>
+                <p className="text-xs text-gray-500 mt-1">Add individual components to calculate total compensation</p>
               </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Market Data Graph */}
-      {calculatedPercentile !== null && marketData && marketData.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6">
-            <PercentileGraph
-              marketData={marketData}
-              selectedSpecialty={selectedSpecialty}
-              selectedMetric={selectedMetric}
-              inputValue={inputValue}
-              calculatedPercentile={calculatedPercentile}
-              formatValue={formatValue}
-              getMetricLabel={getMetricLabel}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Calculation History */}
-      {calculationHistory.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">Calculation History</h2>
               <button
-                onClick={() => setCalculationHistory([])}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                type="button"
+                onClick={addTccComponent}
+                className="inline-flex items-center px-2 py-1 text-sm font-medium text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
-                <TrashIcon className="h-4 w-4 mr-2" />
-                Clear History
+                <PlusIcon className="w-4 h-4 mr-1" />
+                Component
               </button>
             </div>
-            <CalculationHistoryView
-              history={calculationHistory}
-              onDelete={deleteCalculation}
-              formatValue={formatValue}
-              getMetricLabel={getMetricLabel}
-              marketData={marketData}
-            />
+
+            <div className="grid grid-cols-1 gap-4">
+              {tccComponents.map((component) => (
+                <div key={component.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <input
+                    type="text"
+                    value={component.name}
+                    onChange={(e) => updateTccComponent(component.id, 'name', e.target.value)}
+                    placeholder="Component Name"
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  />
+                  <div className="flex-none">
+                    {component.isPercentage ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="relative w-32">
+                          <input
+                            type="text"
+                            value={component.value}
+                            onChange={(e) => handleTccValueChange(component.id, e.target.value)}
+                            onBlur={(e) => handleTccValueBlur(component.id, e.target.value)}
+                            placeholder="Percentage"
+                            className="w-full rounded-lg border border-gray-300 px-3 pr-8 py-2 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                          />
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                            <span className="text-gray-500">%</span>
+                          </div>
+                        </div>
+                        <div className="relative w-40">
+                          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                            <span className="text-gray-500">$</span>
+                          </div>
+                          <input
+                            type="text"
+                            value={(() => {
+                              const baseComponent = tccComponents.find(c => c.name.toLowerCase().includes('base'));
+                              const baseValue = baseComponent ? parseFloat(baseComponent.value.replace(/[^0-9.]/g, '') || '0') : 0;
+                              const percentage = parseFloat(component.value.replace(/[^0-9.]/g, '') || '0');
+                              const dollarValue = (percentage / 100) * baseValue;
+                              return dollarValue.toLocaleString('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              });
+                            })()}
+                            readOnly
+                            className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-gray-600 bg-gray-50"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative w-48">
+                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                          <span className="text-gray-500">$</span>
+                        </div>
+                        <input
+                          type="text"
+                          value={component.value}
+                          onChange={(e) => handleTccValueChange(component.id, e.target.value)}
+                          onBlur={(e) => handleTccValueBlur(component.id, e.target.value)}
+                          placeholder="Value"
+                          className="w-full rounded-lg border border-gray-300 pl-7 pr-3 py-2 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={component.notes}
+                    onChange={(e) => updateTccComponent(component.id, 'notes', e.target.value)}
+                    placeholder="Notes"
+                    className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  />
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => toggleValueType(component.id)}
+                      className={`px-2 py-1 rounded ${
+                        component.isPercentage ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                      } text-sm font-medium hover:bg-opacity-75 transition-colors`}
+                      disabled={component.name.toLowerCase().includes('base')}
+                    >
+                      {component.isPercentage ? '%' : '$'}
+                    </button>
+                    <button
+                      onClick={() => toggleNormalization(component.id)}
+                      className={`px-2 py-1 rounded ${
+                        component.normalize ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                      } text-sm font-medium hover:bg-opacity-75 transition-colors`}
+                    >
+                      FTE {component.normalize ? '✓' : ''}
+                    </button>
+                    <button
+                      onClick={() => removeTccComponent(component.id)}
+                      className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between p-3 border-t border-gray-200">
+              <div className="text-sm font-medium text-gray-900">Total TCC:</div>
+              <div className="text-base font-bold text-gray-900">{formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) || 0, 'total')}</div>
+            </div>
           </div>
+        )}
+
+        {/* Add Custom Market Data Button */}
+        {showCustomDataModal && <CustomDataModal />}
+
+        {/* Action Buttons */}
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            onClick={clearInputs}
+            className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
+          >
+            <XMarkIcon className="w-4 h-4 mr-2" />
+            Clear
+          </button>
+          <button
+            type="button"
+            onClick={calculatePercentile}
+            disabled={!selectedSpecialty || !selectedMetric || !inputValue || !physicianName}
+            className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            <CalculatorIcon className="w-4 h-4 mr-2" />
+            Calculate Percentile
+          </button>
         </div>
-      )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="p-4 bg-rose-50 rounded-lg border border-rose-200">
+            <div className="flex">
+              <ExclamationTriangleIcon className="h-5 w-5 text-rose-400 mr-2" />
+              <div className="text-sm text-rose-700">{error}</div>
+            </div>
+          </div>
+        )}
+
+        {/* Results Section */}
+        {calculatedPercentile !== null && selectedSpecialty && physicianName && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="space-y-4">
+              <div className="text-lg leading-relaxed text-gray-900">
+                <span className="font-medium">{physicianName}</span> ranks in the{' '}
+                <span className="text-blue-600 font-semibold">{(calculatedPercentile || 0).toFixed(1)}th percentile</span> for{' '}
+                {selectedSpecialty.toLowerCase()} compensation
+                {fte !== '1.0' ? ` (${formatValue(inputValue)} at ${parseFloat(fte).toFixed(2)} FTE)` : ` at ${formatValue(inputValue)}`}.
+              </div>
+
+              {(selectedMetric === 'total' || selectedMetric === 'wrvu') && fte !== '1.0' && (
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <div className="flex items-start">
+                    <svg className="w-5 h-5 text-blue-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-blue-900">
+                        Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
+                      </div>
+                      <p className="mt-1 text-sm text-blue-700">
+                        Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Market Data Graph */}
+        {calculatedPercentile !== null && marketData && marketData.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6">
+              <PercentileGraph
+                marketData={marketData}
+                selectedSpecialty={selectedSpecialty}
+                selectedMetric={selectedMetric}
+                inputValue={inputValue}
+                calculatedPercentile={calculatedPercentile}
+                formatValue={formatValue}
+                getMetricLabel={getMetricLabel}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Calculation History */}
+        {calculationHistory.length > 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-semibold text-gray-900">Calculation History</h2>
+                <button
+                  onClick={() => setCalculationHistory([])}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                >
+                  <TrashIcon className="h-4 w-4 mr-2" />
+                  Clear History
+                </button>
+              </div>
+              <CalculationHistoryView
+                history={calculationHistory}
+                onDelete={deleteCalculation}
+                formatValue={formatValue}
+                getMetricLabel={getMetricLabel}
+                marketData={marketData}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 } 

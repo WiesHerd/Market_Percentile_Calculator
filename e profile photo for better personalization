@@ -1,0 +1,5 @@
+[33mcommit a932e9b16c84391a565e71350294e6e6d5214913[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Mon Feb 17 06:11:02 2025 -0700
+
+    Fixed print functionality: switched from URL parameters to localStorage to handle large data

@@ -9,11 +9,18 @@ export default function PrintReport() {
   const [data, setData] = useState<{
     calculation: CalculationHistory;
     marketData: MarketData[];
-    timestamp: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [timestamp, setTimestamp] = useState<number | null>(null);
 
   useEffect(() => {
+    // Set timestamp on client side only
+    setTimestamp(Date.now());
+  }, []);
+
+  useEffect(() => {
+    if (timestamp === null) return; // Don't run until timestamp is set on client
+
     try {
       // Get the data from localStorage
       const storedData = localStorage.getItem('printReportData');
@@ -37,7 +44,7 @@ export default function PrintReport() {
       // Parse the data
       const decodedData = JSON.parse(storedData);
       
-      if (!decodedData.calculation || !decodedData.marketData || !decodedData.timestamp) {
+      if (!decodedData.calculation || !decodedData.marketData) {
         console.error('Invalid data structure:', decodedData);
         setError(
           'Invalid data format.\n\n' +
@@ -49,9 +56,9 @@ export default function PrintReport() {
         return;
       }
 
-      // Check if the data is too old (more than 5 minutes)
-      const now = new Date().getTime();
-      if (now - decodedData.timestamp > 5 * 60 * 1000) {
+      // Check if the component was mounted more than 5 minutes ago
+      const now = Date.now();
+      if (now - timestamp > 5 * 60 * 1000) {
         setError(
           'The print data has expired.\n\n' +
           'For security reasons, print data is only valid for 5 minutes.\n' +
@@ -77,7 +84,7 @@ export default function PrintReport() {
         'Please try generating a new report from the calculator page.'
       );
     }
-  }, []);
+  }, [timestamp]); // Only run when timestamp is set
 
   if (error) {
     return (
