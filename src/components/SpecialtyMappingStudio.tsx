@@ -343,9 +343,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Progress Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-medium text-gray-900">Specialty Mapping Progress</h2>
@@ -408,7 +408,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
         <div className="grid grid-cols-2 gap-6">
           {/* Left side: Enhanced Unmapped specialties */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {/* Header section */}
             <div className="border-b border-gray-200 bg-gray-50 p-4">
               <div className="flex items-center justify-between mb-4">
@@ -481,7 +481,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             </div>
 
             {/* Specialty list */}
-            <div className="p-4">
+            <div className="p-6">
               <div className="space-y-2">
                 {filteredSpecialties.length > 0 ? (
                   filteredSpecialties.map((item) => (
@@ -533,9 +533,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           </div>
 
           {/* Right side: Mapping interface */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             {selectedSpecialty ? (
-              <div className="space-y-4">
+              <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-medium text-gray-900">
                     Map "{selectedSpecialty.specialty}"
@@ -600,7 +600,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12 text-gray-500">
+              <div className="p-6 text-center py-12 text-gray-500">
                 Select a specialty to start mapping
               </div>
             )}

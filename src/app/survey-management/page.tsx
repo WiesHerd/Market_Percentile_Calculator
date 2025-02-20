@@ -555,19 +555,10 @@ export default function SurveyManagementPage(): JSX.Element {
 
     setAutoDetectStatus('complete');
     setShowMappingPreview(true);
+    setActiveStep('mapping');
     
     toast.success('Column mappings detected and saved successfully');
-    
-    // If all surveys have specialty columns mapped, proceed to specialty mapping
-    const allMapped = uploadedSurveys.every(survey => {
-      const updatedSurvey = uploadedSurveys.find(s => s.id === survey.id);
-      return updatedSurvey?.mappings?.specialty;
-    });
-    
-    if (allMapped) {
-      setActiveStep('specialties');
-    }
-};
+  };
 
   const findMatchingSpecialties = (sourceSpecialty: string): string[] => {
     if (!sourceSpecialty) return [];
@@ -1344,22 +1335,13 @@ export default function SurveyManagementPage(): JSX.Element {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center">
             <div>
               <h3 className="text-xl font-medium text-gray-900">Map Specialties</h3>
               <p className="mt-1 text-sm text-gray-500">
                 Create intelligent mappings between survey specialties
               </p>
             </div>
-            <button
-              onClick={autoArrangeSpecialties}
-              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              Auto-arrange Specialties
-            </button>
           </div>
         </div>
 
@@ -1649,52 +1631,69 @@ export default function SurveyManagementPage(): JSX.Element {
   );
 
   const renderMappingInterface = () => (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex justify-between items-center">
-          <div>
-        <h2 className="text-lg font-medium text-gray-900">Column Mapping</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Map your survey columns to standardized fields for accurate data processing
-        </p>
+    <div className="space-y-8">
+      {/* Survey Selection */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Select Survey to Map</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Choose a survey to begin mapping its columns to standardized fields
+              </p>
+            </div>
+            <div className="w-80">
+              <select
+                value={selectedMapping || ''}
+                onChange={(e) => handleSurveySelect(e.target.value)}
+                className="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+              >
+                <option value="">Choose a survey...</option>
+                {uploadedSurveys.map((survey) => (
+                  <option key={survey.id} value={survey.id}>
+                    {formatVendorName(survey.vendor)} Survey ({survey.data.length} specialties)
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          
-          {/* Add Survey Selection Dropdown */}
-          <div className="w-64">
-            <select
-              value={selectedMapping || ''}
-              onChange={(e) => handleSurveySelect(e.target.value)}
-              className="w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            >
-              <option value="">Select a survey to map</option>
-              {uploadedSurveys.map((survey) => (
-                <option key={survey.id} value={survey.id}>
-                  {survey.vendor} Survey
-                </option>
-              ))}
-            </select>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="px-6 pb-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">Mapping Progress</span>
+            <span className="text-sm font-medium text-gray-900">{calculateProgress()}%</span>
+          </div>
+          <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500 ease-out"
+              style={{ width: `${calculateProgress()}%` }}
+            />
           </div>
         </div>
       </div>
 
-      {/* Mapping Cards */}
-      <div className="space-y-4">
+      {/* Mapping Cards Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Specialty Card */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="p-4 flex items-center space-x-3 border-b border-gray-100">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden transition-shadow duration-300 hover:shadow-md">
+          <div className="p-5 flex items-center space-x-3 border-b border-gray-100 bg-gray-50">
+            <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center">
+              <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <h3 className="font-medium text-gray-900">Specialty</h3>
+            <div>
+              <h3 className="font-medium text-gray-900">Specialty</h3>
+              <p className="text-sm text-gray-500">Map the specialty column</p>
+            </div>
           </div>
-          <div className="p-4">
+          <div className="p-5">
             <select
               value={columnMapping.specialty}
               onChange={(e) => handleColumnMappingChange('specialty', null, e.target.value)}
-              className="w-full rounded-md border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+              className="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
               <option value="">Select specialty column</option>
               {columns.map((column) => (
@@ -1707,53 +1706,69 @@ export default function SurveyManagementPage(): JSX.Element {
         {/* Metrics Cards */}
         {[
           { 
-            key: 'tcc' as const,
+            key: 'tcc' as keyof ColumnMapping,
             title: 'Total Cash Compensation',
+            description: 'Map compensation percentiles',
             icon: (
-              <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+      </svg>
             ),
-            color: 'emerald'
+            gradientFrom: 'from-gray-50',
+            gradientTo: 'to-gray-100',
+            iconBg: 'text-emerald-600',
+            focusRing: 'focus:ring-emerald-500'
           },
           {
-            key: 'wrvu' as const,
+            key: 'wrvu' as keyof ColumnMapping,
             title: 'Work RVUs',
+            description: 'Map work RVU percentiles',
             icon: (
-              <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
+      </svg>
             ),
-            color: 'blue'
+            gradientFrom: 'from-blue-50',
+            gradientTo: 'to-blue-100',
+            iconBg: 'text-blue-600',
+            focusRing: 'focus:ring-blue-500'
           },
           {
-            key: 'cf' as const,
+            key: 'cf' as keyof ColumnMapping,
             title: 'Conversion Factor',
+            description: 'Map conversion factor percentiles',
             icon: (
-              <svg className="w-5 h-5 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+      </svg>
             ),
-            color: 'purple'
+            gradientFrom: 'from-purple-50',
+            gradientTo: 'to-purple-100',
+            iconBg: 'text-purple-600',
+            focusRing: 'focus:ring-purple-500'
           }
-        ].map(({ key, title, icon, color }) => (
-          <div key={key} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="p-4 flex items-center space-x-3 border-b border-gray-100">
-              <div className={`w-8 h-8 rounded-lg bg-${color}-50 flex items-center justify-center`}>
+        ].map(({ key, title, description, icon, gradientFrom, gradientTo, iconBg, focusRing }) => (
+          <div key={key} className="bg-white rounded-xl border border-gray-200 overflow-hidden transition-shadow duration-300 hover:shadow-md">
+            <div className={`p-5 flex items-center space-x-3 border-b border-gray-100 bg-gradient-to-r ${gradientFrom} ${gradientTo}`}>
+              <div className="w-10 h-10 rounded-lg bg-white shadow-sm flex items-center justify-center">
                 {icon}
               </div>
-              <h3 className="font-medium text-gray-900">{title}</h3>
+              <div>
+                <h3 className="font-medium text-gray-900">{title}</h3>
+                <p className="text-sm text-gray-500">{description}</p>
+              </div>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="p-5 space-y-4">
               {['25th', '50th', '75th', '90th'].map((percentile) => {
                 const pKey = `p${percentile.slice(0, 2)}` as keyof ColumnMappingMetric;
+                const metricValue = columnMapping[key] as ColumnMappingMetric;
                 return (
                   <div key={percentile} className="flex items-center space-x-3">
-                    <label className="w-16 text-sm text-gray-500">{percentile}</label>
+                    <label className="w-16 text-sm font-medium text-gray-700">{percentile}</label>
                     <select
-                      value={columnMapping[key][pKey]}
+                      value={metricValue[pKey]}
                       onChange={(e) => handleColumnMappingChange(key, pKey, e.target.value)}
-                      className={`flex-1 rounded-md border-gray-200 shadow-sm focus:border-${color}-500 focus:ring-${color}-500`}
+                      className={`flex-1 rounded-lg border-gray-200 shadow-sm focus:border-blue-500 ${focusRing} text-sm`}
                     >
                       <option value="">Select column</option>
                       {columns.map((column) => (
@@ -1768,59 +1783,53 @@ export default function SurveyManagementPage(): JSX.Element {
         ))}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between pt-4">
-        <button
-          onClick={autoDetectMappings}
-          disabled={autoDetectStatus === 'detecting'}
-          className={`
-            relative overflow-hidden px-4 py-2 rounded-lg font-medium text-sm
-            transition-all duration-300 transform hover:scale-105
-            ${autoDetectStatus === 'detecting' 
-              ? 'bg-indigo-100 text-indigo-400 cursor-wait'
-              : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:from-indigo-500 hover:to-blue-500 shadow-md hover:shadow-lg'
-            }
-          `}
-        >
-          <div className="flex items-center space-x-2">
-            <svg 
-              className={`w-4 h-4 ${autoDetectStatus === 'detecting' ? 'animate-spin' : 'animate-pulse'}`}
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
-            <span className="relative">
-              Auto-detect Mappings
-            </span>
-          </div>
-        </button>
-
+      {/* Continue Button */}
+      <div className="flex justify-end pt-6">
         <button
           onClick={() => setActiveStep('specialties')}
           disabled={!isColumnMappingComplete()}
           className={`
-            inline-flex items-center px-4 py-2 rounded-md text-sm font-medium
+            inline-flex items-center px-6 py-3 rounded-xl text-sm font-medium shadow-sm
+            transition-all duration-300 transform hover:scale-105
             ${isColumnMappingComplete()
-              ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 hover:shadow-lg'
               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }
           `}
         >
-          Continue to Mapping
-          <svg className="ml-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          Continue to Specialty Mapping
+          <svg className="ml-2 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </button>
       </div>
     </div>
   );
+
+  // Add the calculateProgress function
+  const calculateProgress = (): number => {
+    if (!columnMapping) return 0;
+    
+    let totalPoints = 0;
+    let mappedPoints = 0;
+    
+    // Specialty mapping (1 point)
+    totalPoints += 1;
+    if (columnMapping.specialty) mappedPoints += 1;
+    
+    // TCC, WRVU, CF percentiles (4 points each = 12 points total)
+    ['tcc', 'wrvu', 'cf'].forEach((metric) => {
+      ['p25', 'p50', 'p75', 'p90'].forEach((percentile) => {
+        totalPoints += 1;
+        const metricMapping = columnMapping[metric as keyof ColumnMapping] as ColumnMappingMetric;
+        if (metricMapping[percentile as keyof ColumnMappingMetric]) {
+          mappedPoints += 1;
+        }
+      });
+    });
+    
+    return Math.round((mappedPoints / totalPoints) * 100);
+  };
 
   const renderTemplateSaveModal = () => (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
@@ -2036,28 +2045,163 @@ export default function SurveyManagementPage(): JSX.Element {
   }, [activeStep, uploadedSurveys]);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-[1920px] mx-auto px-8">
-        {/* Header Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="px-6 py-5">
-            <div className="flex items-center">
-              <ChartBarIcon className="h-8 w-8 text-blue-600 mr-3" />
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Survey Management</h1>
-                <p className="mt-1 text-gray-600">
-                  Upload and manage compensation survey data from multiple vendors
-                </p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Enhanced Header Section */}
+        <div className="bg-white rounded-2xl shadow-sm mb-8 overflow-hidden">
+          <div className="px-6 py-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm">
+                  <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900">Survey Management</h1>
+                  <p className="mt-2 text-gray-600 max-w-2xl">
+                    Upload and manage compensation survey data from multiple vendors. Map specialties and analyze trends across surveys.
+                  </p>
+                </div>
               </div>
+              <div className="flex items-center space-x-4">
+                {activeStep === 'upload' || activeStep === 'mapping' ? (
+                  <select
+                    value={selectedMapping || ''}
+                    onChange={(e) => handleSurveySelect(e.target.value)}
+                    className="w-64 h-11 rounded-lg border border-gray-200 bg-white px-4 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="">Choose a survey...</option>
+                    {uploadedSurveys.map((survey) => (
+                      <option key={survey.id} value={survey.id}>
+                        {formatVendorName(survey.vendor)} ({survey.data.length})
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {activeStep === 'mapping' ? (
+                  <button
+                    onClick={autoDetectMappings}
+                    disabled={autoDetectStatus === 'detecting'}
+                    className={`
+                      relative overflow-hidden px-6 py-3 rounded-lg font-medium text-sm h-11 whitespace-nowrap
+                      transition-all duration-300 transform hover:scale-105
+                      ${autoDetectStatus === 'detecting' 
+                        ? 'bg-gray-100 text-gray-400 cursor-wait'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow'
+                      }
+                    `}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <svg 
+                        className={`w-5 h-5 ${autoDetectStatus === 'detecting' ? 'animate-spin' : ''}`}
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor"
+                      >
+                        <path 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round" 
+                          strokeWidth={2} 
+                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                        />
+                      </svg>
+                      <span>Auto-map Columns</span>
+                    </div>
+                  </button>
+                ) : activeStep === 'specialties' ? (
+                  <button
+                    onClick={autoArrangeSpecialties}
+                    className="inline-flex items-center px-6 py-3 rounded-lg font-medium text-sm h-11 whitespace-nowrap
+                      bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 
+                      shadow-sm hover:shadow transition-all duration-300 transform hover:scale-105"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Auto-arrange Specialties
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Enhanced Step Indicator */}
+          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+            <div className="flex items-center justify-center">
+              <button
+                onClick={() => setActiveStep('upload')}
+                className={`flex items-center ${activeStep === 'upload' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 transition-colors group`}
+              >
+                <div className={`
+                  flex items-center justify-center w-10 h-10 rounded-xl border-2 
+                  ${activeStep === 'upload' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+                  transition-all duration-300
+                `}>
+                  <ArrowUpTrayIcon className="w-5 h-5" />
+                </div>
+                <div className="ml-3">
+                  <span className="block font-medium">Upload Surveys</span>
+                  <span className="text-sm text-gray-500">{uploadedSurveys.length} uploaded</span>
+                </div>
+              </button>
+              <div className="w-16 h-0.5 mx-4 bg-gray-200"></div>
+              <button
+                onClick={() => setActiveStep('mapping')}
+                disabled={uploadedSurveys.length === 0}
+                className={`flex items-center ${activeStep === 'mapping' ? 'text-blue-600' : uploadedSurveys.length === 0 ? 'text-gray-300' : 'text-gray-400 hover:text-blue-500'} transition-colors group`}
+              >
+                <div className={`
+                  flex items-center justify-center w-10 h-10 rounded-xl border-2 
+                  ${activeStep === 'mapping' 
+                    ? 'border-blue-600 bg-blue-50' 
+                    : uploadedSurveys.length === 0 
+                      ? 'border-gray-200 bg-gray-50' 
+                      : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+                  transition-all duration-300
+                `}>
+                  <DocumentTextIcon className="w-5 h-5" />
+                </div>
+                <div className="ml-3">
+                  <span className="block font-medium">Map Columns</span>
+                  <span className="text-sm text-gray-500">{calculateProgress()}% complete</span>
+                </div>
+              </button>
+              <div className="w-16 h-0.5 mx-4 bg-gray-200"></div>
+              <button
+                onClick={() => setActiveStep('specialties')}
+                disabled={uploadedSurveys.length === 0}
+                className={`flex items-center ${activeStep === 'specialties' ? 'text-blue-600' : uploadedSurveys.length === 0 ? 'text-gray-300' : 'text-gray-400 hover:text-blue-500'} transition-colors group`}
+              >
+                <div className={`
+                  flex items-center justify-center w-10 h-10 rounded-xl border-2 
+                  ${activeStep === 'specialties' 
+                    ? 'border-blue-600 bg-blue-50' 
+                    : uploadedSurveys.length === 0 
+                      ? 'border-gray-200 bg-gray-50' 
+                      : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+                  transition-all duration-300
+                `}>
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" 
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <span className="block font-medium">Map Specialties</span>
+                  <span className="text-sm text-gray-500">{Object.keys(specialtyMappings).length} mapped</span>
+                </div>
+              </button>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white rounded-2xl shadow-sm">
           <div className="p-6">
-            {renderStepIndicator()}
-
             {activeStep === 'upload' ? (
               renderDataPreview()
             ) : activeStep === 'mapping' ? (
