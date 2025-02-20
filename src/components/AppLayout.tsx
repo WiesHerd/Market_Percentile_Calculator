@@ -15,11 +15,25 @@ import {
   QuestionMarkCircleIcon,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
-  UserIcon
+  UserIcon,
+  ArrowUpTrayIcon
 } from '@heroicons/react/24/outline';
 
 interface AppLayoutProps {
   children: React.ReactNode;
+}
+
+interface SubNavigationItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  subItems?: SubNavigationItem[];
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -46,171 +60,173 @@ export function AppLayout({ children }: AppLayoutProps) {
     window.URL.revokeObjectURL(url);
   };
 
-  const navigationItems = [
-    { name: 'Dashboard', href: '/', icon: HomeIcon },
-    { name: 'View Market Data', href: '/market-data', icon: DocumentChartBarIcon },
+  const navigationItems: NavigationItem[] = [
+    { 
+      name: 'Dashboard', 
+      href: '/dashboard',
+      icon: HomeIcon 
+    },
+    {
+      name: 'Percentile Calculator',
+      href: '/',
+      icon: ChartBarIcon
+    },
     { 
       name: 'Survey Management', 
       href: '/survey-management', 
-      icon: ({ className }: { className?: string }) => (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" 
-          />
-        </svg>
-      )
+      icon: DocumentChartBarIcon,
+      subItems: [
+        { 
+          name: 'View Surveys', 
+          href: '/survey-management/view-surveys', 
+          icon: DocumentTextIcon 
+        },
+        { 
+          name: 'Upload Guide', 
+          href: '/upload-guide', 
+          icon: ArrowUpTrayIcon 
+        }
+      ]
     },
     { 
-      name: 'Survey Analytics', 
-      href: '/survey-analytics', 
-      icon: ChartBarIcon 
+      name: 'Market Analysis', 
+      href: '/market-data', 
+      icon: ChartBarIcon,
+      subItems: [
+        {
+          name: 'Specialty Review',
+          href: '/survey-analytics',
+          icon: ChartBarIcon
+        },
+        { 
+          name: 'Compare Specialties', 
+          href: '/compare', 
+          icon: ArrowsRightLeftIcon 
+        }
+      ]
     },
-    { name: 'Compare Specialties', href: '/compare', icon: ArrowsRightLeftIcon },
-    { name: 'Documentation', href: '/docs', icon: DocumentTextIcon },
     { 
-      name: 'About Me', 
-      href: '/help', 
-      icon: ({ className }: { className?: string }) => (
-        <div className={`relative w-5 h-5 rounded-full overflow-hidden ${className}`}>
-          <Image
-            src={`${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH.jpg`}
-            alt="Wieslaw Herdzik"
-            fill
-            style={{ objectFit: 'cover' }}
-          />
-        </div>
-      ),
-      tooltip: (
-        <div className="absolute left-full ml-2 -mt-8 bg-white rounded-lg shadow-lg border border-gray-200 p-2 hidden group-hover:block">
-          <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-blue-100">
-            <Image
-              src={`${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/WH.jpg`}
-              alt="Wieslaw Herdzik"
-              fill
-              style={{ objectFit: 'cover' }}
-              className="hover:scale-105 transition-transform duration-300"
-            />
-          </div>
-        </div>
-      )
-    },
+      name: 'Help & Resources', 
+      href: '/help',
+      icon: QuestionMarkCircleIcon,
+      subItems: [
+        { 
+          name: 'Documentation', 
+          href: '/help',
+          icon: QuestionMarkCircleIcon 
+        },
+        { 
+          name: 'About Me', 
+          href: '/about',
+          icon: UserIcon 
+        }
+      ]
+    }
   ];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sidebar - Always visible on larger screens */}
+      {/* Sidebar */}
       <div 
-        className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-100 transform transition-all duration-300 ease-in-out lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-200 transform transition-all duration-300 ease-in-out lg:translate-x-0 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } ${isCollapsed ? 'lg:w-20' : 'lg:w-64'}`}
       >
         <div className="h-full flex flex-col">
-          {/* Sidebar Header */}
+          {/* Logo */}
           <div className="p-4">
             <Link href="/" className={`block ${isCollapsed ? 'mx-auto' : ''}`}>
               <div className="flex items-center">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-sm relative group hover:from-indigo-400 hover:to-blue-500 transition-all duration-200">
-                  <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors"></div>
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="w-8 h-8"
-                    fill="none"
-                  >
-                    {/* W */}
-                    <path
-                      d="M3 7l3 10l3-10l3 10l3-10"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    {/* H */}
-                    <path
-                      d="M15 7v10M21 7v10M15 12h6"
-                      stroke="white"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                  <span className="text-white font-bold text-xl">WH</span>
                 </div>
               </div>
             </Link>
           </div>
 
-          {/* Navigation Links */}
-          <nav className="flex-1 p-4 space-y-1">
+          {/* Navigation */}
+          <nav className="flex-1 px-2 py-4">
             {navigationItems.map((item) => (
-              <div key={item.name} className="relative group">
+              <div key={item.name} className="mb-4">
                 <Link
                   href={item.href}
-                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                    pathname === item.href
-                      ? 'bg-indigo-50 text-indigo-700'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  } ${isCollapsed ? 'justify-center lg:px-2' : ''}`}
                   title={isCollapsed ? item.name : ''}
+                  className={`
+                    group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                    ${pathname === item.href
+                      ? 'bg-blue-50 text-blue-600'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }
+                  `}
                 >
-                  <item.icon className={`h-5 w-5 ${
-                    pathname === item.href ? 'text-indigo-700' : 'text-gray-500 group-hover:text-gray-700'
-                  } ${isCollapsed ? '' : 'mr-3'}`} />
-                  {!isCollapsed && <span>{item.name}</span>}
-                  {isCollapsed && item.tooltip}
+                  <item.icon className={`
+                    ${isCollapsed ? '' : 'mr-3'} h-5 w-5
+                    ${pathname === item.href
+                      ? 'text-blue-600'
+                      : 'text-gray-400 group-hover:text-gray-500'
+                    }
+                  `} />
+                  {!isCollapsed && <span className="truncate">{item.name}</span>}
                 </Link>
-                
-                {/* Sub-items for Market Data */}
-                {!isCollapsed && item.href === '/market-data' && (
-                  <Link
-                    href="/market-data/upload-guide"
-                    className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors ml-8 mt-1 ${
-                      pathname === '/market-data/upload-guide'
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50'
-                    }`}
-                  >
-                    <DocumentTextIcon className="h-4 w-4 mr-3 text-gray-400" />
-                    <span>Upload Guide</span>
-                  </Link>
+
+                {/* Sub-items */}
+                {!isCollapsed && item.subItems && item.subItems.length > 0 && (
+                  <div className="ml-6 mt-2 space-y-1">
+                    {item.subItems.map((subItem) => (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        className={`
+                          group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                          ${pathname === subItem.href
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                          }
+                        `}
+                      >
+                        <subItem.icon className={`
+                          mr-3 h-4 w-4
+                          ${pathname === subItem.href
+                            ? 'text-blue-600'
+                            : 'text-gray-400 group-hover:text-gray-500'
+                          }
+                        `} />
+                        <span className="truncate">{subItem.name}</span>
+                      </Link>
+                    ))}
+                  </div>
                 )}
               </div>
             ))}
           </nav>
 
-          {/* Sidebar Footer */}
-          <div className="p-4 mt-auto border-t border-gray-200">
-            <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-              {!isCollapsed && (
-                <>
-                  <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-sm">
-                      <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
-                        {/* W */}
-                        <path d="M3 7l3 10l3-10l3 10l3-10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        {/* H */}
-                        <path d="M15 7v10M21 7v10M15 12h6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                  </div>
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">WH</span>
+                </div>
+                {!isCollapsed && (
                   <div>
                     <p className="text-sm font-medium text-gray-900">Market Intelligence</p>
                     <p className="text-xs text-gray-500">Version 1.0.0</p>
                   </div>
-                </>
-              )}
+                )}
+              </div>
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 ease-in-out"
+                title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {isCollapsed ? (
+                  <ChevronDoubleRightIcon className="h-5 w-5 text-gray-500" />
+                ) : (
+                  <ChevronDoubleLeftIcon className="h-5 w-5 text-gray-500" />
+                )}
+              </button>
             </div>
           </div>
-
-          {/* Collapse Button */}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="absolute right-0 top-20 -mr-3 hidden lg:flex items-center justify-center h-6 w-6 rounded-full bg-white border border-gray-200 text-gray-500 hover:text-blue-600 focus:outline-none"
-          >
-            {isCollapsed ? (
-              <ChevronDoubleRightIcon className="h-4 w-4" />
-            ) : (
-              <ChevronDoubleLeftIcon className="h-4 w-4" />
-            )}
-          </button>
         </div>
       </div>
 

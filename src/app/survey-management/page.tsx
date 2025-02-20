@@ -11,6 +11,7 @@ import { formatCurrency, formatNumber } from '@/utils/formatting';
 import { calculateStringSimilarity } from '@/utils/string';
 import SpecialtyMappingStudio from '@/components/SpecialtyMappingStudio';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import Link from 'next/link';
 
 interface ColumnMappingMetric {
   p25: string;
@@ -130,6 +131,23 @@ interface UploadedSurvey {
   specialtyMappings: MappingState;
   columns: string[];
 }
+
+// Helper function to format vendor names consistently
+const formatVendorName = (vendor: string): string => {
+  const vendorMap: Record<string, string> = {
+    'mgma': 'MGMA',
+    'MGMA': 'MGMA',
+    'sullivan': 'SullivanCotter',
+    'sullivancotter': 'SullivanCotter',
+    'SULLIVANCOTTER': 'SullivanCotter',
+    'SULLIVAN': 'SullivanCotter',
+    'SULLIVAN COTTER': 'SullivanCotter',
+    'SULLIVAN-COTTER': 'SullivanCotter',
+    'gallagher': 'Gallagher',
+    'GALLAGHER': 'Gallagher'
+  };
+  return vendorMap[vendor.toLowerCase()] || vendor;
+};
 
 export default function SurveyManagementPage(): JSX.Element {
   const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
@@ -1466,14 +1484,12 @@ export default function SurveyManagementPage(): JSX.Element {
                   id="vendor-select"
                   value={selectedVendor}
                   onChange={(e) => setSelectedVendor(e.target.value)}
-                  className="w-full rounded-lg border-gray-200 bg-white shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
                 >
-                  <option value="">Select Survey Vendor</option>
-                  {vendors.map((vendor) => (
-                    <option key={vendor.id} value={vendor.id}>
-                      {vendor.name}
-                    </option>
-                  ))}
+                  <option value="" disabled>Select Survey Vendor</option>
+                  <option value="MGMA">MGMA</option>
+                  <option value="SULLIVANCOTTER">SullivanCotter</option>
+                  <option value="GALLAGHER">Gallagher</option>
                 </select>
               </div>
             </div>
@@ -1556,30 +1572,41 @@ export default function SurveyManagementPage(): JSX.Element {
           {uploadedSurveys.length > 0 ? (
             <div className="space-y-4">
               {uploadedSurveys.map((survey) => (
-                <div key={survey.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-blue-100 transition-colors">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{survey.vendor}</h4>
-                    <p className="text-sm text-gray-500">
-                      {survey.data?.length || 0} specialties • Uploaded {new Date(parseInt(survey.id)).toLocaleString()}
-                    </p>
+                <Link
+                  key={survey.id}
+                  href={`/survey-management/view-surveys?surveyId=${survey.id}`}
+                  className="block bg-white rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
+                >
+                  <div className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-medium text-gray-900">
+                          {formatVendorName(survey.vendor)}
+                        </h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                          {survey.data.length} specialties • Uploaded {new Date(parseInt(survey.id)).toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          const index = uploadedSurveys.findIndex(s => s.id === survey.id);
+                          if (index !== -1) {
+                            const updatedSurveys = [...uploadedSurveys];
+                            updatedSurveys.splice(index, 1);
+                            setUploadedSurveys(updatedSurveys);
+                            localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+                          }
+                        }}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      const index = uploadedSurveys.findIndex(s => s.id === survey.id);
-                      if (index !== -1) {
-                        const updatedSurveys = [...uploadedSurveys];
-                        updatedSurveys.splice(index, 1);
-                        setUploadedSurveys(updatedSurveys);
-                        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-                      }
-                    }}
-                    className="text-gray-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
+                </Link>
               ))}
             </div>
           ) : (
