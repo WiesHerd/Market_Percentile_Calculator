@@ -686,13 +686,21 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   }, [marketData, searchTerm]);
 
   const clearAllData = () => {
+    // Preserve uploaded surveys
+    const uploadedSurveys = localStorage.getItem('uploadedSurveys');
+    
     // Clear all states
     clearInputs();
     setCalculationHistory([]);
     setMarketData([]);
     
-    // Clear all localStorage
+    // Clear localStorage except for uploaded surveys
     localStorage.clear();
+    
+    // Restore uploaded surveys
+    if (uploadedSurveys) {
+      localStorage.setItem('uploadedSurveys', uploadedSurveys);
+    }
     
     // Reload the page to reset the app to its initial state
     window.location.reload();

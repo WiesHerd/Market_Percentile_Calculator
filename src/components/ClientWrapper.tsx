@@ -35,8 +35,8 @@ export function ClientWrapper() {
   useEffect(() => {
     const initializeData = async () => {
       try {
-        // Clear localStorage first
-        localStorage.clear();
+        // Preserve existing uploaded surveys
+        const existingUploadedSurveys = localStorage.getItem('uploadedSurveys');
         
         // Load default market data from public storage
         const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
@@ -92,6 +92,11 @@ export function ClientWrapper() {
 
         // Set app version
         localStorage.setItem('appVersion', APP_VERSION);
+        
+        // Restore uploaded surveys if they existed
+        if (existingUploadedSurveys) {
+          localStorage.setItem('uploadedSurveys', existingUploadedSurveys);
+        }
         
       } catch (error) {
         console.error('Error initializing data:', error);

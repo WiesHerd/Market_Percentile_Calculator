@@ -1,0 +1,38 @@
+[
+  {
+    "id": "default_1",
+    "vendor": "Sample Survey Co.",
+    "year": "2024",
+    "specialty": "Family Medicine",
+    "p25_total": 220000,
+    "p50_total": 250000,
+    "p75_total": 280000,
+    "p90_total": 320000,
+    "p25_wrvu": 4200,
+    "p50_wrvu": 4800,
+    "p75_wrvu": 5400,
+    "p90_wrvu": 6200,
+    "p25_cf": 45.50,
+    "p50_cf": 48.75,
+    "p75_cf": 52.00,
+    "p90_cf": 56.25
+  },
+  {
+    "id": "default_2",
+    "vendor": "Sample Survey Co.",
+    "year": "2024",
+    "specialty": "Internal Medicine",
+    "p25_total": 230000,
+    "p50_total": 260000,
+    "p75_total": 290000,
+    "p90_total": 330000,
+    "p25_wrvu": 4300,
+    "p50_wrvu": 4900,
+    "p75_wrvu": 5500,
+    "p90_wrvu": 6300,
+    "p25_cf": 46.50,
+    "p50_cf": 49.75,
+    "p75_cf": 53.00,
+    "p90_cf": 57.25
+  }
+] 
