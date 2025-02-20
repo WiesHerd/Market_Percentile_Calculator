@@ -19,3 +19,134 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Print styles */
+@media print {
+  @page {
+    size: letter portrait;
+    margin: 0.75in 0.5in;
+  }
+
+  /* Hide everything except print view */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show print view */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Basic print styles */
+  .print-content {
+    font-size: 10pt;
+    line-height: 1.4;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  /* Header styles */
+  .print-header {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #000;
+  }
+
+  .header-title {
+    font-size: 9pt;
+    color: #666;
+    margin-bottom: 0.5rem;
+  }
+
+  .print-header h1 {
+    font-size: 16pt;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+  }
+
+  .print-header h2 {
+    font-size: 14pt;
+    color: #333;
+  }
+
+  /* Table section styles */
+  .metric-table {
+    margin-bottom: 1.5rem;
+    page-break-inside: avoid;
+  }
+
+  .metric-table h3 {
+    font-size: 12pt;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    color: #333;
+  }
+
+  /* Table styles */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 0.5rem;
+    font-size: 9pt;
+  }
+
+  th {
+    font-weight: 600;
+    text-align: right;
+    padding: 6px 8px;
+    border-bottom: 1.5px solid #000;
+    text-transform: uppercase;
+    font-size: 8pt;
+    letter-spacing: 0.5px;
+    color: #333;
+  }
+
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #ddd;
+    text-align: right;
+  }
+
+  .source-column {
+    text-align: left !important;
+    font-weight: 500;
+    width: 25%;
+  }
+
+  /* Average row styling */
+  .average-row {
+    font-weight: 600;
+    background-color: #f5f5f5;
+    border-top: 1px solid #000;
+  }
+
+  .average-row td {
+    border-bottom: none;
+  }
+
+  /* Footer styles */
+  .print-footer {
+    margin-top: 2rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #000;
+    font-size: 8pt;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .timestamp {
+    text-align: left;
+  }
+
+  .page-number {
+    text-align: right;
+  }
+}
+
+/* Hide print view in normal display */
+.print-only {
+  display: none;
+}
