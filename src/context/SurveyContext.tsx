@@ -81,25 +81,13 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
 
           // Create the transformed survey object
           return {
-            id: survey.id,
             vendor: survey.vendor,
-            data: specialties.map((specialty: unknown) => {
-              // Find the first row that matches this specialty
-              const row = survey.data.find((r: any) => 
-                String(r[survey.mappings.specialty]) === specialty
-              );
-              
-              if (!row) {
-                return {
-                  specialty: String(specialty),
-                  tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
-                  wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
-                  cf: { p25: 0, p50: 0, p75: 0, p90: 0 }
-                };
-              }
+            data: survey.data.map((row: any) => {
+              const specialty = String(row[survey.mappings.specialty] || '').trim();
+              if (!specialty) return null;
 
               return {
-                specialty: String(specialty),
+                specialty,
                 tcc: {
                   p25: parseFloat(String(row[survey.mappings.tcc.p25] || '0')),
                   p50: parseFloat(String(row[survey.mappings.tcc.p50] || '0')),
@@ -117,9 +105,9 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
                   p50: parseFloat(String(row[survey.mappings.cf.p50] || '0')),
                   p75: parseFloat(String(row[survey.mappings.cf.p75] || '0')),
                   p90: parseFloat(String(row[survey.mappings.cf.p90] || '0')),
-                },
+                }
               };
-            }),
+            }).filter((row: any) => row !== null) // Remove null entries
           };
         });
 

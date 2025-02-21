@@ -83,7 +83,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         },
         { 
           name: 'Upload Guide', 
-          href: '/upload-guide', 
+          href: '/market-data/upload-guide', 
           icon: ArrowUpTrayIcon 
         }
       ]

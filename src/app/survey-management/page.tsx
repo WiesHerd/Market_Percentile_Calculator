@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import Select, { MultiValue, StylesConfig } from 'react-select';
@@ -1266,56 +1266,27 @@ export default function SurveyManagementPage(): JSX.Element {
       // First, get all unique specialties from the survey data
       const specialties = Array.from(new Set(
         survey.data
-          .map(row => String(row[survey.mappings.specialty] || ''))
-          .filter(s => s && s.trim() !== '')
+          .map(row => {
+            const specialty = row[survey.mappings.specialty];
+            console.log('Processing specialty:', specialty, 'from row:', row);
+            return String(specialty || '').trim();
+          })
+          .filter(s => s && s !== '')
       ));
 
       console.log(`Found ${specialties.length} unique specialties in ${survey.vendor} survey:`, specialties);
 
       // Create the transformed survey object
-      const transformed = {
+      return {
         id: survey.id,
         vendor: survey.vendor,
-        data: specialties.map(specialty => {
-          // Find the first row that matches this specialty
-          const row = survey.data.find(r => String(r[survey.mappings.specialty]) === specialty);
-          
-          if (!row) {
-            console.warn(`No data found for specialty: ${specialty} in ${survey.vendor} survey`);
-            return {
-              specialty,
-              tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
-              wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
-              cf: { p25: 0, p50: 0, p75: 0, p90: 0 }
-            };
-          }
-
-          return {
-            specialty,
-            tcc: {
-              p25: parseFloat(String(row[survey.mappings.tcc.p25] || '0')),
-              p50: parseFloat(String(row[survey.mappings.tcc.p50] || '0')),
-              p75: parseFloat(String(row[survey.mappings.tcc.p75] || '0')),
-              p90: parseFloat(String(row[survey.mappings.tcc.p90] || '0')),
-            },
-            wrvu: {
-              p25: parseFloat(String(row[survey.mappings.wrvu.p25] || '0')),
-              p50: parseFloat(String(row[survey.mappings.wrvu.p50] || '0')),
-              p75: parseFloat(String(row[survey.mappings.wrvu.p75] || '0')),
-              p90: parseFloat(String(row[survey.mappings.wrvu.p90] || '0')),
-            },
-            cf: {
-              p25: parseFloat(String(row[survey.mappings.cf.p25] || '0')),
-              p50: parseFloat(String(row[survey.mappings.cf.p50] || '0')),
-              p75: parseFloat(String(row[survey.mappings.cf.p75] || '0')),
-              p90: parseFloat(String(row[survey.mappings.cf.p90] || '0')),
-            },
-          };
-        }),
+        data: specialties.map(specialty => ({
+          specialty,
+          tcc: null,
+          wrvu: null,
+          cf: null
+        }))
       };
-
-      console.log(`Transformed ${survey.vendor} survey:`, transformed);
-      return transformed;
     });
 
     // Transform specialty mappings to match the expected type
@@ -1335,7 +1306,7 @@ export default function SurveyManagementPage(): JSX.Element {
       <div className="space-y-6">
         {/* Header */}
         <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <div className="flex items-center">
+          <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-medium text-gray-900">Map Specialties</h3>
               <p className="mt-1 text-sm text-gray-500">
@@ -2045,11 +2016,11 @@ export default function SurveyManagementPage(): JSX.Element {
   }, [activeStep, uploadedSurveys]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Enhanced Header Section */}
-        <div className="bg-white rounded-2xl shadow-sm mb-8 overflow-hidden">
-          <div className="px-6 py-8">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mb-8 overflow-hidden">
+          <div className="bg-blue-50 px-6 py-8">
             <div className="flex items-center justify-between">
               <div className="flex items-start space-x-4">
                 <div className="p-3 bg-white rounded-xl shadow-sm">
@@ -2066,70 +2037,38 @@ export default function SurveyManagementPage(): JSX.Element {
                 </div>
               </div>
               <div className="flex items-center space-x-4">
-                {activeStep === 'upload' || activeStep === 'mapping' ? (
-                  <select
-                    value={selectedMapping || ''}
-                    onChange={(e) => handleSurveySelect(e.target.value)}
-                    className="w-64 h-11 rounded-lg border border-gray-200 bg-white px-4 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  >
-                    <option value="">Choose a survey...</option>
-                    {uploadedSurveys.map((survey) => (
-                      <option key={survey.id} value={survey.id}>
-                        {formatVendorName(survey.vendor)} ({survey.data.length})
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-                {activeStep === 'mapping' ? (
-                  <button
-                    onClick={autoDetectMappings}
-                    disabled={autoDetectStatus === 'detecting'}
-                    className={`
-                      relative overflow-hidden px-6 py-3 rounded-lg font-medium text-sm h-11 whitespace-nowrap
-                      transition-all duration-300 transform hover:scale-105
-                      ${autoDetectStatus === 'detecting' 
-                        ? 'bg-gray-100 text-gray-400 cursor-wait'
-                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow'
-                      }
-                    `}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <svg 
-                        className={`w-5 h-5 ${autoDetectStatus === 'detecting' ? 'animate-spin' : ''}`}
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        <path 
-                          strokeLinecap="round" 
-                          strokeLinejoin="round" 
-                          strokeWidth={2} 
-                          d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                        />
+                {activeStep !== 'specialties' && (
+                  <div className="flex items-center space-x-4">
+                    <select
+                      value={selectedMapping || ''}
+                      onChange={(e) => handleSurveySelect(e.target.value)}
+                      className="block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose a survey...</option>
+                      {uploadedSurveys.map(survey => (
+                        <option key={survey.id} value={survey.id}>
+                          {survey.vendor} ({survey.data.length} rows)
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => autoDetectMappings()}
+                      disabled={!selectedMapping}
+                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${!selectedMapping ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                       </svg>
-                      <span>Auto-map Columns</span>
-                    </div>
-                  </button>
-                ) : activeStep === 'specialties' ? (
-                  <button
-                    onClick={autoArrangeSpecialties}
-                    className="inline-flex items-center px-6 py-3 rounded-lg font-medium text-sm h-11 whitespace-nowrap
-                      bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 
-                      shadow-sm hover:shadow transition-all duration-300 transform hover:scale-105"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                    Auto-arrange Specialties
-                  </button>
-                ) : null}
+                      Auto-map Columns
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Enhanced Step Indicator */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
+          <div className="px-6 py-4 border-t border-gray-100">
             <div className="flex items-center justify-center">
               <button
                 onClick={() => setActiveStep('upload')}
@@ -2200,7 +2139,7 @@ export default function SurveyManagementPage(): JSX.Element {
         </div>
 
         {/* Main Content */}
-        <div className="bg-white rounded-2xl shadow-sm">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
           <div className="p-6">
             {activeStep === 'upload' ? (
               renderDataPreview()

@@ -37,9 +37,9 @@ const Navigation = () => {
     },
     {
       name: 'Upload Guide',
-      href: '/upload-guide',
+      href: '/market-data/upload-guide',
       icon: ArrowUpTrayIcon,
-      current: pathname === '/upload-guide',
+      current: pathname === '/market-data/upload-guide',
       indent: true
     },
     {

@@ -3,6 +3,7 @@ import { MagnifyingGlassIcon, ArrowsRightLeftIcon, XMarkIcon, CheckIcon } from '
 import { calculateStringSimilarity } from '@/utils/string';
 import { findMatchingSpecialties } from '@/utils/surveySpecialtyMapping';
 import type { SurveyVendor, SpecialtyMapping } from '@/utils/surveySpecialtyMapping';
+import { toast } from 'react-hot-toast';
 
 interface SpecialtyMappingStudioProps {
   surveys: Array<{
@@ -109,20 +110,33 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Get all unique specialties with their vendors
   const allSpecialties = useMemo((): UnmappedSpecialty[] => {
     const specialties: UnmappedSpecialty[] = [];
+    console.log('Processing surveys for specialties:', surveys);
+    
     surveys.forEach(survey => {
+      console.log('Processing survey:', survey.vendor, survey.data.length);
       survey.data.forEach(item => {
-        specialties.push({
-          specialty: item.specialty,
-          vendor: survey.vendor
-        });
+        if (item.specialty && typeof item.specialty === 'string') {
+          console.log('Adding specialty:', item.specialty, 'from vendor:', survey.vendor);
+          specialties.push({
+            specialty: item.specialty.trim(),
+            vendor: formatVendorName(survey.vendor)
+          });
+        }
       });
     });
+    
+    console.log('Found specialties:', specialties);
     return specialties;
   }, [surveys]);
 
   // Get unmapped specialties
   const unmappedSpecialties = useMemo((): UnmappedSpecialty[] => {
-    return allSpecialties.filter(item => !Object.keys(mappings).includes(item.specialty));
+    const unmapped = allSpecialties.filter(item => 
+      !Object.keys(mappings).includes(item.specialty) &&
+      item.specialty.trim() !== ''
+    );
+    console.log('Unmapped specialties:', unmapped);
+    return unmapped;
   }, [allSpecialties, mappings]);
 
   // Get mapped specialties with their connections
@@ -341,9 +355,51 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     });
   };
 
+  // Add this function before the return statement
+  const autoArrangeSpecialties = () => {
+    // Get all unmapped specialties
+    const unmappedList = unmappedSpecialties;
+    
+    // Process each unmapped specialty
+    unmappedList.forEach(source => {
+      // Skip if already mapped
+      if (Object.keys(mappings).includes(source.specialty)) return;
+
+      // Find potential matches from other vendors
+      const potentialMatches = allSpecialties
+        .filter(target => 
+          // Only look at specialties from other vendors
+          target.vendor !== source.vendor &&
+          // Not already mapped
+          !Object.values(mappings).flat().includes(target.specialty)
+        )
+        .map(target => ({
+          specialty: target.specialty,
+          vendor: target.vendor,
+          confidence: calculateStringSimilarity(source.specialty, target.specialty)
+        }))
+        .filter(match => match.confidence > 0.8) // Only consider high confidence matches
+        .sort((a, b) => b.confidence - a.confidence);
+
+      // If we found good matches, create the mapping
+      if (potentialMatches.length > 0) {
+        const matchedSpecialties = potentialMatches.map(m => m.specialty);
+        onMappingChange(source.specialty, matchedSpecialties);
+        
+        // Update local mappings state
+        setMappings(prev => ({
+          ...prev,
+          [source.specialty]: matchedSpecialties
+        }));
+      }
+    });
+
+    toast.success('Auto-arrangement complete!');
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="bg-gray-50">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
         {/* Progress Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
           <div className="flex items-center justify-between mb-4">
@@ -355,7 +411,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => {/* Add auto-arrange functionality */}}
+                onClick={autoArrangeSpecialties}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -406,11 +462,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-6">
-          {/* Left side: Enhanced Unmapped specialties */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left side: Unmapped specialties */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[calc(100vh-300px)] overflow-auto">
             {/* Header section */}
-            <div className="border-b border-gray-200 bg-gray-50 p-4">
+            <div className="sticky top-0 border-b border-gray-200 bg-gray-50 p-4 z-10">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">
                   {viewMode === 'unmapped' ? 'Unmapped Specialties' : 'Mapped Specialties'}
@@ -533,7 +589,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           </div>
 
           {/* Right side: Mapping interface */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[calc(100vh-300px)] overflow-auto">
             {selectedSpecialty ? (
               <div className="p-6 space-y-4">
                 <div className="flex items-center justify-between">

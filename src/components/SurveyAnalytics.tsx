@@ -115,22 +115,60 @@ const SurveyAnalytics: React.FC = () => {
 
     // Collect data from each survey
     surveyData.forEach(survey => {
-      allSpecialties.forEach(specialty => {
-        const data = survey.data.find(d => d.specialty === specialty);
-        if (data) {
-          if (!surveyValues[survey.vendor]) {
-            surveyValues[survey.vendor] = {
-              specialty: specialty,
-              tcc: data.tcc,
-              wrvu: data.wrvu,
-              cf: data.cf
-            };
+      // Find all matching rows for the selected specialty and its mappings
+      const matchingRows = survey.data.filter(row => 
+        allSpecialties.includes(row.specialty)
+      );
+
+      if (matchingRows.length > 0) {
+        // Aggregate the data for this vendor
+        const aggregatedData: SurveyData = {
+          specialty: selectedSpecialty,
+          tcc: {
+            p25: 0,
+            p50: 0,
+            p75: 0,
+            p90: 0
+          },
+          wrvu: {
+            p25: 0,
+            p50: 0,
+            p75: 0,
+            p90: 0
+          },
+          cf: {
+            p25: 0,
+            p50: 0,
+            p75: 0,
+            p90: 0
           }
-        }
-      });
+        };
+
+        // Calculate averages for each metric and percentile
+        ['tcc', 'wrvu', 'cf'].forEach(metric => {
+          percentiles.forEach(percentile => {
+            const values = matchingRows
+              .map(row => {
+                const metricData = row[metric as keyof typeof row];
+                return metricData && typeof metricData === 'object' ? metricData[percentile] : undefined;
+              })
+              .filter((v): v is number => v !== undefined && !isNaN(v));
+            
+            if (values.length > 0) {
+              const metricKey = metric as keyof SurveyData;
+              if (aggregatedData[metricKey] && typeof aggregatedData[metricKey] === 'object') {
+                (aggregatedData[metricKey] as SurveyMetric)[percentile] = 
+                  values.reduce((a, b) => a + b, 0) / values.length;
+              }
+            }
+          });
+        });
+
+        surveyValues[survey.vendor] = aggregatedData;
+      }
     });
 
-    // Calculate averages across surveys
+    // Calculate overall averages across surveys
     const averages: Record<'tcc' | 'wrvu' | 'cf', SurveyMetric> = {
       tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
       wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
@@ -140,12 +178,15 @@ const SurveyAnalytics: React.FC = () => {
     ['tcc', 'wrvu', 'cf'].forEach(metric => {
       percentiles.forEach(percentile => {
         const values = Object.values(surveyValues)
-          .map(v => v[metric as keyof SurveyData]?.[percentile])
-          .filter((v): v is number => v !== undefined);
+          .map(v => {
+            const metricData = v[metric as keyof SurveyData];
+            return metricData && typeof metricData === 'object' ? metricData[percentile] : undefined;
+          })
+          .filter((v): v is number => v !== undefined && !isNaN(v));
         
         if (values.length > 0) {
-          averages[metric as keyof typeof averages][percentile] = 
-            values.reduce((a, b) => a + b, 0) / values.length;
+          const metricKey = metric as keyof typeof averages;
+          averages[metricKey][percentile] = values.reduce((a, b) => a + b, 0) / values.length;
         }
       });
     });
@@ -268,16 +309,18 @@ const SurveyAnalytics: React.FC = () => {
   return (
     <>
       {/* Regular view - hidden during print */}
-      <div className="min-h-screen bg-white no-print">
+      <div className="min-h-screen bg-gray-50 no-print">
         {/* Header */}
         <div className="bg-white">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+          <div className="py-10">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <ChartBarIcon className="h-8 w-8 text-blue-600" />
-                <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">Survey Analytics</h1>
-                  <p className="mt-1 text-sm text-gray-500">
+              <div className="flex items-center space-x-6">
+                <div className="space-y-3">
+                  <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 via-blue-800 to-gray-900 bg-clip-text text-transparent">
+                    Survey Analytics
+                  </h2>
+                  <div className="h-1 w-24 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full"></div>
+                  <p className="text-sm font-medium text-gray-600 max-w-2xl tracking-wide">
                     Analyze and compare compensation data across different specialties and surveys
                   </p>
                 </div>
@@ -302,7 +345,7 @@ const SurveyAnalytics: React.FC = () => {
           </div>
         </div>
 
-        <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        <main className="py-8">
           <div className="space-y-6">
             {/* Search Bar */}
             <div className="relative search-bar">
@@ -354,7 +397,7 @@ const SurveyAnalytics: React.FC = () => {
             </div>
 
             {/* Selected Specialty Display */}
-            {selectedSpecialty && (
+            {selectedSpecialty && specialtyData && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 specialty-selector">
                 <div className="p-4">
                   <div className="flex items-center justify-between">
@@ -362,7 +405,7 @@ const SurveyAnalytics: React.FC = () => {
                       <h2 className="text-lg font-medium text-gray-900">
                         Selected: <span className="text-blue-600">{selectedSpecialty}</span>
                       </h2>
-                      {specialtyData?.mapping.mappedSpecialties.length > 0 && (
+                      {specialtyData.mapping.mappedSpecialties && specialtyData.mapping.mappedSpecialties.length > 0 && (
                         <p className="mt-1 text-sm text-gray-500">
                           Mapped to: {specialtyData.mapping.mappedSpecialties.join(', ')}
                         </p>
