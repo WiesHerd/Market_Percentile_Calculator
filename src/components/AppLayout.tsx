@@ -16,7 +16,8 @@ import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   UserIcon,
-  ArrowUpTrayIcon
+  ArrowUpTrayIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 
 interface AppLayoutProps {
@@ -73,18 +74,23 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     { 
       name: 'Survey Management', 
-      href: '/survey-management', 
+      href: '#',
       icon: DocumentChartBarIcon,
       subItems: [
+        { 
+          name: 'Survey Processing', 
+          href: '/survey-management', 
+          icon: ArrowUpTrayIcon 
+        },
         { 
           name: 'View Surveys', 
           href: '/survey-management/view-surveys', 
           icon: DocumentTextIcon 
         },
         { 
-          name: 'Upload Guide', 
-          href: '/market-data/upload-guide', 
-          icon: ArrowUpTrayIcon 
+          name: 'Recent Uploads', 
+          href: '/survey-management/recent', 
+          icon: ClockIcon 
         }
       ]
     },
@@ -148,26 +154,33 @@ export function AppLayout({ children }: AppLayoutProps) {
           <nav className="flex-1 px-2 py-4">
             {navigationItems.map((item) => (
               <div key={item.name} className="mb-4">
-                <Link
-                  href={item.href}
-                  title={isCollapsed ? item.name : ''}
-                  className={`
-                    group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                    ${pathname === item.href
-                      ? 'bg-blue-50 text-blue-600'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }
-                  `}
-                >
-                  <item.icon className={`
-                    ${isCollapsed ? '' : 'mr-3'} h-5 w-5
-                    ${pathname === item.href
-                      ? 'text-blue-600'
-                      : 'text-gray-400 group-hover:text-gray-500'
-                    }
-                  `} />
-                  {!isCollapsed && <span className="truncate">{item.name}</span>}
-                </Link>
+                {item.href === '#' ? (
+                  <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-600">
+                    <item.icon className="h-5 w-5 mr-3 text-gray-400" />
+                    <span className="truncate">{item.name}</span>
+                  </div>
+                ) : (
+                  <Link
+                    href={item.href}
+                    title={isCollapsed ? item.name : ''}
+                    className={`
+                      group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                      ${pathname === item.href
+                        ? 'bg-blue-50 text-blue-600'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      }
+                    `}
+                  >
+                    <item.icon className={`
+                      ${isCollapsed ? '' : 'mr-3'} h-5 w-5
+                      ${pathname === item.href
+                        ? 'text-blue-600'
+                        : 'text-gray-400 group-hover:text-gray-500'
+                      }
+                    `} />
+                    {!isCollapsed && <span className="truncate">{item.name}</span>}
+                  </Link>
+                )}
 
                 {/* Sub-items */}
                 {!isCollapsed && item.subItems && item.subItems.length > 0 && (
