@@ -128,14 +128,62 @@ const standardSpecialties: Record<string, StandardSpecialty> = {
   }
 };
 
-// Helper function to normalize specialty names
-const normalizeSpecialtyName = (name: string): string => {
-  return name
+// Specialty synonym mappings
+export const specialtySynonyms: Record<string, string[]> = {
+  'otolaryngology': ['otorhinolaryngology', 'ent', 'ear nose and throat'],
+  'obstetrics and gynecology': ['ob/gyn', 'obgyn', 'obstetrics gynecology'],
+  'physical medicine and rehabilitation': ['physiatry', 'pm&r', 'pmr'],
+  'emergency medicine': ['em', 'emergency room'],
+  // Add more specialty synonyms as needed
+};
+
+// Comprehensive normalize function that handles all specialty name variations
+export const normalizeSpecialtyName = (specialty: string): string => {
+  return specialty
     .toLowerCase()
     .replace(/[\(\)]/g, '')        // Remove parentheses
     .replace(/[\/\-&,]/g, ' ')     // Replace separators with spaces
+    .replace(/[^a-z0-9\s]/g, '')   // Remove special characters
     .replace(/\s+/g, ' ')          // Normalize spaces
     .trim();
+};
+
+// Check if two specialties are synonyms
+export const areSpecialtiesSynonyms = (specialty1: string, specialty2: string): boolean => {
+  const norm1 = normalizeSpecialtyName(specialty1);
+  const norm2 = normalizeSpecialtyName(specialty2);
+
+  // Direct match
+  if (norm1 === norm2) return true;
+
+  // Check synonyms
+  for (const [base, synonyms] of Object.entries(specialtySynonyms)) {
+    const isSpecialty1Match = base === norm1 || synonyms.includes(norm1);
+    const isSpecialty2Match = base === norm2 || synonyms.includes(norm2);
+    
+    if (isSpecialty1Match && isSpecialty2Match) return true;
+  }
+
+  return false;
+};
+
+// Get all synonyms for a specialty
+export const getSpecialtySynonyms = (specialty: string): string[] => {
+  const normalized = normalizeSpecialtyName(specialty);
+  
+  // Check if it's a base specialty
+  if (specialtySynonyms[normalized]) {
+    return [normalized, ...specialtySynonyms[normalized]];
+  }
+  
+  // Check if it's a synonym
+  for (const [base, synonyms] of Object.entries(specialtySynonyms)) {
+    if (synonyms.includes(normalized)) {
+      return [base, ...synonyms];
+    }
+  }
+  
+  return [normalized];
 };
 
 // Helper to check if two specialty names are variations of each other
@@ -218,7 +266,6 @@ const calculateSpecialtySimilarity = (name1: string, name2: string): number => {
 export type { StandardSpecialty, SpecialtyCategory };
 export {
   standardSpecialties,
-  normalizeSpecialtyName,
   areSpecialtyVariations,
   findStandardSpecialty,
   calculateSpecialtySimilarity

@@ -39,6 +39,7 @@ interface MappingTemplate {
 interface SpecialtyMapping {
   mappedSpecialties: string[];
   notes?: string;
+  resolved?: boolean;
 }
 
 interface MappingState {
@@ -772,13 +773,15 @@ export default function SurveyManagementPage(): JSX.Element {
   const handleSpecialtyMappingChange = (
     sourceSpecialty: string,
     mappedSpecialties: string[],
-    notes?: string
+    notes?: string,
+    resolved?: boolean
   ) => {
     const updatedMappings = {
       ...specialtyMappings,
       [sourceSpecialty]: {
         mappedSpecialties: mappedSpecialties || [],
-        notes
+        notes,
+        resolved: resolved || false
       }
     };
     
@@ -1332,6 +1335,8 @@ export default function SurveyManagementPage(): JSX.Element {
 
   // Update the mapping section in renderSpecialtyMappingStep
   const renderSpecialtyMappingStep = () => {
+    const progress = calculateSpecialtyProgress();
+    
     // Transform uploaded surveys to match the expected Survey type
     const transformedSurveys = uploadedSurveys.map(survey => {
       // Get all unique specialties from the survey data
@@ -1361,16 +1366,21 @@ export default function SurveyManagementPage(): JSX.Element {
         transformedMappings[key] = value.mappedSpecialties;
       }
     });
-
+    
     return (
       <div className="space-y-6">
         {/* Main Content */}
-        <div className="bg-white rounded-lg border border-gray-200 min-h-[600px] overflow-hidden">
+        <div className="bg-white rounded-lg border border-gray-200 min-h-[600px] overflow-hidden relative">
           <ErrorBoundary>
             <SpecialtyMappingStudio
               surveys={transformedSurveys}
-              onMappingChange={(sourceSpecialty: string, mappedSpecialties: string[]) => {
-                handleSpecialtyMappingChange(sourceSpecialty, mappedSpecialties);
+              onMappingChange={(sourceSpecialty: string, mappedSpecialties: string[], notes?: string, resolved?: boolean) => {
+                handleSpecialtyMappingChange(
+                  sourceSpecialty,
+                  mappedSpecialties,
+                  notes,
+                  resolved
+                );
                 
                 // Update the current survey's specialty mappings
                 if (selectedMapping) {
@@ -1382,7 +1392,8 @@ export default function SurveyManagementPage(): JSX.Element {
                           ...survey.specialtyMappings,
                           [sourceSpecialty]: {
                             mappedSpecialties,
-                            notes: survey.specialtyMappings[sourceSpecialty]?.notes || ''
+                            notes: notes || '',
+                            resolved: resolved || false
                           }
                         }
                       };
@@ -1397,6 +1408,21 @@ export default function SurveyManagementPage(): JSX.Element {
               existingMappings={transformedMappings}
             />
           </ErrorBoundary>
+
+          {/* Continue Button - Fixed Position */}
+          {progress === 100 && (
+            <div className="fixed bottom-8 right-8 z-50">
+              <button
+                onClick={() => setActiveStep('preview')}
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105"
+              >
+                Continue to Preview
+                <svg className="ml-2 -mr-1 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2030,24 +2056,24 @@ export default function SurveyManagementPage(): JSX.Element {
   const calculateSpecialtyProgress = (): number => {
     // Get total unique specialties across all surveys
     const allSpecialties = new Set<string>();
-    const mappedSpecialties = new Set<string>();
+    const resolvedSpecialties = new Set<string>();
 
     uploadedSurveys.forEach(survey => {
       survey.data.forEach(row => {
         const specialty = String(row[survey.mappings.specialty] || '');
         if (specialty) {
           allSpecialties.add(specialty);
-          // If this specialty has mappings, add all mapped specialties
+          // Count as resolved if it has mappings or is marked as resolved
           const mapping = specialtyMappings[specialty];
-          if (mapping && mapping.mappedSpecialties.length > 0) {
-            mappedSpecialties.add(specialty); // Count the source specialty as mapped
+          if (mapping && (mapping.mappedSpecialties.length > 0 || mapping.resolved)) {
+            resolvedSpecialties.add(specialty);
           }
         }
       });
     });
 
-    // Calculate percentage of mapped specialties
-    return allSpecialties.size > 0 ? Math.round((mappedSpecialties.size / allSpecialties.size) * 100) : 0;
+    // Calculate percentage of resolved specialties
+    return allSpecialties.size > 0 ? Math.round((resolvedSpecialties.size / allSpecialties.size) * 100) : 0;
   };
 
   return (

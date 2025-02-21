@@ -1,5 +1,14 @@
 export type MetricType = 'total' | 'wrvu' | 'cf';
 
+export type DataSourceType = 'market_intelligence' | 'survey' | 'aggregated_survey';
+
+export interface MarketDataSource {
+  type: DataSourceType;
+  name: string;
+  timestamp: string;
+  version?: string;
+}
+
 export interface MarketData {
   id: string;
   specialty: string;
@@ -15,6 +24,9 @@ export interface MarketData {
   p50_cf: number;
   p75_cf: number;
   p90_cf: number;
+  source?: MarketDataSource;
+  confidence?: number;
+  dataPoints?: number;
 }
 
 export interface CustomMarketData {
@@ -38,4 +50,7 @@ export interface TCCComponent {
   name: string;
   value: string;
   notes: string;
+  normalize: boolean;
+  isPercentage?: boolean;
+  baseComponentId?: string;
 } 
