@@ -981,38 +981,99 @@ export default function SurveyManagementPage(): JSX.Element {
       <div className="flex items-center justify-center">
         <button
           onClick={() => setActiveStep('upload')}
-          className={`flex items-center ${activeStep === 'upload' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 transition-colors`}
+          className={`flex items-center ${activeStep === 'upload' ? 'text-blue-600' : uploadedSurveys.length > 0 ? 'text-green-600' : 'text-gray-400'} hover:text-blue-500 transition-colors group`}
         >
-          <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-current">
-            <ArrowUpTrayIcon className="w-4 h-4" />
+          <div className={`
+            flex items-center justify-center w-10 h-10 rounded-xl border-2 
+            ${activeStep === 'upload' 
+              ? 'border-blue-600 bg-blue-50' 
+              : uploadedSurveys.length > 0 
+                ? 'border-green-600 bg-green-50' 
+                : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+            transition-all duration-300
+          `}>
+            {uploadedSurveys.length > 0 ? (
+              <CheckCircleIcon className="w-5 h-5 text-green-600" />
+            ) : (
+              <ArrowUpTrayIcon className="w-5 h-5" />
+            )}
           </div>
-          <span className="ml-2 font-medium">Upload Surveys ({uploadedSurveys.length})</span>
+          <div className="ml-3">
+            <span className="block font-medium">Upload Surveys</span>
+            <span className="text-sm text-gray-500">{uploadedSurveys.length} uploaded</span>
+          </div>
         </button>
-        <div className="w-16 h-0.5 mx-4 bg-gray-200"></div>
+        <div className={`w-16 h-0.5 mx-4 ${uploadedSurveys.length > 0 ? 'bg-green-200' : 'bg-gray-200'}`}></div>
         <button
           onClick={() => setActiveStep('mapping')}
           disabled={uploadedSurveys.length === 0}
-          className={`flex items-center ${activeStep === 'mapping' ? 'text-blue-600' : uploadedSurveys.length === 0 ? 'text-gray-300' : 'text-gray-400 hover:text-blue-500'} transition-colors`}
+          className={`flex items-center ${
+            activeStep === 'mapping' 
+              ? 'text-blue-600' 
+              : calculateProgress() === 100 
+                ? 'text-green-600' 
+                : uploadedSurveys.length === 0 
+                  ? 'text-gray-300' 
+                  : 'text-gray-400 hover:text-blue-500'
+          } transition-colors group`}
         >
-          <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-current">
-            <DocumentTextIcon className="w-4 h-4" />
+          <div className={`
+            flex items-center justify-center w-10 h-10 rounded-xl border-2 
+            ${activeStep === 'mapping' 
+              ? 'border-blue-600 bg-blue-50' 
+              : calculateProgress() === 100
+                ? 'border-green-600 bg-green-50'
+                : uploadedSurveys.length === 0 
+                  ? 'border-gray-200 bg-gray-50' 
+                  : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+            transition-all duration-300
+          `}>
+            {calculateProgress() === 100 ? (
+              <CheckCircleIcon className="w-5 h-5 text-green-600" />
+            ) : (
+              <DocumentTextIcon className="w-5 h-5" />
+            )}
           </div>
-          <span className="ml-2 font-medium">Map Columns</span>
+          <div className="ml-3">
+            <span className="block font-medium">Map Columns</span>
+            <span className="text-sm text-gray-500">{calculateProgress()}% complete</span>
+          </div>
         </button>
-        <div className="w-16 h-0.5 mx-4 bg-gray-200"></div>
+        <div className={`w-16 h-0.5 mx-4 ${calculateProgress() === 100 ? 'bg-green-200' : 'bg-gray-200'}`}></div>
         <button
           onClick={() => setActiveStep('specialties')}
-          disabled={uploadedSurveys.length === 0}
-          className={`flex items-center ${activeStep === 'specialties' ? 'text-blue-600' : uploadedSurveys.length === 0 ? 'text-gray-300' : 'text-gray-400 hover:text-blue-500'} transition-colors`}
+          disabled={uploadedSurveys.length === 0 || calculateProgress() !== 100}
+          className={`flex items-center ${
+            activeStep === 'specialties' 
+              ? 'text-blue-600' 
+              : calculateSpecialtyProgress() === 100 
+                ? 'text-green-600' 
+                : uploadedSurveys.length === 0 || calculateProgress() !== 100
+                  ? 'text-gray-300' 
+                  : 'text-gray-400 hover:text-blue-500'
+          } transition-colors group`}
         >
-          <div className="flex items-center justify-center w-8 h-8 rounded-full border-2 border-current">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" 
-              />
-            </svg>
+          <div className={`
+            flex items-center justify-center w-10 h-10 rounded-xl border-2 
+            ${activeStep === 'specialties' 
+              ? 'border-blue-600 bg-blue-50' 
+              : calculateSpecialtyProgress() === 100
+                ? 'border-green-600 bg-green-50'
+                : uploadedSurveys.length === 0 || calculateProgress() !== 100
+                  ? 'border-gray-200 bg-gray-50' 
+                  : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+            transition-all duration-300
+          `}>
+            {calculateSpecialtyProgress() === 100 ? (
+              <CheckCircleIcon className="w-5 h-5 text-green-600" />
+            ) : (
+              <DocumentChartBarIcon className="w-5 h-5" />
+            )}
           </div>
-          <span className="ml-2 font-medium">Map Specialties</span>
+          <div className="ml-3">
+            <span className="block font-medium">Map Specialties</span>
+            <span className="text-sm text-gray-500">{calculateSpecialtyProgress()}% mapped</span>
+          </div>
         </button>
       </div>
     </div>
@@ -1271,25 +1332,14 @@ export default function SurveyManagementPage(): JSX.Element {
 
   // Update the mapping section in renderSpecialtyMappingStep
   const renderSpecialtyMappingStep = () => {
-    console.log('Rendering specialty mapping step with:', {
-      uploadedSurveys,
-      specialtyMappings
-    });
-
     // Transform uploaded surveys to match the expected Survey type
     const transformedSurveys = uploadedSurveys.map(survey => {
-      // First, get all unique specialties from the survey data
+      // Get all unique specialties from the survey data
       const specialties = Array.from(new Set(
         survey.data
-          .map(row => {
-            const specialty = row[survey.mappings.specialty];
-            console.log('Processing specialty:', specialty, 'from row:', row);
-            return String(specialty || '').trim();
-          })
+          .map(row => String(row[survey.mappings.specialty] || '').trim())
           .filter(s => s && s !== '')
       ));
-
-      console.log(`Found ${specialties.length} unique specialties in ${survey.vendor} survey:`, specialties);
 
       // Create the transformed survey object
       return {
@@ -1312,25 +1362,8 @@ export default function SurveyManagementPage(): JSX.Element {
       }
     });
 
-    console.log('Final transformed data:', {
-      surveys: transformedSurveys,
-      mappings: transformedMappings
-    });
-
     return (
       <div className="space-y-6">
-        {/* Header */}
-        <div className="bg-white rounded-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-medium text-gray-900">Map Specialties</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Create intelligent mappings between survey specialties
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Main Content */}
         <div className="bg-white rounded-lg border border-gray-200 min-h-[600px] overflow-hidden">
           <ErrorBoundary>
@@ -1365,72 +1398,8 @@ export default function SurveyManagementPage(): JSX.Element {
             />
           </ErrorBoundary>
         </div>
-
-        {/* Quick Actions Panel */}
-        <div className="fixed bottom-6 right-6 flex flex-col space-y-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-4 bg-white rounded-full shadow-lg text-blue-600 hover:text-blue-700 hover:shadow-xl transition-all duration-300"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
-          </motion.button>
-        </div>
-
-        {/* Mapping Instructions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100"
-        >
-          <h4 className="text-lg font-medium text-blue-900 mb-4">Mapping Guide</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <div className="flex items-center text-blue-800">
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                <h5 className="font-medium">Quick Actions</h5>
-              </div>
-              <ul className="text-sm text-blue-700 space-y-1 ml-7">
-                <li>• Use auto-arrange for instant mapping</li>
-                <li>• Search and filter specialties</li>
-                <li>• Toggle between grid and list views</li>
-              </ul>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center text-blue-800">
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-                <h5 className="font-medium">Advanced Features</h5>
-          </div>
-              <ul className="text-sm text-blue-700 space-y-1 ml-7">
-                <li>• Group similar specialties</li>
-                <li>• Edit and merge groups</li>
-                <li>• Add mapping notes</li>
-              </ul>
-        </div>
-            <div className="space-y-2">
-              <div className="flex items-center text-blue-800">
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <h5 className="font-medium">Best Practices</h5>
-              </div>
-              <ul className="text-sm text-blue-700 space-y-1 ml-7">
-                <li>• Review suggested mappings</li>
-                <li>• Validate mapping accuracy</li>
-                <li>• Save templates for reuse</li>
-              </ul>
-            </div>
-          </div>
-        </motion.div>
-    </div>
-  );
+      </div>
+    );
   };
 
   const renderDataPreview = () => (
@@ -2058,6 +2027,29 @@ export default function SurveyManagementPage(): JSX.Element {
     }
   }, [activeStep, uploadedSurveys]);
 
+  const calculateSpecialtyProgress = (): number => {
+    // Get total unique specialties across all surveys
+    const allSpecialties = new Set<string>();
+    const mappedSpecialties = new Set<string>();
+
+    uploadedSurveys.forEach(survey => {
+      survey.data.forEach(row => {
+        const specialty = String(row[survey.mappings.specialty] || '');
+        if (specialty) {
+          allSpecialties.add(specialty);
+          // If this specialty has mappings, add all mapped specialties
+          const mapping = specialtyMappings[specialty];
+          if (mapping && mapping.mappedSpecialties.length > 0) {
+            mappedSpecialties.add(specialty); // Count the source specialty as mapped
+          }
+        }
+      });
+    });
+
+    // Calculate percentage of mapped specialties
+    return allSpecialties.size > 0 ? Math.round((mappedSpecialties.size / allSpecialties.size) * 100) : 0;
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -2093,66 +2085,98 @@ export default function SurveyManagementPage(): JSX.Element {
             <div className="flex items-center justify-center">
               <button
                 onClick={() => setActiveStep('upload')}
-                className={`flex items-center ${activeStep === 'upload' ? 'text-blue-600' : 'text-gray-400'} hover:text-blue-500 transition-colors group`}
+                className={`flex items-center ${activeStep === 'upload' ? 'text-blue-600' : uploadedSurveys.length > 0 ? 'text-green-600' : 'text-gray-400'} hover:text-blue-500 transition-colors group`}
               >
                 <div className={`
                   flex items-center justify-center w-10 h-10 rounded-xl border-2 
-                  ${activeStep === 'upload' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+                  ${activeStep === 'upload' 
+                    ? 'border-blue-600 bg-blue-50' 
+                    : uploadedSurveys.length > 0 
+                      ? 'border-green-600 bg-green-50' 
+                      : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
                   transition-all duration-300
                 `}>
-                  <ArrowUpTrayIcon className="w-5 h-5" />
+                  {uploadedSurveys.length > 0 ? (
+                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <ArrowUpTrayIcon className="w-5 h-5" />
+                  )}
                 </div>
                 <div className="ml-3">
                   <span className="block font-medium">Upload Surveys</span>
                   <span className="text-sm text-gray-500">{uploadedSurveys.length} uploaded</span>
                 </div>
               </button>
-              <div className="w-16 h-0.5 mx-4 bg-gray-200"></div>
+              <div className={`w-16 h-0.5 mx-4 ${uploadedSurveys.length > 0 ? 'bg-green-200' : 'bg-gray-200'}`}></div>
               <button
                 onClick={() => setActiveStep('mapping')}
                 disabled={uploadedSurveys.length === 0}
-                className={`flex items-center ${activeStep === 'mapping' ? 'text-blue-600' : uploadedSurveys.length === 0 ? 'text-gray-300' : 'text-gray-400 hover:text-blue-500'} transition-colors group`}
+                className={`flex items-center ${
+                  activeStep === 'mapping' 
+                    ? 'text-blue-600' 
+                    : calculateProgress() === 100 
+                      ? 'text-green-600' 
+                      : uploadedSurveys.length === 0 
+                        ? 'text-gray-300' 
+                        : 'text-gray-400 hover:text-blue-500'
+                } transition-colors group`}
               >
                 <div className={`
                   flex items-center justify-center w-10 h-10 rounded-xl border-2 
                   ${activeStep === 'mapping' 
                     ? 'border-blue-600 bg-blue-50' 
-                    : uploadedSurveys.length === 0 
-                      ? 'border-gray-200 bg-gray-50' 
-                      : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+                    : calculateProgress() === 100
+                      ? 'border-green-600 bg-green-50'
+                      : uploadedSurveys.length === 0 
+                        ? 'border-gray-200 bg-gray-50' 
+                        : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
                   transition-all duration-300
                 `}>
-                  <DocumentTextIcon className="w-5 h-5" />
+                  {calculateProgress() === 100 ? (
+                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <DocumentTextIcon className="w-5 h-5" />
+                  )}
                 </div>
                 <div className="ml-3">
                   <span className="block font-medium">Map Columns</span>
                   <span className="text-sm text-gray-500">{calculateProgress()}% complete</span>
                 </div>
               </button>
-              <div className="w-16 h-0.5 mx-4 bg-gray-200"></div>
+              <div className={`w-16 h-0.5 mx-4 ${calculateProgress() === 100 ? 'bg-green-200' : 'bg-gray-200'}`}></div>
               <button
                 onClick={() => setActiveStep('specialties')}
-                disabled={uploadedSurveys.length === 0}
-                className={`flex items-center ${activeStep === 'specialties' ? 'text-blue-600' : uploadedSurveys.length === 0 ? 'text-gray-300' : 'text-gray-400 hover:text-blue-500'} transition-colors group`}
+                disabled={uploadedSurveys.length === 0 || calculateProgress() !== 100}
+                className={`flex items-center ${
+                  activeStep === 'specialties' 
+                    ? 'text-blue-600' 
+                    : calculateSpecialtyProgress() === 100 
+                      ? 'text-green-600' 
+                      : uploadedSurveys.length === 0 || calculateProgress() !== 100
+                        ? 'text-gray-300' 
+                        : 'text-gray-400 hover:text-blue-500'
+                } transition-colors group`}
               >
                 <div className={`
                   flex items-center justify-center w-10 h-10 rounded-xl border-2 
                   ${activeStep === 'specialties' 
                     ? 'border-blue-600 bg-blue-50' 
-                    : uploadedSurveys.length === 0 
-                      ? 'border-gray-200 bg-gray-50' 
-                      : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
+                    : calculateSpecialtyProgress() === 100
+                      ? 'border-green-600 bg-green-50'
+                      : uploadedSurveys.length === 0 || calculateProgress() !== 100
+                        ? 'border-gray-200 bg-gray-50' 
+                        : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
                   transition-all duration-300
                 `}>
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                      d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" 
-                    />
-                  </svg>
+                  {calculateSpecialtyProgress() === 100 ? (
+                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <DocumentChartBarIcon className="w-5 h-5" />
+                  )}
                 </div>
                 <div className="ml-3">
                   <span className="block font-medium">Map Specialties</span>
-                  <span className="text-sm text-gray-500">{Object.keys(specialtyMappings).length} mapped</span>
+                  <span className="text-sm text-gray-500">{calculateSpecialtyProgress()}% mapped</span>
                 </div>
               </button>
             </div>

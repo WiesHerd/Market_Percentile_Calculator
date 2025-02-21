@@ -421,26 +421,28 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               </button>
               <button
                 onClick={() => setViewMode('unmapped')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                  ${viewMode === 'unmapped' 
-                    ? 'bg-blue-100 text-blue-700' 
-                    : 'text-gray-600 hover:bg-gray-100'}`}
+                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  viewMode === 'unmapped' 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
               >
                 Unmapped Specialties
               </button>
               <button
                 onClick={() => setViewMode('mapped')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors
-                  ${viewMode === 'mapped' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'text-gray-600 hover:bg-gray-100'}`}
+                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  viewMode === 'mapped' 
+                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
               >
                 Mapped Specialties
               </button>
               {Object.keys(mappings).length > 0 && (
                 <button
                   onClick={handleClearAllMappings}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 >
                   Clear All Mappings
                 </button>
@@ -469,7 +471,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className="sticky top-0 border-b border-gray-200 bg-gray-50 p-4 z-10">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-medium text-gray-900">
-                  {viewMode === 'unmapped' ? 'Unmapped Specialties' : 'Mapped Specialties'}
+                  {viewMode === 'unmapped' ? `Unmapped Specialties (${unmappedSpecialties.length})` : 'Mapped Specialties'}
                 </h3>
                 <div className="flex items-center space-x-2">
                   <button
