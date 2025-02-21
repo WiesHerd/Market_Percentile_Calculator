@@ -16,7 +16,7 @@ interface SpecialtyMappingStudioProps {
       cf: any;
     }>;
   }>;
-  onMappingChange: (sourceSpecialty: string, mappedSpecialties: string[]) => void;
+  onMappingChange: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string, resolved?: boolean) => void;
   existingMappings?: Record<string, string[]>;
 }
 
@@ -45,6 +45,7 @@ interface MappedSpecialty {
   specialty: string;
   vendor: string;
   connections: Connection[];
+  resolved?: boolean;
 }
 
 interface SimilarSpecialty {
@@ -89,6 +90,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     selectedVendors: new Set(['MGMA', 'GALLAGHER', 'SULLIVANCOTTER'])
   });
 
+  // Add state for resolved specialties
+  const [resolvedSpecialties, setResolvedSpecialties] = useState<Set<string>>(new Set());
+
   // Convert surveys to SpecialtyMapping format
   const availableSpecialties = useMemo(() => {
     const specialties: SpecialtyMapping[] = [];
@@ -109,50 +113,62 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Get all unique specialties with their vendors
   const allSpecialties = useMemo((): UnmappedSpecialty[] => {
-    const specialties: UnmappedSpecialty[] = [];
-    console.log('Processing surveys for specialties:', surveys);
+    const uniqueSpecialties = new Map<string, UnmappedSpecialty>();
     
     surveys.forEach(survey => {
-      console.log('Processing survey:', survey.vendor, survey.data.length);
       survey.data.forEach(item => {
         if (item.specialty && typeof item.specialty === 'string') {
-          console.log('Adding specialty:', item.specialty, 'from vendor:', survey.vendor);
-          specialties.push({
-            specialty: item.specialty.trim(),
-            vendor: formatVendorName(survey.vendor)
-          });
+          const specialty = item.specialty.trim();
+          if (!uniqueSpecialties.has(specialty)) {
+            uniqueSpecialties.set(specialty, {
+              specialty,
+              vendor: formatVendorName(survey.vendor)
+            });
+          }
         }
       });
     });
     
-    console.log('Found specialties:', specialties);
-    return specialties;
+    return Array.from(uniqueSpecialties.values());
   }, [surveys]);
 
   // Get unmapped specialties
   const unmappedSpecialties = useMemo((): UnmappedSpecialty[] => {
     const unmapped = allSpecialties.filter(item => 
       !Object.keys(mappings).includes(item.specialty) &&
+      !resolvedSpecialties.has(item.specialty) &&
       item.specialty.trim() !== ''
     );
     console.log('Unmapped specialties:', unmapped);
     return unmapped;
-  }, [allSpecialties, mappings]);
+  }, [allSpecialties, mappings, resolvedSpecialties]);
 
   // Get mapped specialties with their connections
   const mappedSpecialties = useMemo((): MappedSpecialty[] => {
-    return Object.entries(mappings).map(([specialty, connections]) => ({
+    const mapped = Object.entries(mappings).map(([specialty, connections]) => ({
       specialty,
       vendor: allSpecialties.find(s => s.specialty === specialty)?.vendor || '',
-      connections: connections.map(conn => {
-        const vendorInfo = allSpecialties.find(s => s.specialty === conn);
-        return {
-          specialty: conn,
-          vendor: vendorInfo?.vendor || ''
-        };
-      })
+      connections: connections.map(conn => ({
+        specialty: conn,
+        vendor: allSpecialties.find(s => s.specialty === conn)?.vendor || ''
+      }))
     }));
-  }, [mappings, allSpecialties]);
+
+    // Add resolved specialties
+    const resolved = Array.from(resolvedSpecialties)
+      .filter(specialty => !Object.keys(mappings).includes(specialty))
+      .map(specialty => {
+        const specialtyInfo = allSpecialties.find(s => s.specialty === specialty);
+        return {
+          specialty,
+          vendor: specialtyInfo?.vendor || '',
+          connections: [],
+          resolved: true
+        };
+      });
+
+    return [...mapped, ...resolved];
+  }, [mappings, allSpecialties, resolvedSpecialties]);
 
   // Get unique vendors
   const uniqueVendors = useMemo(() => {
@@ -397,6 +413,112 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     toast.success('Auto-arrangement complete!');
   };
 
+  // Update progress calculation to be more accurate
+  const calculateProgress = () => {
+    const uniqueSpecialties = new Set(allSpecialties.map(s => s.specialty));
+    const totalSpecialties = uniqueSpecialties.size;
+    const mappedCount = Object.keys(mappings).length;
+    const resolvedCount = Array.from(resolvedSpecialties).filter(
+      specialty => !Object.keys(mappings).includes(specialty)
+    ).length;
+    
+    return totalSpecialties > 0 ? Math.round(((mappedCount + resolvedCount) / totalSpecialties) * 100) : 0;
+  };
+
+  // Update handler for resolving specialties
+  const handleResolveSpecialty = useCallback((specialty: string) => {
+    setResolvedSpecialties(prev => {
+      const updated = new Set(prev);
+      updated.add(specialty);
+      return updated;
+    });
+    // Notify parent component that this specialty has been resolved
+    onMappingChange(specialty, [], undefined, true);
+  }, [onMappingChange]);
+
+  // Similar specialties section with resolve option
+  const renderSimilarSpecialties = () => {
+    if (filteredSimilarSpecialties.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
+            <svg className="w-6 h-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-medium text-gray-900 mb-2">No matching specialties found</h3>
+          <p className="text-sm text-gray-500 mb-6">
+            This specialty doesn't have any matches in other surveys.
+          </p>
+          <button
+            onClick={() => {
+              handleResolveSpecialty(selectedSpecialty!.specialty);
+              setSelectedSpecialty(null);
+            }}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <CheckIcon className="w-4 h-4 mr-2" />
+            Mark as Complete
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        {filteredSimilarSpecialties.map((item) => (
+          <SimilarSpecialtyItem
+            key={`${item.specialty}-${item.vendor}`}
+            specialty={item}
+            isSelected={selectedMatches.has(item.specialty)}
+            onToggle={() => handleMatchToggle(item.specialty)}
+          />
+        ))}
+      </>
+    );
+  };
+
+  // Update the specialty item rendering
+  const renderSpecialtyItem = (item: UnmappedSpecialty | MappedSpecialty) => (
+    <div
+      key={`${item.specialty}-${item.vendor}`}
+      onClick={() => !('resolved' in item) && setSelectedSpecialty(item)}
+      className={`p-4 rounded-lg border transition-all duration-200 ${
+        selectedSpecialty?.specialty === item.specialty
+          ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200'
+          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+      } ${!('resolved' in item) ? 'cursor-pointer' : ''}`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <div className="font-medium text-gray-900">{item.specialty}</div>
+          <div className="flex items-center mt-1 space-x-2">
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              item.vendor === 'MGMA' ? 'bg-purple-100 text-purple-800' :
+              item.vendor === 'GALLAGHER' ? 'bg-green-100 text-green-800' :
+              'bg-blue-100 text-blue-800'
+            }`}>
+              {formatVendorName(item.vendor)}
+            </span>
+            {'resolved' in item && item.resolved && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                No matches available
+              </span>
+            )}
+          </div>
+        </div>
+        {selectedSpecialty?.specialty === item.specialty && !('resolved' in item) && (
+          <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center">
+            <CheckIcon className="h-4 w-4 text-blue-600" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-gray-50">
       <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
@@ -406,7 +528,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div>
               <h2 className="text-lg font-medium text-gray-900">Specialty Mapping Progress</h2>
               <p className="mt-1 text-sm text-gray-500">
-                {Object.keys(mappings).length} / {allSpecialties.length} specialties mapped
+                {Object.keys(mappings).length + Array.from(resolvedSpecialties).filter(
+                  specialty => !Object.keys(mappings).includes(specialty)
+                ).length} / {allSpecialties.length} specialties mapped or resolved
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -418,26 +542,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
                 Auto-arrange Specialties
-              </button>
-              <button
-                onClick={() => setViewMode('unmapped')}
-                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  viewMode === 'unmapped' 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Unmapped Specialties
-              </button>
-              <button
-                onClick={() => setViewMode('mapped')}
-                className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  viewMode === 'mapped' 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                Mapped Specialties
               </button>
               {Object.keys(mappings).length > 0 && (
                 <button
@@ -453,13 +557,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-blue-500 transition-all duration-500"
-                style={{ 
-                  width: `${(Object.keys(mappings).length / allSpecialties.length) * 100}%` 
-                }}
+                style={{ width: `${calculateProgress()}%` }}
               />
             </div>
             <span className="text-sm text-gray-600">
-              {Math.round((Object.keys(mappings).length / allSpecialties.length) * 100)}% complete
+              {calculateProgress()}% complete
             </span>
           </div>
         </div>
@@ -473,23 +575,23 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 <h3 className="text-lg font-medium text-gray-900">
                   {viewMode === 'unmapped' ? `Unmapped Specialties (${unmappedSpecialties.length})` : 'Mapped Specialties'}
                 </h3>
-                <div className="flex items-center space-x-2">
+                <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
                   <button
                     onClick={() => setViewMode('unmapped')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    className={`inline-flex items-center px-4 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === 'unmapped' 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'bg-blue-600 text-white rounded-md' 
+                        : 'text-gray-700 hover:text-gray-900'
                     }`}
                   >
                     Unmapped
                   </button>
                   <button
                     onClick={() => setViewMode('mapped')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    className={`inline-flex items-center px-4 py-1.5 text-sm font-medium transition-colors ${
                       viewMode === 'mapped'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'text-gray-500 hover:text-gray-700'
+                        ? 'bg-blue-600 text-white rounded-md'
+                        : 'text-gray-700 hover:text-gray-900'
                     }`}
                   >
                     Mapped
@@ -542,39 +644,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className="p-6">
               <div className="space-y-2">
                 {filteredSpecialties.length > 0 ? (
-                  filteredSpecialties.map((item) => (
-                    <div
-                      key={`${item.specialty}-${item.vendor}`}
-                      onClick={() => setSelectedSpecialty(item)}
-                      className={`p-4 rounded-lg border transition-all duration-200 cursor-pointer ${
-                        selectedSpecialty?.specialty === item.specialty
-                          ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200'
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">{item.specialty}</div>
-                          <div className="flex items-center mt-1">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              item.vendor === 'MGMA' ? 'bg-purple-100 text-purple-800' :
-                              item.vendor === 'GALLAGHER' ? 'bg-green-100 text-green-800' :
-                              'bg-blue-100 text-blue-800'
-                            }`}>
-                              {formatVendorName(item.vendor)}
-                            </span>
-                          </div>
-                        </div>
-                        {selectedSpecialty?.specialty === item.specialty && (
-                          <div className="ml-4">
-                            <div className="h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center">
-                              <CheckIcon className="h-4 w-4 text-blue-600" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))
+                  filteredSpecialties.map(item => renderSpecialtyItem(item))
                 ) : (
                   <div className="text-center py-8">
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
@@ -617,45 +687,34 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
                 {/* Similar specialties list */}
                 <div className="space-y-3 mt-4">
-                  {filteredSimilarSpecialties.length > 0 ? (
-                    filteredSimilarSpecialties.map((item) => (
-                      <SimilarSpecialtyItem
-                        key={`${item.specialty}-${item.vendor}`}
-                        specialty={item}
-                        isSelected={selectedMatches.has(item.specialty)}
-                        onToggle={() => handleMatchToggle(item.specialty)}
-                      />
-                    ))
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      No similar specialties found. Try adjusting your search.
-                    </div>
-                  )}
+                  {renderSimilarSpecialties()}
                 </div>
 
-                {/* Action buttons */}
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={() => {
-                      setSelectedSpecialty(null);
-                      setSelectedMatches(new Set());
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCompleteMappings}
-                    disabled={selectedMatches.size === 0}
-                    className={`px-4 py-2 text-sm font-medium rounded-md ${
-                      selectedMatches.size > 0
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Confirm Mapping
-                  </button>
-                </div>
+                {/* Action buttons - only show if there are matches */}
+                {filteredSimilarSpecialties.length > 0 && (
+                  <div className="flex justify-end space-x-3 mt-6">
+                    <button
+                      onClick={() => {
+                        setSelectedSpecialty(null);
+                        setSelectedMatches(new Set());
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCompleteMappings}
+                      disabled={selectedMatches.size === 0}
+                      className={`px-4 py-2 text-sm font-medium rounded-md ${
+                        selectedMatches.size > 0
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      Confirm Mapping
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-6 text-center py-12 text-gray-500">
