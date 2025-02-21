@@ -460,7 +460,14 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       specialty => !Object.keys(mappings).includes(specialty)
     ).length;
     
-    return totalSpecialties > 0 ? Math.round(((mappedCount + resolvedCount) / totalSpecialties) * 100) : 0;
+    const progress = Math.round(totalSpecialties > 0 ? ((mappedCount + resolvedCount) / totalSpecialties) * 100 : 0);
+    
+    // Dispatch progress event
+    window.dispatchEvent(new CustomEvent('specialtyMappingProgress', { 
+      detail: progress 
+    }));
+    
+    return progress;
   };
 
   // Update handler for resolving specialties
@@ -884,8 +891,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           <div className="flex items-center space-x-2">
             <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-blue-500 transition-all duration-500"
+                className="h-full bg-blue-500 transition-all duration-500 specialty-mapping-progress"
                 style={{ width: `${calculateProgress()}%` }}
+                data-progress={calculateProgress()}
               />
             </div>
             <span className="text-sm text-gray-600">

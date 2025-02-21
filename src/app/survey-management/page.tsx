@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
@@ -219,6 +219,8 @@ export default function SurveyManagementPage(): JSX.Element {
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [showMappingInterface, setShowMappingInterface] = useState(false);
   const [customVendorName, setCustomVendorName] = useState<string>('');
+  const [isSurveySaved, setIsSurveySaved] = useState(false);
+  const [specialtyProgress, setSpecialtyProgress] = useState(0);
 
   // Add default survey data loading
   useEffect(() => {
@@ -234,13 +236,23 @@ export default function SurveyManagementPage(): JSX.Element {
             (parseInt(b.id) || 0) - (parseInt(a.id) || 0)
           );
           
-          if (sortedSurveys.length > 0 && sortedSurveys[0].specialtyMappings) {
-            setSpecialtyMappings(sortedSurveys[0].specialtyMappings);
-          }
-          
-          // If there are surveys, show the mapping interface
-          if (parsedSurveys.length > 0) {
+          if (sortedSurveys.length > 0) {
+            // Set specialty mappings if they exist
+            if (sortedSurveys[0].specialtyMappings) {
+              setSpecialtyMappings(sortedSurveys[0].specialtyMappings);
+            }
+            
+            // Set the most recent survey as selected and load its mappings
+            setSelectedMapping(sortedSurveys[0].id);
+            if (sortedSurveys[0].mappings) {
+              setColumnMapping(sortedSurveys[0].mappings);
+              setColumns(sortedSurveys[0].columns || []);
+              setFileData(sortedSurveys[0].data);
+            }
+            
+            // Show the mapping interface and set the active step
             setShowMappingInterface(true);
+            setActiveStep('mapping');
           }
         }
       } catch (error) {
@@ -944,8 +956,15 @@ export default function SurveyManagementPage(): JSX.Element {
       const existingSurveys = JSON.parse(localStorage.getItem('uploadedSurveys') || '[]');
       localStorage.setItem('uploadedSurveys', JSON.stringify([...existingSurveys, newSurvey]));
 
-      // Show success message
-      toast.success('Survey data saved successfully');
+      // Calculate the number of mapped specialties
+      const mappedSpecialtiesCount = Object.keys(specialtyMappings).length;
+      const vendorName = formatVendorName(selectedVendor || 'Auto-detected');
+
+      // Show detailed success message
+      toast.success(
+        `Survey saved successfully!\n${mappedSpecialtiesCount} specialties mapped in ${vendorName} survey.`,
+        { duration: 5000 } // Show for 5 seconds
+      );
 
       // Reset the form for new upload
       setActiveStep('upload');
@@ -1408,21 +1427,6 @@ export default function SurveyManagementPage(): JSX.Element {
               existingMappings={transformedMappings}
             />
           </ErrorBoundary>
-
-          {/* Continue Button - Fixed Position */}
-          {progress === 100 && (
-            <div className="fixed bottom-8 right-8 z-50">
-              <button
-                onClick={() => setActiveStep('preview')}
-                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105"
-              >
-                Continue to Preview
-                <svg className="ml-2 -mr-1 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1700,7 +1704,7 @@ export default function SurveyManagementPage(): JSX.Element {
           </div>
           <div className="p-5">
             <select
-              value={columnMapping.specialty}
+              value={columnMapping?.specialty}
               onChange={(e) => handleColumnMappingChange('specialty', null, e.target.value)}
               className="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500"
             >
@@ -1919,6 +1923,18 @@ export default function SurveyManagementPage(): JSX.Element {
 
         setMappingValidation(validations);
         setShowMappingPreview(true);
+        
+        // Save the current state to localStorage to ensure persistence
+        const updatedSurveys = uploadedSurveys.map(s => 
+          s.id === surveyId ? {
+            ...s,
+            mappings: selectedSurvey.mappings,
+            columns: selectedSurvey.columns,
+            specialtyMappings: selectedSurvey.specialtyMappings
+          } : s
+        );
+        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+        setUploadedSurveys(updatedSurveys);
       } else {
         console.log('No existing mappings found, triggering auto-detect');
         // Small delay to ensure state is updated before running auto-detect
@@ -1929,6 +1945,10 @@ export default function SurveyManagementPage(): JSX.Element {
       if (selectedSurvey.specialtyMappings) {
         setSpecialtyMappings(selectedSurvey.specialtyMappings);
       }
+      
+      // Ensure we're in mapping step
+      setActiveStep('mapping');
+      setShowMappingInterface(true);
       
       console.log('Survey data loaded:', {
         dataLength: selectedSurvey.data.length,
@@ -2053,27 +2073,51 @@ export default function SurveyManagementPage(): JSX.Element {
     }
   }, [activeStep, uploadedSurveys]);
 
+  useEffect(() => {
+    const handleSpecialtyProgress = (event: CustomEvent<number>) => {
+      setSpecialtyProgress(event.detail);
+    };
+
+    window.addEventListener('specialtyMappingProgress', handleSpecialtyProgress as EventListener);
+    return () => {
+      window.removeEventListener('specialtyMappingProgress', handleSpecialtyProgress as EventListener);
+    };
+  }, []);
+
   const calculateSpecialtyProgress = (): number => {
-    // Get total unique specialties across all surveys
-    const allSpecialties = new Set<string>();
-    const resolvedSpecialties = new Set<string>();
+    // Get the progress from the SpecialtyMappingStudio component
+    const progressElement = document.querySelector('.specialty-mapping-progress');
+    if (progressElement) {
+      const progress = parseInt(progressElement.getAttribute('data-progress') || '0', 10);
+      return progress;
+    }
+    return 0;
+  };
 
-    uploadedSurveys.forEach(survey => {
-      survey.data.forEach(row => {
-        const specialty = String(row[survey.mappings.specialty] || '');
-        if (specialty) {
-          allSpecialties.add(specialty);
-          // Count as resolved if it has mappings or is marked as resolved
-          const mapping = specialtyMappings[specialty];
-          if (mapping && (mapping.mappedSpecialties.length > 0 || mapping.resolved)) {
-            resolvedSpecialties.add(specialty);
-          }
-        }
-      });
-    });
+  const handleSaveSurvey = () => {
+    // Save the current state to localStorage
+    const updatedSurveys = uploadedSurveys.map(survey => ({
+      ...survey,
+      specialtyMappings: specialtyMappings
+    }));
+    
+    localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+    setUploadedSurveys(updatedSurveys);
+    setIsSurveySaved(true);
+    toast.success('Survey mappings saved successfully!');
+  };
 
-    // Calculate percentage of resolved specialties
-    return allSpecialties.size > 0 ? Math.round((resolvedSpecialties.size / allSpecialties.size) * 100) : 0;
+  const areAllStepsComplete = (): boolean => {
+    // Check if we have uploaded surveys
+    if (uploadedSurveys.length === 0) return false;
+
+    // Check if column mapping is complete
+    if (calculateProgress() !== 100) return false;
+
+    // Check if specialty mapping is complete
+    if (calculateSpecialtyProgress() !== 100) return false;
+
+    return true;
   };
 
   return (
@@ -2098,9 +2142,16 @@ export default function SurveyManagementPage(): JSX.Element {
                 </div>
               </div>
               <div className="flex items-center space-x-4">
-                {activeStep !== 'specialties' && (
-                  <div className="flex items-center space-x-4">
-                  </div>
+                {!isSurveySaved && areAllStepsComplete() && (
+                  <button
+                    onClick={handleSaveSurvey}
+                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-300 transform hover:scale-105"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Save Survey
+                  </button>
                 )}
               </div>
             </div>
