@@ -92,7 +92,16 @@ interface SelectOption {
 
 // Add survey vendor patterns
 const SURVEY_PATTERNS = {
-  'SullivanCotter': {
+  'MGMA': {
+    required: ['specialty', 'compensation', 'wRVU'],
+    patterns: {
+      specialty: /specialty|physician.type/i,
+      tcc: /compensation|total.comp|salary/i,
+      wrvu: /wRVU|work.?rvu|production/i,
+      cf: /compensation.per|per.rvu|rate/i
+    }
+  },
+  'SULLIVANCOTTER': {
     required: ['specialty', 'total_cash', 'work_rvu'],
     patterns: {
       specialty: /specialty|provider_type/i,
@@ -101,7 +110,7 @@ const SURVEY_PATTERNS = {
       cf: /conversion|conv.?factor|cf/i
     }
   },
-  'ECGManagement': {
+  'GALLAGHER': {
     required: ['specialty', 'compensation', 'productivity'],
     patterns: {
       specialty: /specialty|provider/i,
@@ -110,13 +119,40 @@ const SURVEY_PATTERNS = {
       cf: /rate.per|per.rvu|conversion/i
     }
   },
-  'MGMA': {
-    required: ['specialty', 'compensation', 'wRVU'],
+  'ECG': {
+    required: ['specialty', 'compensation', 'productivity'],
     patterns: {
-      specialty: /specialty|physician.type/i,
+      specialty: /specialty|provider|position/i,
+      tcc: /compensation|total.comp|cash.comp/i,
+      wrvu: /productivity|wrvus|work.?rvu/i,
+      cf: /rate.per|per.rvu|conversion/i
+    }
+  },
+  'AAMGA': {
+    required: ['specialty', 'compensation', 'rvu'],
+    patterns: {
+      specialty: /specialty|provider.type|position/i,
       tcc: /compensation|total.comp|salary/i,
-      wrvu: /wRVU|work.?rvu|production/i,
-      cf: /compensation.per|per.rvu|rate/i
+      wrvu: /rvu|work.?rvu|production/i,
+      cf: /comp.per|per.rvu|rate/i
+    }
+  },
+  'MERRIT_HAWKINS': {
+    required: ['specialty', 'compensation'],
+    patterns: {
+      specialty: /specialty|position|practice.type/i,
+      tcc: /compensation|salary|total.package/i,
+      wrvu: /production|volume|rvu/i,
+      cf: /rate|per.rvu|compensation.factor/i
+    }
+  },
+  'CUSTOM': {
+    required: ['specialty'],
+    patterns: {
+      specialty: /specialty|provider|position|type/i,
+      tcc: /compensation|salary|total|cash/i,
+      wrvu: /rvu|production|volume|work/i,
+      cf: /rate|factor|per|conversion/i
     }
   }
 };
@@ -135,18 +171,21 @@ interface UploadedSurvey {
 // Helper function to format vendor names consistently
 const formatVendorName = (vendor: string): string => {
   const vendorMap: Record<string, string> = {
-    'mgma': 'MGMA',
     'MGMA': 'MGMA',
-    'sullivan': 'SullivanCotter',
-    'sullivancotter': 'SullivanCotter',
+    'GALLAGHER': 'Gallagher',
     'SULLIVANCOTTER': 'SullivanCotter',
     'SULLIVAN': 'SullivanCotter',
     'SULLIVAN COTTER': 'SullivanCotter',
     'SULLIVAN-COTTER': 'SullivanCotter',
-    'gallagher': 'Gallagher',
-    'GALLAGHER': 'Gallagher'
+    'ECG': 'ECG Management',
+    'AAMGA': 'AAMGA',
+    'MERRIT_HAWKINS': 'Merrit Hawkins'
   };
-  return vendorMap[vendor.toLowerCase()] || vendor;
+  // If it's a custom survey, return the custom name or "Custom Survey"
+  if (vendor.startsWith('CUSTOM:')) {
+    return vendor.replace('CUSTOM:', '');
+  }
+  return vendorMap[vendor.toUpperCase()] || vendor;
 };
 
 export default function SurveyManagementPage(): JSX.Element {
@@ -178,6 +217,7 @@ export default function SurveyManagementPage(): JSX.Element {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [showMappingInterface, setShowMappingInterface] = useState(false);
+  const [customVendorName, setCustomVendorName] = useState<string>('');
 
   // Add default survey data loading
   useEffect(() => {
@@ -614,6 +654,11 @@ export default function SurveyManagementPage(): JSX.Element {
         throw new Error('Please select a survey vendor first');
       }
 
+      // If it's a custom survey, validate the custom name
+      if (selectedVendor === 'CUSTOM' && !customVendorName.trim()) {
+        throw new Error('Please enter a custom survey name');
+      }
+
       const text = await file.text();
       console.log('File text loaded, parsing CSV...');
       
@@ -621,7 +666,6 @@ export default function SurveyManagementPage(): JSX.Element {
         header: true,
         skipEmptyLines: true,
         transformHeader: (header) => {
-          // Clean up header names
           return header.trim().replace(/\s+/g, '_').toLowerCase();
         },
         complete: (results) => {
@@ -636,64 +680,35 @@ export default function SurveyManagementPage(): JSX.Element {
           const headers = Object.keys(results.data[0]);
           console.log('Detected headers:', headers);
 
-          // Auto-detect column mappings
-          const mappings = {
-            specialty: headers.find(h => h.toLowerCase() === 'specialty') || '',
-            tcc: {
-              p25: headers.find(h => h.toLowerCase().includes('tcc_25') || h.toLowerCase().includes('tcc25')) || '',
-              p50: headers.find(h => h.toLowerCase().includes('tcc_50') || h.toLowerCase().includes('tcc50')) || '',
-              p75: headers.find(h => h.toLowerCase().includes('tcc_75') || h.toLowerCase().includes('tcc75')) || '',
-              p90: headers.find(h => h.toLowerCase().includes('tcc_90') || h.toLowerCase().includes('tcc90')) || ''
-            },
-            wrvu: {
-              p25: headers.find(h => h.toLowerCase().includes('wrvu_25') || h.toLowerCase().includes('wrvu25')) || '',
-              p50: headers.find(h => h.toLowerCase().includes('wrvu_50') || h.toLowerCase().includes('wrvu50')) || '',
-              p75: headers.find(h => h.toLowerCase().includes('wrvu_75') || h.toLowerCase().includes('wrvu75')) || '',
-              p90: headers.find(h => h.toLowerCase().includes('wrvu_90') || h.toLowerCase().includes('wrvu90')) || ''
-            },
-            cf: {
-              p25: headers.find(h => h.toLowerCase().includes('cf_25') || h.toLowerCase().includes('cf25')) || '',
-              p50: headers.find(h => h.toLowerCase().includes('cf_50') || h.toLowerCase().includes('cf50')) || '',
-              p75: headers.find(h => h.toLowerCase().includes('cf_75') || h.toLowerCase().includes('cf75')) || '',
-              p90: headers.find(h => h.toLowerCase().includes('cf_90') || h.toLowerCase().includes('cf90')) || ''
-            }
-          };
-
-          console.log('Auto-detected mappings:', mappings);
-
-          // Create new survey
+          // Create new survey with proper vendor name
+          const vendorName = selectedVendor === 'CUSTOM' ? `CUSTOM:${customVendorName}` : selectedVendor;
           const newSurvey: UploadedSurvey = {
             id: Date.now().toString(),
-            vendor: selectedVendor,
+            vendor: vendorName,
             year: new Date().getFullYear().toString(),
-            data: results.data as PreviewRow[],  // Cast the data to PreviewRow[]
-            mappings: mappings,
+            data: results.data as PreviewRow[],
+            mappings: {
+              specialty: '',
+              tcc: { p25: '', p50: '', p75: '', p90: '' },
+              wrvu: { p25: '', p50: '', p75: '', p90: '' },
+              cf: { p25: '', p50: '', p75: '', p90: '' }
+            },
             specialtyMappings: {},
             columns: headers
           };
 
-          console.log('Created new survey:', newSurvey);
-
           // Update state and localStorage
           setUploadedSurveys(prev => {
             const updatedSurveys = [...prev, newSurvey];
-            console.log('Updating uploaded surveys:', updatedSurveys);
             localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-            
-            if (updatedSurveys.length > 0) {
-              setActiveStep('mapping');
-              setSelectedMapping(newSurvey.id);
-            }
-            
             return updatedSurveys;
           });
 
-          // Set current column mapping
-          setColumnMapping(mappings);
-          
-          toast.success(`Successfully uploaded ${vendors.find(v => v.id === selectedVendor)?.name} survey`);
+          toast.success(`Successfully uploaded ${formatVendorName(vendorName)} survey`);
           setIsUploading(false);
           setSelectedVendor('');
+          setCustomVendorName('');
+          setActiveStep('mapping');
         },
         error: (error: ParseError) => {
           console.error('CSV parsing error:', error);
@@ -1432,18 +1447,36 @@ export default function SurveyManagementPage(): JSX.Element {
                   Upload your compensation survey data files (CSV format). You can upload multiple surveys before mapping.
                 </p>
               </div>
-              <div className="flex-shrink-0 w-64">
+              <div className="flex-shrink-0 w-64 space-y-2">
                 <select
                   id="vendor-select"
                   value={selectedVendor}
-                  onChange={(e) => setSelectedVendor(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedVendor(e.target.value);
+                    if (e.target.value !== 'CUSTOM') {
+                      setCustomVendorName('');
+                    }
+                  }}
                   className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
                 >
                   <option value="" disabled>Select Survey Vendor</option>
                   <option value="MGMA">MGMA</option>
                   <option value="SULLIVANCOTTER">SullivanCotter</option>
                   <option value="GALLAGHER">Gallagher</option>
+                  <option value="ECG">ECG Management</option>
+                  <option value="AAMGA">AAMGA</option>
+                  <option value="MERRIT_HAWKINS">Merrit Hawkins</option>
+                  <option value="CUSTOM">Custom Survey</option>
                 </select>
+                {selectedVendor === 'CUSTOM' && (
+                  <input
+                    type="text"
+                    value={customVendorName}
+                    onChange={(e) => setCustomVendorName(e.target.value)}
+                    placeholder="Enter custom survey name"
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  />
+                )}
               </div>
             </div>
 
@@ -1613,19 +1646,29 @@ export default function SurveyManagementPage(): JSX.Element {
                 Choose a survey to begin mapping its columns to standardized fields
               </p>
             </div>
-            <div className="w-80">
+            <div className="flex items-center space-x-4">
               <select
                 value={selectedMapping || ''}
                 onChange={(e) => handleSurveySelect(e.target.value)}
-                className="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
+                className="block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 <option value="">Choose a survey...</option>
-                {uploadedSurveys.map((survey) => (
+                {uploadedSurveys.map(survey => (
                   <option key={survey.id} value={survey.id}>
-                    {formatVendorName(survey.vendor)} Survey ({survey.data.length} specialties)
+                    {formatVendorName(survey.vendor)} Survey ({survey.data.length} rows)
                   </option>
                 ))}
               </select>
+              <button
+                onClick={() => autoDetectMappings()}
+                disabled={!selectedMapping}
+                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${!selectedMapping ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                Auto-map Columns
+              </button>
             </div>
           </div>
         </div>
@@ -2039,28 +2082,6 @@ export default function SurveyManagementPage(): JSX.Element {
               <div className="flex items-center space-x-4">
                 {activeStep !== 'specialties' && (
                   <div className="flex items-center space-x-4">
-                    <select
-                      value={selectedMapping || ''}
-                      onChange={(e) => handleSurveySelect(e.target.value)}
-                      className="block rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose a survey...</option>
-                      {uploadedSurveys.map(survey => (
-                        <option key={survey.id} value={survey.id}>
-                          {survey.vendor} ({survey.data.length} rows)
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => autoDetectMappings()}
-                      disabled={!selectedMapping}
-                      className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${!selectedMapping ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
-                    >
-                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                      </svg>
-                      Auto-map Columns
-                    </button>
                   </div>
                 )}
               </div>
