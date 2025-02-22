@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon, ArrowPathIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useSurveyContext, SurveyProvider } from '@/context/SurveyContext';
+import { MappingState } from '@/types/mapping';
 
 interface SurveyData {
   specialty: string;
@@ -34,13 +36,14 @@ interface UploadedSurvey {
   data: SurveyData[];
 }
 
-export default function ViewSurveysPage() {
+function ViewSurveysContent() {
   const [surveys, setSurveys] = useState<UploadedSurvey[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<UploadedSurvey | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showAggregated, setShowAggregated] = useState(false);
   const searchParams = useSearchParams();
+  const { specialtyMappings } = useSurveyContext();
 
   useEffect(() => {
     const loadSurveys = () => {
@@ -363,7 +366,12 @@ export default function ViewSurveysPage() {
                       <tr key={item.specialty} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                         <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit">
                           <Link 
-                            href={`/survey-analytics?specialty=${encodeURIComponent(item.specialty)}`}
+                            href={`/survey-analytics?specialty=${encodeURIComponent(
+                              // Find parent specialty or use current if no mapping exists
+                              Object.entries(specialtyMappings).find(([parent, mapping]) => 
+                                mapping.mappedSpecialties.includes(item.specialty) || parent === item.specialty
+                              )?.[0] || item.specialty
+                            )}`}
                             className="text-blue-600 hover:text-blue-800 hover:underline"
                           >
                             {item.specialty}
@@ -400,5 +408,13 @@ export default function ViewSurveysPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ViewSurveysPage() {
+  return (
+    <SurveyProvider>
+      <ViewSurveysContent />
+    </SurveyProvider>
   );
 } 

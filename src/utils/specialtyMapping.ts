@@ -54,10 +54,7 @@ const standardSpecialties: Record<string, StandardSpecialty> = {
   "Allergy and Immunology": {
     name: "Allergy and Immunology",
     variations: [
-      "Allergy/Immunology",
-      "Allergy & Immunology",
-      "Allergist/Immunologist",
-      "Allergy and Clinical Immunology"
+      "Allergy/Immunology"
     ],
     category: "Medical",
     keywords: ["allergy", "immunology"],
@@ -166,14 +163,10 @@ const specialtyDefinitions: Record<string, SpecialtyDefinition> = {
   'Allergy and Immunology': {
     name: 'Allergy and Immunology',
     synonyms: [
-      'Allergy/Immunology',
-      'Allergy & Immunology',
-      'Allergist/Immunologist',
-      'Clinical Immunology'
+      'Allergy/Immunology'
     ],
     relatedSpecialties: [
-      'Pediatric Allergy',
-      'Clinical Immunology'
+      'Pediatric Allergy'
     ],
     category: 'Medical'
   },

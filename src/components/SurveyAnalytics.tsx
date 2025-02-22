@@ -100,10 +100,30 @@ const SurveyAnalytics: React.FC = () => {
 
   // Get all unique specialties
   const specialties = useMemo(() => {
-    const allSpecialties = Object.keys(specialtyMappings).sort();
-    console.log('Available specialties:', allSpecialties);
-    return allSpecialties;
-  }, [specialtyMappings]);
+    console.log('Raw specialty mappings:', specialtyMappings);
+    
+    // Get all specialties from survey data
+    const allSpecialties = new Set<string>();
+    surveyData.forEach(survey => {
+      survey.data.forEach(item => {
+        // If this specialty is mapped to a parent, use the parent name
+        const parentMapping = Object.entries(specialtyMappings).find(([_, mapping]) => 
+          mapping.mappedSpecialties.includes(item.specialty)
+        );
+        
+        if (parentMapping) {
+          allSpecialties.add(parentMapping[0]); // Add parent specialty
+        } else {
+          allSpecialties.add(item.specialty); // Add original specialty
+        }
+      });
+    });
+
+    // Sort alphabetically
+    const uniqueSpecialties = Array.from(allSpecialties).sort();
+    console.log('Final unique specialties:', uniqueSpecialties);
+    return uniqueSpecialties;
+  }, [specialtyMappings, surveyData]);
 
   // Set initial specialty from URL parameter
   useEffect(() => {
@@ -118,9 +138,7 @@ const SurveyAnalytics: React.FC = () => {
   const specialtyData = useMemo(() => {
     if (!selectedSpecialty) return null;
 
-    const mapping = specialtyMappings[selectedSpecialty];
-    if (!mapping) return null;
-
+    const mapping = specialtyMappings[selectedSpecialty] || { mappedSpecialties: [] };
     const allSpecialties = [selectedSpecialty, ...mapping.mappedSpecialties];
     const surveyValues: Record<string, SurveyData> = {};
 
@@ -473,6 +491,14 @@ const SurveyAnalytics: React.FC = () => {
                               <tr key={vendor} className="hover:bg-gray-50">
                                 <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                                   {formatVendorName(vendor)}
+                                  {specialtyData.mapping.mappedSpecialties && (
+                                    <span className="ml-2 text-xs text-blue-600">
+                                      ({surveyData.find(s => s.vendor === vendor)?.data.find(d => 
+                                        specialtyData.mapping.mappedSpecialties.includes(d.specialty) || 
+                                        d.specialty === selectedSpecialty
+                                      )?.specialty})
+                                    </span>
+                                  )}
                                 </td>
                                 {percentiles.map((percentile) => (
                                   <td key={percentile} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
