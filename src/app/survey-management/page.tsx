@@ -12,6 +12,8 @@ import { calculateStringSimilarity } from '@/utils/string';
 import SpecialtyMappingStudio from '@/components/SpecialtyMappingStudio';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Link from 'next/link';
+import { Dialog } from '@headlessui/react';
+import { SpecialtyMapping, SpecialtyMappingState } from '@/types/mapping';
 
 interface ColumnMappingMetric {
   p25: string;
@@ -34,12 +36,6 @@ interface MappingTemplate {
   year: string;
   mapping: ColumnMapping;
   lastUsed: string;
-}
-
-interface SpecialtyMapping {
-  mappedSpecialties: string[];
-  notes?: string;
-  resolved?: boolean;
 }
 
 interface MappingState {
@@ -167,6 +163,7 @@ interface UploadedSurvey {
   mappings: ColumnMapping;
   specialtyMappings: MappingState;
   columns: string[];
+  mappingProgress?: number;
 }
 
 // Helper function to format vendor names consistently
@@ -188,6 +185,31 @@ const formatVendorName = (vendor: string): string => {
   }
   return vendorMap[vendor.toUpperCase()] || vendor;
 };
+
+interface UnmappedSpecialty {
+  specialty: string;
+  vendor: string;
+}
+
+interface SpecialtyMatch {
+  specialty: string;
+  vendor: string;
+  confidence: number;
+}
+
+// Add interface for Survey type
+interface Survey {
+  id: string;
+  vendor: string;
+  data: Array<Record<string, any>>;
+  mappings: {
+    specialty: string;
+    [key: string]: any;
+  };
+  specialtyMappings: Record<string, SpecialtyMappingState>;
+  columns?: string[];
+  mappingProgress?: number;
+}
 
 export default function SurveyManagementPage(): JSX.Element {
   const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
@@ -221,6 +243,7 @@ export default function SurveyManagementPage(): JSX.Element {
   const [customVendorName, setCustomVendorName] = useState<string>('');
   const [isSurveySaved, setIsSurveySaved] = useState(false);
   const [specialtyProgress, setSpecialtyProgress] = useState(0);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
   // Add default survey data loading
   useEffect(() => {
@@ -229,34 +252,62 @@ export default function SurveyManagementPage(): JSX.Element {
         const storedSurveys = localStorage.getItem('uploadedSurveys');
         if (storedSurveys) {
           const parsedSurveys = JSON.parse(storedSurveys);
-          setUploadedSurveys(parsedSurveys);
           
-          // Load specialty mappings from the most recently modified survey
+          // Sort surveys by last modified
           const sortedSurveys = [...parsedSurveys].sort((a, b) => 
             (parseInt(b.id) || 0) - (parseInt(a.id) || 0)
           );
           
           if (sortedSurveys.length > 0) {
-            // Set specialty mappings if they exist
-            if (sortedSurveys[0].specialtyMappings) {
-              setSpecialtyMappings(sortedSurveys[0].specialtyMappings);
+            const mostRecentSurvey = sortedSurveys[0];
+            
+            // Load specialty mappings if they exist
+            if (mostRecentSurvey.specialtyMappings && Object.keys(mostRecentSurvey.specialtyMappings).length > 0) {
+              // Ensure single source mappings are properly restored
+              const restoredMappings = Object.entries(mostRecentSurvey.specialtyMappings).reduce<Record<string, SpecialtyMappingState>>((acc, [specialty, mapping]) => {
+                const typedMapping = mapping as SpecialtyMappingState;
+                if (typedMapping.isSingleSource) {
+                  acc[specialty] = {
+                    ...typedMapping,
+                    resolved: true,
+                    mappedSpecialties: [specialty],
+                    isSingleSource: true
+                  };
+                } else {
+                  acc[specialty] = typedMapping;
+                }
+                return acc;
+              }, {});
+              
+              setSpecialtyMappings(restoredMappings);
+              
+              // Calculate and set progress
+              const progress = mostRecentSurvey.mappingProgress || calculateSpecialtyProgress();
+              setSpecialtyProgress(progress);
+              
+              console.log('Loaded mappings:', {
+                mappingsCount: Object.keys(restoredMappings).length,
+                progress: progress
+              });
             }
             
-            // Set the most recent survey as selected and load its mappings
-            setSelectedMapping(sortedSurveys[0].id);
-            if (sortedSurveys[0].mappings) {
-              setColumnMapping(sortedSurveys[0].mappings);
-              setColumns(sortedSurveys[0].columns || []);
-              setFileData(sortedSurveys[0].data);
+            // Set other survey data
+            setSelectedMapping(mostRecentSurvey.id);
+            if (mostRecentSurvey.mappings) {
+              setColumnMapping(mostRecentSurvey.mappings);
+              setColumns(mostRecentSurvey.columns || []);
+              setFileData(mostRecentSurvey.data);
             }
             
-            // Show the mapping interface and set the active step
             setShowMappingInterface(true);
             setActiveStep('mapping');
           }
+          
+          setUploadedSurveys(parsedSurveys);
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
+        toast.error('Failed to load saved surveys');
       }
     };
 
@@ -931,52 +982,57 @@ export default function SurveyManagementPage(): JSX.Element {
     setShowTemplateSaveModal(false);
   };
 
+  // Update the handleSaveMappings function to be more robust
   const handleSaveMappings = () => {
-    const errors = validateMappings();
-    setValidationErrors(errors);
-
-    if (errors.length === 0) {
-      const aggregated = aggregateData();
-      setAggregatedData(aggregated);
-
-      // Save the current survey data
-      const newSurvey: UploadedSurvey = {
-        id: Date.now().toString(),
-        vendor: selectedVendor || 'Auto-detected',
-        year: new Date().getFullYear().toString(),
-        data: fileData || [],
-        mappings: columnMapping,
-        specialtyMappings: specialtyMappings,
-        columns: columns
-      };
-
-      setUploadedSurveys(prev => [...prev, newSurvey]);
-
-      // Save to localStorage
-      const existingSurveys = JSON.parse(localStorage.getItem('uploadedSurveys') || '[]');
-      localStorage.setItem('uploadedSurveys', JSON.stringify([...existingSurveys, newSurvey]));
-
-      // Calculate the number of mapped specialties
-      const mappedSpecialtiesCount = Object.keys(specialtyMappings).length;
-      const vendorName = formatVendorName(selectedVendor || 'Auto-detected');
-
-      // Show detailed success message
-      toast.success(
-        `Survey saved successfully!\n${mappedSpecialtiesCount} specialties mapped in ${vendorName} survey.`,
-        { duration: 5000 } // Show for 5 seconds
-      );
-
-      // Reset the form for new upload
-      setActiveStep('upload');
-      setFileData(null);
-      setColumns([]);
-      setColumnMapping({
-        specialty: '',
-        tcc: { p25: '', p50: '', p75: '', p90: '' },
-        wrvu: { p25: '', p50: '', p75: '', p90: '' },
-        cf: { p25: '', p50: '', p75: '', p90: '' }
+    try {
+      // Get current specialty progress
+      const currentProgress = calculateSpecialtyProgress();
+      
+      // Create a copy of the current mappings to ensure we preserve all flags
+      const updatedMappings = { ...specialtyMappings };
+      
+      // Ensure single source specialties are properly marked
+      Object.entries(updatedMappings).forEach(([specialty, mapping]) => {
+        if (mapping.isSingleSource) {
+          updatedMappings[specialty] = {
+            ...mapping,
+            resolved: true,
+            mappedSpecialties: [specialty], // Map to itself
+            isSingleSource: true // Ensure flag is set
+          };
+        }
       });
-      setSpecialtyMappings({});
+      
+      // Update all surveys with the current specialty mappings
+      const updatedSurveys = uploadedSurveys.map(survey => ({
+        ...survey,
+        specialtyMappings: updatedMappings,
+        mappingProgress: currentProgress
+      }));
+
+      // Save to localStorage with progress information
+      localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+      setUploadedSurveys(updatedSurveys);
+      
+      // Update local state
+      setSpecialtyMappings(updatedMappings);
+      setSpecialtyProgress(currentProgress);
+      setIsSurveySaved(true);
+      
+      // Show success message
+      toast.success('Mappings saved successfully!');
+      setShowSaveConfirmation(false);
+
+      // Log the save operation for debugging
+      console.log('Saved mappings:', {
+        progress: currentProgress,
+        mappingsCount: Object.keys(updatedMappings).length,
+        singleSourceCount: Object.values(updatedMappings).filter(m => m.isSingleSource).length,
+        surveyCount: updatedSurveys.length
+      });
+    } catch (error) {
+      console.error('Error saving mappings:', error);
+      toast.error('Failed to save mappings. Please try again.');
     }
   };
 
@@ -1102,99 +1158,91 @@ export default function SurveyManagementPage(): JSX.Element {
   );
 
   const autoArrangeSpecialties = () => {
-    console.log('Starting auto-arrange with surveys:', uploadedSurveys);
+    // Get all unmapped specialties (excluding single source)
+    const unmappedList: UnmappedSpecialty[] = uploadedSurveys.reduce((acc: UnmappedSpecialty[], survey) => {
+      const specialties = survey.data
+        .map(row => ({
+          specialty: String(row[survey.mappings.specialty] || '').trim(),
+          vendor: survey.vendor
+        }))
+        .filter(s => {
+          const mapping = specialtyMappings[s.specialty];
+          return s.specialty && 
+            !mapping?.resolved && 
+            !mapping?.isSingleSource && // Explicitly check for single source
+            !mapping?.mappedSpecialties?.length;
+        });
+      return [...acc, ...specialties];
+    }, []);
+    
+    // Process each unmapped specialty
+    unmappedList.forEach(source => {
+      // Skip if already mapped
+      if (specialtyMappings[source.specialty]) return;
 
-    // Transform surveys for auto-arrange
-    const transformedSurveys = uploadedSurveys.map(survey => ({
-      id: survey.id,
-      vendor: survey.vendor,
-      specialties: Array.from(new Set(
-        survey.data
-          .map(row => String(row[survey.mappings.specialty] || ''))
-          .filter(s => s && s.trim() !== '')
-      ))
-    }));
+      // Find potential matches from other vendors
+      const potentialMatches: SpecialtyMatch[] = uploadedSurveys
+        .flatMap(survey => 
+          survey.data
+            .map(row => ({
+              specialty: String(row[survey.mappings.specialty] || '').trim(),
+              vendor: survey.vendor,
+              confidence: calculateStringSimilarity(source.specialty, String(row[survey.mappings.specialty] || '').trim())
+            }))
+            .filter(match => 
+              match.specialty &&
+              match.vendor !== source.vendor &&
+              !Object.values(specialtyMappings).flatMap(m => m.mappedSpecialties).includes(match.specialty)
+            )
+        )
+        .filter(match => match.confidence > 0.8)
+        .sort((a, b) => b.confidence - a.confidence);
 
-    console.log('Transformed surveys for auto-arrange:', transformedSurveys);
+      // If we found good matches, create the mapping
+      if (potentialMatches.length > 0) {
+        const matchedSpecialties = potentialMatches.map(m => m.specialty);
+        
+        // Update both local state and parent component
+        handleSpecialtyMappingChange(
+          source.specialty,
+          matchedSpecialties,
+          'Auto-mapped specialty',
+          true
+        );
 
-    // Define exact specialty mappings
-    const exactMappings = {
-      // Surgical Specialties
-      'Surgery (Cardiothoracic/Cardiovascular)': ['Cardiothoracic Surgery', 'Cardiovascular Surgery'],
-      'Surgery (Neurological)': ['Neurological Surgery', 'Neurosurgery'],
-      'Surgery (Orthopedics)': ['Orthopedic Surgery'],
-      'Surgery (Plastics)': ['Plastic Surgery', 'Plastic and Reconstructive Surgery', 'Plastic and Reconstruction Surgery'],
-      'Surgery (General)': ['General Surgery'],
-      
-      // Medical Specialties
-      'Critical Care Medicine': ['Critical Care/Intensivist'],
-      'Critical Care Medicine - Cardiology': ['Critical Care Cardiology'],
-      'Psychiatry (General)': ['Psychiatry'],
-      'General': ['General Pediatrics', 'Pediatrics General'], // Explicit mapping for General to Pediatrics
-      
-      // Add more exact mappings as needed
-    };
-
-    // Helper function to find the base specialty for a given specialty name
-    const findBaseSpecialty = (specialty: string): string | null => {
-      // First check if this specialty is a base specialty itself
-      for (const [base, variations] of Object.entries(exactMappings)) {
-        if (base === specialty || variations.includes(specialty)) {
-          return base;
-        }
+        // Save to localStorage
+        const updatedSurveys = uploadedSurveys.map(survey => ({
+          ...survey,
+          specialtyMappings: {
+            ...survey.specialtyMappings,
+            [source.specialty]: {
+              mappedSpecialties: matchedSpecialties,
+              notes: 'Auto-mapped specialty',
+              resolved: true
+            }
+          }
+        }));
+        
+        setUploadedSurveys(updatedSurveys);
+        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
       }
-      return null;
-    };
-
-    // Create groups based on exact mappings
-    const groups: { [key: string]: string[] } = {};
-    const processedSpecialties = new Set<string>();
-
-    // First pass: Create groups based on exact mappings
-    transformedSurveys.forEach(survey => {
-      survey.specialties.forEach(specialty => {
-        if (processedSpecialties.has(specialty)) return;
-
-        const baseSpecialty = findBaseSpecialty(specialty);
-        if (baseSpecialty) {
-          if (!groups[baseSpecialty]) {
-            groups[baseSpecialty] = [baseSpecialty];
-          }
-          if (!groups[baseSpecialty].includes(specialty)) {
-            groups[baseSpecialty].push(specialty);
-          }
-          processedSpecialties.add(specialty);
-        }
-      });
     });
 
-    // Update specialty mappings
-    const newMappings: MappingState = {};
-    Object.entries(groups).forEach(([baseSpecialty, specialties]) => {
-      specialties.forEach(specialty => {
-        if (specialty !== baseSpecialty) {
-          newMappings[specialty] = {
-            mappedSpecialties: [baseSpecialty],
-            notes: `Auto-mapped to standard specialty: ${baseSpecialty}`
-          };
-        }
-      });
-    });
-
-    // Update the state
-    setSpecialtyMappings(newMappings);
-
-    // Update all surveys' specialty mappings
+    // After processing specialties, calculate and save progress
+    const progress = calculateSpecialtyProgress();
+    setSpecialtyProgress(progress);
+    
+    // Update surveys with new progress
     const updatedSurveys = uploadedSurveys.map(survey => ({
       ...survey,
-      specialtyMappings: newMappings
+      specialtyMappings: specialtyMappings,
+      mappingProgress: progress
     }));
-
+    
     setUploadedSurveys(updatedSurveys);
     localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-
-    console.log('Auto-arrange complete. New mappings:', newMappings);
-    toast.success('Specialties auto-arranged based on exact matches');
+    
+    toast.success('Auto-arrangement complete! Mappings have been saved.');
   };
 
   const renderSpecialtyCard = (sourceSpecialty: string, mapping: SpecialtyMapping, survey: any) => {
@@ -2085,13 +2133,27 @@ export default function SurveyManagementPage(): JSX.Element {
   }, []);
 
   const calculateSpecialtyProgress = (): number => {
-    // Get the progress from the SpecialtyMappingStudio component
-    const progressElement = document.querySelector('.specialty-mapping-progress');
-    if (progressElement) {
-      const progress = parseInt(progressElement.getAttribute('data-progress') || '0', 10);
-      return progress;
-    }
-    return 0;
+    if (!uploadedSurveys.length) return 0;
+
+    // Get all unique specialties across all surveys
+    const allSpecialties = new Set<string>();
+    uploadedSurveys.forEach(survey => {
+      survey.data.forEach(row => {
+        const specialty = String(row[survey.mappings.specialty] || '').trim();
+        if (specialty) allSpecialties.add(specialty);
+      });
+    });
+
+    // Count mapped specialties (including single source)
+    const mappedCount = Object.entries(specialtyMappings).filter(([_, mapping]) => {
+      return (
+        mapping?.resolved || 
+        mapping?.isSingleSource || // Include single source in progress
+        (mapping?.mappedSpecialties && mapping.mappedSpecialties.length > 0)
+      );
+    }).length;
+
+    return Math.round((mappedCount / allSpecialties.size) * 100);
   };
 
   const handleSaveSurvey = () => {
@@ -2120,6 +2182,63 @@ export default function SurveyManagementPage(): JSX.Element {
     return true;
   };
 
+  // Update the handleAcceptSingleSource function to properly persist mappings
+  const handleAcceptSingleSource = (specialty: string, vendor: string) => {
+    try {
+      // Create the mapping for the single source specialty
+      const newMapping: SpecialtyMappingState = {
+        mappedSpecialties: [specialty], // Map to itself
+        notes: `Accepted as single source from ${vendor}`,
+        resolved: true,
+        isSingleSource: true // Explicitly set single source flag
+      };
+
+      // Update local state with the new mapping
+      const updatedMappings = {
+        ...specialtyMappings,
+        [specialty]: newMapping
+      };
+      setSpecialtyMappings(updatedMappings);
+
+      // Calculate new progress
+      const progress = calculateSpecialtyProgress();
+      setSpecialtyProgress(progress);
+
+      // Find the survey this specialty belongs to
+      const targetSurvey = uploadedSurveys.find((survey: Survey) => 
+        survey.data.some(row => row[survey.mappings.specialty] === specialty)
+      );
+
+      // Update all surveys with new mappings and progress
+      const updatedSurveys = uploadedSurveys.map((survey: Survey) => ({
+        ...survey,
+        specialtyMappings: {
+          ...survey.specialtyMappings,
+          [specialty]: newMapping
+        },
+        mappingProgress: progress
+      }));
+      setUploadedSurveys(updatedSurveys);
+
+      // Save to localStorage immediately
+      localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+
+      // Show success message
+      toast.success(`Accepted ${specialty} as single source`);
+
+      // Log the operation for debugging
+      console.log('Single source accepted:', {
+        specialty,
+        mapping: newMapping,
+        progress,
+        totalMappings: Object.keys(updatedMappings).length
+      });
+    } catch (error) {
+      console.error('Error accepting single source:', error);
+      toast.error('Failed to accept single source. Please try again.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -2142,17 +2261,15 @@ export default function SurveyManagementPage(): JSX.Element {
                 </div>
               </div>
               <div className="flex items-center space-x-4">
-                {!isSurveySaved && areAllStepsComplete() && (
-                  <button
-                    onClick={handleSaveSurvey}
-                    className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-300 transform hover:scale-105"
-                  >
-                    <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    Save Survey
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowSaveConfirmation(true)}
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+                  Save Mappings
+                </button>
               </div>
             </div>
           </div>
@@ -2277,6 +2394,44 @@ export default function SurveyManagementPage(): JSX.Element {
       </div>
 
       {showTemplateSaveModal && renderTemplateSaveModal()}
+
+      {/* Save Confirmation Dialog */}
+      <Dialog 
+        open={showSaveConfirmation} 
+        onClose={() => setShowSaveConfirmation(false)}
+        className="fixed inset-0 z-50 overflow-y-auto"
+      >
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="fixed inset-0 bg-black opacity-30" />
+          
+          <Dialog.Panel className="relative bg-white rounded-lg max-w-md w-full mx-4 p-6 shadow-xl">
+            <Dialog.Title className="text-lg font-medium text-gray-900">
+              Save Specialty Mappings
+            </Dialog.Title>
+            
+            <div className="mt-4">
+              <p className="text-sm text-gray-500">
+                Are you sure you want to save the current specialty mappings? This will update all surveys with the new mappings.
+              </p>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowSaveConfirmation(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveMappings}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Save Mappings
+              </button>
+            </div>
+          </Dialog.Panel>
+        </div>
+      </Dialog>
     </div>
   );
 } 

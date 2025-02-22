@@ -1,10 +1,12 @@
-export interface SpecialtyMapping {
+export interface SpecialtyMappingState {
   mappedSpecialties: string[];
   notes?: string;
+  resolved?: boolean;
+  isSingleSource?: boolean;
 }
 
 export interface MappingState {
-  [specialty: string]: SpecialtyMapping;
+  [specialty: string]: SpecialtyMappingState;
 }
 
 export interface Node {
@@ -12,8 +14,6 @@ export interface Node {
   label: string;
   type: 'source' | 'target';
   confidence?: number;
-  x?: number;
-  y?: number;
 }
 
 export interface Link {
