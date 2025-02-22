@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDownIcon, ArrowDownTrayIcon, ChartBarIcon, DocumentChartBarIcon, ArrowsRightLeftIcon, MagnifyingGlassIcon, CheckIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { useSurveyContext } from '@/context/SurveyContext';
+import { useSearchParams } from 'next/navigation';
 
 interface SurveyMetric {
   p25: number;
@@ -91,6 +92,7 @@ const formatVendorName = (vendor: string): string => {
 
 const SurveyAnalytics: React.FC = () => {
   const { specialtyMappings, surveyData } = useSurveyContext();
+  const searchParams = useSearchParams();
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState<'select' | 'analyze' | 'review'>('select');
   const [isOpen, setIsOpen] = useState(false);
@@ -102,6 +104,15 @@ const SurveyAnalytics: React.FC = () => {
     console.log('Available specialties:', allSpecialties);
     return allSpecialties;
   }, [specialtyMappings]);
+
+  // Set initial specialty from URL parameter
+  useEffect(() => {
+    const specialtyParam = searchParams.get('specialty');
+    if (specialtyParam && specialties.includes(specialtyParam)) {
+      setSelectedSpecialty(specialtyParam);
+      setSearchQuery('');
+    }
+  }, [searchParams, specialties]);
 
   // Get survey data for selected specialty
   const specialtyData = useMemo(() => {

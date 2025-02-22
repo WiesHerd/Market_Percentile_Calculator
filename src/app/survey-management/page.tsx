@@ -1126,7 +1126,9 @@ export default function SurveyManagementPage(): JSX.Element {
           </div>
           <div className="ml-3">
             <span className="block font-medium">Map Specialties</span>
-            <span className="text-sm text-gray-500">{calculateSpecialtyProgress()}% mapped</span>
+            <span className="text-sm text-gray-500">
+              {calculateSpecialtyProgress() === -1 ? 'In Process' : `${calculateSpecialtyProgress()}% mapped`}
+            </span>
           </div>
         </button>
       </div>
@@ -1389,27 +1391,19 @@ export default function SurveyManagementPage(): JSX.Element {
           .filter(s => s && s !== '')
       ));
 
-      // Create the transformed survey object
+      // Create the transformed survey object with empty metric objects
       return {
         id: survey.id,
         vendor: survey.vendor,
         data: specialties.map(specialty => ({
           specialty,
-          tcc: null,
-          wrvu: null,
-          cf: null
+          tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
+          wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
+          cf: { p25: 0, p50: 0, p75: 0, p90: 0 }
         }))
       };
     });
 
-    // Transform specialty mappings to match the expected type
-    const transformedMappings: Record<string, string[]> = {};
-    Object.entries(specialtyMappings).forEach(([key, value]) => {
-      if (value && value.mappedSpecialties && value.mappedSpecialties.length > 0) {
-        transformedMappings[key] = value.mappedSpecialties;
-      }
-    });
-    
     return (
       <div className="space-y-6">
         {/* Main Content */}
@@ -1417,13 +1411,8 @@ export default function SurveyManagementPage(): JSX.Element {
           <ErrorBoundary>
             <SpecialtyMappingStudio
               surveys={transformedSurveys}
-              onMappingChange={(sourceSpecialty: string, mappedSpecialties: string[], notes?: string, resolved?: boolean) => {
-                handleSpecialtyMappingChange(
-                  sourceSpecialty,
-                  mappedSpecialties,
-                  notes,
-                  resolved
-                );
+              onMappingChange={(sourceSpecialty: string, mappedSpecialties: string[]) => {
+                handleSpecialtyMappingChange(sourceSpecialty, mappedSpecialties);
                 
                 // Update the current survey's specialty mappings
                 if (selectedMapping) {
@@ -1435,8 +1424,8 @@ export default function SurveyManagementPage(): JSX.Element {
                           ...survey.specialtyMappings,
                           [sourceSpecialty]: {
                             mappedSpecialties,
-                            notes: notes || '',
-                            resolved: resolved || false
+                            notes: '',
+                            resolved: false
                           }
                         }
                       };
@@ -1448,7 +1437,6 @@ export default function SurveyManagementPage(): JSX.Element {
                   localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
                 }
               }}
-              existingMappings={transformedMappings}
             />
           </ErrorBoundary>
         </div>
@@ -2109,27 +2097,59 @@ export default function SurveyManagementPage(): JSX.Element {
   }, []);
 
   const calculateSpecialtyProgress = (): number => {
-    if (!uploadedSurveys.length) return 0;
+    // Log initial state
+    console.log('Calculating specialty progress...');
+    console.log('Number of uploaded surveys:', uploadedSurveys.length);
 
-    // Get all unique specialties across all surveys
+    // If no surveys are uploaded, return 100%
+    if (uploadedSurveys.length === 0) {
+      console.log('No surveys uploaded, returning 100%');
+      return 100;
+    }
+
+    // Get all unique specialties from uploaded surveys
     const allSpecialties = new Set<string>();
+    const mappedSpecialties = new Set<string>();
+
+    // Collect all specialties and check which ones are mapped
     uploadedSurveys.forEach(survey => {
+      const specialtyColumn = survey.mappings.specialty;
+      if (!specialtyColumn) return;
+
       survey.data.forEach(row => {
-        const specialty = String(row[survey.mappings.specialty] || '').trim();
-        if (specialty) allSpecialties.add(specialty);
+        const specialty = String(row[specialtyColumn] || '').trim();
+        if (specialty) {
+          allSpecialties.add(specialty);
+          // Check if this specialty is mapped
+          const mapping = specialtyMappings[specialty];
+          if (mapping && (mapping.isSingleSource || (mapping.mappedSpecialties && mapping.mappedSpecialties.length > 0))) {
+            mappedSpecialties.add(specialty);
+          }
+        }
       });
     });
 
-    // Count mapped specialties (including single source)
-    const mappedCount = Object.entries(specialtyMappings).filter(([_, mapping]) => {
-      return (
-        mapping?.resolved || 
-        mapping?.isSingleSource || // Include single source in progress
-        (mapping?.mappedSpecialties && mapping.mappedSpecialties.length > 0)
-      );
-    }).length;
+    // Log detailed information
+    console.log('Total unique specialties found:', allSpecialties.size);
+    console.log('All specialties:', Array.from(allSpecialties));
+    console.log('Number of mapped specialties:', mappedSpecialties.size);
+    console.log('Mapped specialties:', Array.from(mappedSpecialties));
 
-    return Math.round((mappedCount / allSpecialties.size) * 100);
+    // If there are no specialties at all, return 100%
+    if (allSpecialties.size === 0) {
+      console.log('No specialties found in surveys, returning 100%');
+      return 100;
+    }
+
+    // If all specialties are mapped, return 100%
+    if (mappedSpecialties.size === allSpecialties.size) {
+      console.log('All specialties are mapped, returning 100%');
+      return 100;
+    }
+
+    // Otherwise return -1 to indicate "In Process"
+    console.log('Some specialties are unmapped, returning -1 (In Process)');
+    return -1;
   };
 
   const handleSaveSurvey = () => {
@@ -2338,7 +2358,9 @@ export default function SurveyManagementPage(): JSX.Element {
                 </div>
                 <div className="ml-3">
                   <span className="block font-medium">Map Specialties</span>
-                  <span className="text-sm text-gray-500">{calculateSpecialtyProgress()}% mapped</span>
+                  <span className="text-sm text-gray-500">
+                    {calculateSpecialtyProgress() === -1 ? 'In Process' : `${calculateSpecialtyProgress()}% mapped`}
+                  </span>
                 </div>
               </button>
             </div>
