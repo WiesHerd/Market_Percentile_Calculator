@@ -1,7 +1,7 @@
 // Types for survey-specific specialty mapping
-type SurveyVendor = 'MGMA' | 'GALLAGHER' | 'SULLIVANCOTTER';
+export type SurveyVendor = 'MGMA' | 'GALLAGHER' | 'SULLIVANCOTTER';
 
-interface SpecialtyMapping {
+export interface SpecialtyMapping {
   specialty: string;
   vendor: SurveyVendor;
 }
@@ -101,7 +101,7 @@ const findMatchingSpecialties = (
 };
 
 // Get all known specialties for a vendor from available specialties
-const getKnownSpecialties = (
+export const getKnownSpecialties = (
   vendor: SurveyVendor,
   availableSpecialties: SpecialtyMapping[]
 ): string[] => {
@@ -112,9 +112,7 @@ const getKnownSpecialties = (
   ));
 };
 
-export type { SurveyVendor, SpecialtyMapping };
 export {
   findMatchingSpecialties,
-  getKnownSpecialties,
   normalizeSpecialtyName
 }; 

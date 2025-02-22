@@ -137,93 +137,116 @@ export const specialtySynonyms: Record<string, string[]> = {
   // Add more specialty synonyms as needed
 };
 
-// Comprehensive normalize function that handles all specialty name variations
-export const normalizeSpecialtyName = (specialty: string): string => {
-  return specialty
-    .toLowerCase()
-    .replace(/[\(\)]/g, '')        // Remove parentheses
-    .replace(/[\/\-&,]/g, ' ')     // Replace separators with spaces
-    .replace(/[^a-z0-9\s]/g, '')   // Remove special characters
-    .replace(/\s+/g, ' ')          // Normalize spaces
+// Define specialty mapping types
+interface SpecialtyDefinition {
+  name: string;
+  synonyms: string[];
+  relatedSpecialties?: string[];
+  category?: SpecialtyCategory;
+  parentSpecialty?: string;
+}
+
+// Define specialty mappings
+const specialtyDefinitions: Record<string, SpecialtyDefinition> = {
+  'Dermatology': {
+    name: 'Dermatology',
+    synonyms: [
+      'Dermatologist',
+      'Dermatological Medicine',
+      'Skin Care',
+      'Clinical Dermatology'
+    ],
+    relatedSpecialties: [
+      'Pediatric Dermatology',
+      'Dermatologic Surgery',
+      'Mohs Surgery'
+    ],
+    category: 'Medical'
+  },
+  'Allergy and Immunology': {
+    name: 'Allergy and Immunology',
+    synonyms: [
+      'Allergy/Immunology',
+      'Allergy & Immunology',
+      'Allergist/Immunologist',
+      'Clinical Immunology'
+    ],
+    relatedSpecialties: [
+      'Pediatric Allergy',
+      'Clinical Immunology'
+    ],
+    category: 'Medical'
+  },
+  'Cardiology': {
+    name: 'Cardiology',
+    synonyms: [
+      'Cardiovascular Disease',
+      'Cardiovascular Medicine',
+      'Heart Disease',
+      'Clinical Cardiology'
+    ],
+    relatedSpecialties: [
+      'Interventional Cardiology',
+      'Pediatric Cardiology',
+      'Electrophysiology'
+    ],
+    category: 'Medical'
+  }
+};
+
+// Normalize specialty names for comparison
+const normalizeSpecialtyName = (name: string): string => {
+  return name.toLowerCase()
+    .replace(/[\/\-&,()]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 };
 
-// Check if two specialties are synonyms
-export const areSpecialtiesSynonyms = (specialty1: string, specialty2: string): boolean => {
-  const norm1 = normalizeSpecialtyName(specialty1);
-  const norm2 = normalizeSpecialtyName(specialty2);
-
-  // Direct match
-  if (norm1 === norm2) return true;
-
-  // Check synonyms
-  for (const [base, synonyms] of Object.entries(specialtySynonyms)) {
-    const isSpecialty1Match = base === norm1 || synonyms.includes(norm1);
-    const isSpecialty2Match = base === norm2 || synonyms.includes(norm2);
-    
-    if (isSpecialty1Match && isSpecialty2Match) return true;
-  }
-
-  return false;
-};
-
-// Get all synonyms for a specialty
-export const getSpecialtySynonyms = (specialty: string): string[] => {
+// Get synonyms for a specialty
+const getSpecialtySynonyms = (specialty: string): string[] => {
   const normalized = normalizeSpecialtyName(specialty);
   
-  // Check if it's a base specialty
-  if (specialtySynonyms[normalized]) {
-    return [normalized, ...specialtySynonyms[normalized]];
-  }
+  // Find matching specialty definition
+  const definition = Object.values(specialtyDefinitions).find(def => 
+    normalizeSpecialtyName(def.name) === normalized ||
+    def.synonyms.some(syn => normalizeSpecialtyName(syn) === normalized)
+  );
   
-  // Check if it's a synonym
-  for (const [base, synonyms] of Object.entries(specialtySynonyms)) {
-    if (synonyms.includes(normalized)) {
-      return [base, ...synonyms];
+  return definition ? [definition.name, ...definition.synonyms] : [specialty];
+};
+
+// Check if two specialties are variations of each other
+const areSpecialtyVariations = (specialty1: string, specialty2: string): boolean => {
+  const norm1 = normalizeSpecialtyName(specialty1);
+  const norm2 = normalizeSpecialtyName(specialty2);
+  
+  // Check direct match
+  if (norm1 === norm2) return true;
+  
+  // Check against specialty definitions
+  for (const def of Object.values(specialtyDefinitions)) {
+    const allVariations = [def.name, ...def.synonyms].map(normalizeSpecialtyName);
+    if (allVariations.includes(norm1) && allVariations.includes(norm2)) {
+      return true;
     }
   }
   
-  return [normalized];
-};
-
-// Helper to check if two specialty names are variations of each other
-const areSpecialtyVariations = (name1: string, name2: string): boolean => {
-  const normalized1 = normalizeSpecialtyName(name1);
-  const normalized2 = normalizeSpecialtyName(name2);
-
-  // Check direct match after normalization
-  if (normalized1 === normalized2) return true;
-
-  // Check against standard specialties
-  for (const standard of Object.values(standardSpecialties)) {
-    const isName1Match = standard.variations.some(v => 
-      normalizeSpecialtyName(v) === normalized1
-    ) || normalizeSpecialtyName(standard.name) === normalized1;
-
-    const isName2Match = standard.variations.some(v => 
-      normalizeSpecialtyName(v) === normalized2
-    ) || normalizeSpecialtyName(standard.name) === normalized2;
-
-    if (isName1Match && isName2Match) return true;
-  }
-
   return false;
 };
 
-// Find the standard specialty for a given specialty name
-const findStandardSpecialty = (name: string): StandardSpecialty | null => {
-  const normalized = normalizeSpecialtyName(name);
+// Check if two specialties are synonyms
+const areSpecialtiesSynonyms = (specialty1: string, specialty2: string): boolean => {
+  return areSpecialtyVariations(specialty1, specialty2);
+};
 
-  for (const standard of Object.values(standardSpecialties)) {
-    if (
-      normalizeSpecialtyName(standard.name) === normalized ||
-      standard.variations.some(v => normalizeSpecialtyName(v) === normalized)
-    ) {
-      return standard;
-    }
-  }
-
-  return null;
+// Find standard specialty definition
+const findStandardSpecialty = (specialty: string): SpecialtyDefinition | null => {
+  const normalized = normalizeSpecialtyName(specialty);
+  
+  return Object.values(specialtyDefinitions).find(def => 
+    normalizeSpecialtyName(def.name) === normalized ||
+    def.synonyms.some(syn => normalizeSpecialtyName(syn) === normalized)
+  ) || null;
 };
 
 // Calculate similarity score between two specialties with hierarchy awareness
@@ -236,22 +259,10 @@ const calculateSpecialtySimilarity = (name1: string, name2: string): number => {
   // Exact match or known variation
   if (standard1.name === standard2.name) return 1;
 
-  // Parent-child relationship
-  if (standard1.parentSpecialty === standard2.name || 
-      standard2.parentSpecialty === standard1.name) {
-    return 0.9;
-  }
-
   // Related specialties
   if (standard1.relatedSpecialties?.includes(standard2.name) ||
       standard2.relatedSpecialties?.includes(standard1.name)) {
     return 0.8;
-  }
-
-  // Same immediate parent
-  if (standard1.parentSpecialty && 
-      standard1.parentSpecialty === standard2.parentSpecialty) {
-    return 0.7;
   }
 
   // Same category
@@ -262,11 +273,14 @@ const calculateSpecialtySimilarity = (name1: string, name2: string): number => {
   return 0;
 };
 
-// Fix TypeScript export issues
-export type { StandardSpecialty, SpecialtyCategory };
+// Export types and functions
+export type { StandardSpecialty, SpecialtyCategory, SpecialtyDefinition };
 export {
-  standardSpecialties,
+  normalizeSpecialtyName,
+  getSpecialtySynonyms,
   areSpecialtyVariations,
+  areSpecialtiesSynonyms,
   findStandardSpecialty,
-  calculateSpecialtySimilarity
+  calculateSpecialtySimilarity,
+  specialtyDefinitions
 }; 

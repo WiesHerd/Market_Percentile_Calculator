@@ -13,7 +13,6 @@ import SpecialtyMappingStudio from '@/components/SpecialtyMappingStudio';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Link from 'next/link';
 import { Dialog } from '@headlessui/react';
-import { SpecialtyMapping, SpecialtyMappingState } from '@/types/mapping';
 
 interface ColumnMappingMetric {
   p25: string;
@@ -36,6 +35,13 @@ interface MappingTemplate {
   year: string;
   mapping: ColumnMapping;
   lastUsed: string;
+}
+
+interface SpecialtyMapping {
+  mappedSpecialties: string[];
+  notes?: string;
+  resolved?: boolean;
+  isSingleSource?: boolean;
 }
 
 interface MappingState {
@@ -197,20 +203,6 @@ interface SpecialtyMatch {
   confidence: number;
 }
 
-// Add interface for Survey type
-interface Survey {
-  id: string;
-  vendor: string;
-  data: Array<Record<string, any>>;
-  mappings: {
-    specialty: string;
-    [key: string]: any;
-  };
-  specialtyMappings: Record<string, SpecialtyMappingState>;
-  columns?: string[];
-  mappingProgress?: number;
-}
-
 export default function SurveyManagementPage(): JSX.Element {
   const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
   const [selectedVendor, setSelectedVendor] = useState<string>('');
@@ -263,30 +255,14 @@ export default function SurveyManagementPage(): JSX.Element {
             
             // Load specialty mappings if they exist
             if (mostRecentSurvey.specialtyMappings && Object.keys(mostRecentSurvey.specialtyMappings).length > 0) {
-              // Ensure single source mappings are properly restored
-              const restoredMappings = Object.entries(mostRecentSurvey.specialtyMappings).reduce<Record<string, SpecialtyMappingState>>((acc, [specialty, mapping]) => {
-                const typedMapping = mapping as SpecialtyMappingState;
-                if (typedMapping.isSingleSource) {
-                  acc[specialty] = {
-                    ...typedMapping,
-                    resolved: true,
-                    mappedSpecialties: [specialty],
-                    isSingleSource: true
-                  };
-                } else {
-                  acc[specialty] = typedMapping;
-                }
-                return acc;
-              }, {});
-              
-              setSpecialtyMappings(restoredMappings);
+              setSpecialtyMappings(mostRecentSurvey.specialtyMappings);
               
               // Calculate and set progress
               const progress = mostRecentSurvey.mappingProgress || calculateSpecialtyProgress();
               setSpecialtyProgress(progress);
               
               console.log('Loaded mappings:', {
-                mappingsCount: Object.keys(restoredMappings).length,
+                mappingsCount: Object.keys(mostRecentSurvey.specialtyMappings).length,
                 progress: progress
               });
             }
@@ -307,7 +283,7 @@ export default function SurveyManagementPage(): JSX.Element {
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
-        toast.error('Failed to load saved surveys');
+        toast.error('Error loading saved surveys');
       }
     };
 
@@ -2186,7 +2162,7 @@ export default function SurveyManagementPage(): JSX.Element {
   const handleAcceptSingleSource = (specialty: string, vendor: string) => {
     try {
       // Create the mapping for the single source specialty
-      const newMapping: SpecialtyMappingState = {
+      const newMapping: SpecialtyMapping = {
         mappedSpecialties: [specialty], // Map to itself
         notes: `Accepted as single source from ${vendor}`,
         resolved: true,
@@ -2204,18 +2180,10 @@ export default function SurveyManagementPage(): JSX.Element {
       const progress = calculateSpecialtyProgress();
       setSpecialtyProgress(progress);
 
-      // Find the survey this specialty belongs to
-      const targetSurvey = uploadedSurveys.find((survey: Survey) => 
-        survey.data.some(row => row[survey.mappings.specialty] === specialty)
-      );
-
       // Update all surveys with new mappings and progress
-      const updatedSurveys = uploadedSurveys.map((survey: Survey) => ({
+      const updatedSurveys = uploadedSurveys.map(survey => ({
         ...survey,
-        specialtyMappings: {
-          ...survey.specialtyMappings,
-          [specialty]: newMapping
-        },
+        specialtyMappings: updatedMappings,
         mappingProgress: progress
       }));
       setUploadedSurveys(updatedSurveys);

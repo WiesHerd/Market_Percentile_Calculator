@@ -26,14 +26,6 @@ interface MetricSection {
   icon: JSX.Element;
 }
 
-interface SurveyRow {
-  specialty: string;
-  vendor: string;
-  tcc?: SurveyMetric;
-  wrvu?: SurveyMetric;
-  cf?: SurveyMetric;
-}
-
 const metricSections: MetricSection[] = [
   {
     title: 'Total Cash Compensation',
@@ -265,15 +257,8 @@ const SurveyAnalytics: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(specialtyData.surveyValues).map(([vendor, data]) => {
-                    const mapping = specialtyMappings[selectedSpecialty];
-                    const allSpecialties = [selectedSpecialty, ...(mapping?.mappedSpecialties || [])];
-                    const originalSpecialty = surveyData
-                      .find(survey => survey.vendor === vendor)
-                      ?.data.find(row => allSpecialties.includes(row.specialty))
-                      ?.specialty || data.specialty;
-                    
-                    return data[section.key] && (
+                  {Object.entries(specialtyData.surveyValues).map(([vendor, data]) => (
+                    data[section.key] && (
                       <tr key={vendor}>
                         <td className="source-column">{formatVendorName(vendor)}</td>
                         {percentiles.map((percentile) => (
@@ -284,8 +269,8 @@ const SurveyAnalytics: React.FC = () => {
                           </td>
                         ))}
                       </tr>
-                    );
-                  })}
+                    )
+                  ))}
                   <tr className="average-row">
                     <td className="source-column">Average</td>
                     {percentiles.map((percentile) => (
@@ -472,15 +457,28 @@ const SurveyAnalytics: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
-                          <tr className="hover:bg-gray-50">
-                            <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                              {selectedSpecialty}
-                              <div className="text-xs text-gray-500 mt-1">
-                                Sources: {Object.keys(specialtyData.surveyValues).map(vendor => formatVendorName(vendor)).join(', ')}
-                              </div>
+                          {Object.entries(specialtyData.surveyValues).map(([vendor, data]) => (
+                            data[section.key] && (
+                              <tr key={vendor} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                                  {formatVendorName(vendor)}
+                                </td>
+                                {percentiles.map((percentile) => (
+                                  <td key={percentile} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                                    {data[section.key]?.[percentile] ? 
+                                      section.format(data[section.key]![percentile]) : 
+                                      '—'}
+                                  </td>
+                                ))}
+                              </tr>
+                            )
+                          ))}
+                          <tr className="bg-blue-50">
+                            <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-blue-900">
+                              Average
                             </td>
                             {percentiles.map((percentile) => (
-                              <td key={percentile} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                              <td key={percentile} className="px-3 py-2 whitespace-nowrap text-sm text-right font-medium text-blue-900">
                                 {specialtyData.averages[section.key][percentile] ? 
                                   section.format(specialtyData.averages[section.key][percentile]) : 
                                   '—'}
