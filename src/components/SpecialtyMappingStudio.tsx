@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { MagnifyingGlassIcon, ArrowsRightLeftIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, ArrowsRightLeftIcon, XMarkIcon, CheckIcon, CheckCircleIcon, ArrowPathIcon, PlusIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 import { calculateStringSimilarity } from '@/utils/string';
 import { findMatchingSpecialties } from '@/utils/surveySpecialtyMapping';
 import type { SurveyVendor, SpecialtyMapping } from '@/utils/surveySpecialtyMapping';
@@ -7,8 +7,61 @@ import { toast } from 'react-hot-toast';
 import { 
   areSpecialtiesSynonyms, 
   getSpecialtySynonyms,
-  normalizeSpecialtyName 
+  normalizeSpecialtyName,
+  areSpecialtyVariations,
+  findStandardSpecialty
 } from '@/utils/specialtyMapping';
+import { motion, AnimatePresence } from 'framer-motion';
+import { formatCurrency, formatNumber } from '@/utils/formatting';
+
+interface SpecialtyMetrics {
+  tcc?: {
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+  };
+  wrvu?: {
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+  };
+  cf?: {
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+  };
+}
+
+interface UnmappedSpecialty {
+  name: string;
+  vendor: string;
+  metrics?: SpecialtyMetrics;
+  count: number;
+}
+
+interface SuggestedMapping {
+  specialty: string;
+  confidence: number;
+  vendor: string;
+  metrics?: SpecialtyMetrics;
+  matchType: 'exact' | 'synonym' | 'similar' | 'category';
+  matchReason: string;
+}
+
+interface SpecialtyData {
+  specialty: string;
+  vendor: string;
+  metrics?: SpecialtyMetrics;
+}
+
+interface MappedGroup {
+  id: string;
+  specialties: SpecialtyData[];
+  createdAt: Date;
+}
 
 interface SpecialtyMappingStudioProps {
   surveys: Array<{
@@ -16,32 +69,52 @@ interface SpecialtyMappingStudioProps {
     vendor: string;
     data: Array<{
       specialty: string;
-      tcc: any;
-      wrvu: any;
-      cf: any;
+      tcc?: SpecialtyMetrics['tcc'];
+      wrvu?: SpecialtyMetrics['wrvu'];
+      cf?: SpecialtyMetrics['cf'];
     }>;
   }>;
-  onMappingChange: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string, resolved?: boolean) => void;
-  existingMappings?: Record<string, string[]>;
+  onMappingChange: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => void;
+}
+
+interface AutoMapSuggestion {
+  sourceSpecialty: SpecialtyData;
+  suggestedMatches: {
+    specialty: SpecialtyData;
+    confidence: number;
+    reason: string;
+  }[];
+}
+
+interface MappingTableRow {
+  sourceSpecialty: SpecialtyData;
+  matches: Array<{
+    specialty: SpecialtyData;
+    confidence: number;
+    reason: string;
+    status?: 'approved' | 'rejected';
+  }>;
 }
 
 // Helper to format vendor names
 const formatVendorName = (vendor: string): string => {
+  // Normalize the input first
+  const normalized = vendor.toLowerCase().trim();
+  
   const vendorMap: Record<string, string> = {
     'mgma': 'MGMA',
     'gallagher': 'GALLAGHER',
-    'sullivan': 'SULLIVANCOTTER'
+    'sullivan': 'SULLIVANCOTTER',
+    'sullivancotter': 'SULLIVANCOTTER',
+    'sullivan cotter': 'SULLIVANCOTTER',
+    'sullivan-cotter': 'SULLIVANCOTTER'
   };
-  return vendorMap[vendor.toLowerCase()] || vendor.toUpperCase();
+
+  console.log('Formatting vendor name:', vendor, 'normalized:', normalized, 'result:', vendorMap[normalized] || vendor.toUpperCase());
+  return vendorMap[normalized] || vendor.toUpperCase();
 };
 
 // Add interfaces for specialty types
-interface UnmappedSpecialty {
-  specialty: string;
-  vendor: string;
-  notes?: string;
-}
-
 interface Connection {
   specialty: string;
   vendor: string;
@@ -49,6 +122,7 @@ interface Connection {
 
 interface MappedSpecialty {
   specialty: string;
+  name: string;
   vendor: string;
   connections: Connection[];
   resolved?: boolean;
@@ -81,1009 +155,1130 @@ interface SpecialtySourceInfo {
 const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   surveys,
   onMappingChange,
-  existingMappings = {}
 }) => {
-  // View mode: 'unmapped' or 'mapped'
-  const [viewMode, setViewMode] = useState<'unmapped' | 'mapped'>('unmapped');
-  
-  // Selected specialty for mapping
-  const [selectedSpecialty, setSelectedSpecialty] = useState<UnmappedSpecialty | null>(null);
-  
-  // Search term for finding similar specialties
-  const [searchTerm, setSearchTerm] = useState('');
+  // State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
+  const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>([]);
+  const [autoMapSuggestions, setAutoMapSuggestions] = useState<AutoMapSuggestion | null>(null);
+  const [viewMode, setViewMode] = useState<'auto' | 'manual' | 'mapped'>('auto');
+  const [allAutoMappings, setAllAutoMappings] = useState<Array<{
+    sourceSpecialty: SpecialtyData;
+    matches: Array<{
+      specialty: SpecialtyData;
+      confidence: number;
+      reason: string;
+      status?: 'approved' | 'rejected';
+    }>;
+  }>>([]);
+  const [manualMappingMode, setManualMappingMode] = useState(false);
+  const [showAddMore, setShowAddMore] = useState(false);
 
-  // Track mapped specialties with their connections
-  const [mappings, setMappings] = useState<Record<string, string[]>>(existingMappings);
+  // Format vendor name consistently
+  const formatVendorName = (vendor: string): string => {
+    const normalized = vendor.toLowerCase().trim();
+    const vendorMap: Record<string, string> = {
+      'mgma': 'MGMA',
+      'gallagher': 'Gallagher',
+      'sullivan': 'Sullivan Cotter',
+      'sullivancotter': 'Sullivan Cotter',
+      'sullivan cotter': 'Sullivan Cotter',
+      'sullivan-cotter': 'Sullivan Cotter'
+    };
+    return vendorMap[normalized] || vendor;
+  };
 
-  // Track selected matches during mapping
-  const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
-
-  // Add new state for survey search
-  const [surveySearchTerm, setSurveySearchTerm] = useState('');
-
-  // Add new state for filters
-  const [filters, setFilters] = useState<SpecialtyFilters>({
-    searchTerm: '',
-    selectedVendors: new Set(['MGMA', 'GALLAGHER', 'SULLIVANCOTTER'])
-  });
-
-  // Add state for resolved specialties
-  const [resolvedSpecialties, setResolvedSpecialties] = useState<Set<string>>(new Set());
-
-  // Add new state for the complete specialty search
-  const [completeSearchTerm, setCompleteSearchTerm] = useState('');
-
-  // Convert surveys to SpecialtyMapping format
-  const availableSpecialties = useMemo(() => {
-    const specialties: SpecialtyMapping[] = [];
-    console.log('Processing surveys:', surveys);
-    surveys.forEach(survey => {
-      console.log('Processing survey:', survey.vendor, survey.data.length);
-      survey.data.forEach(item => {
-        console.log('Adding specialty:', item.specialty, 'from vendor:', survey.vendor);
-        specialties.push({
-          specialty: item.specialty,
-          vendor: formatVendorName(survey.vendor) as SurveyVendor
-        });
-      });
-    });
-    console.log('Available specialties:', specialties);
-    return specialties;
-  }, [surveys]);
-
-  // Get all unique specialties with their vendors
-  const allSpecialties = useMemo((): UnmappedSpecialty[] => {
-    const uniqueSpecialties = new Map<string, UnmappedSpecialty>();
+  // Organize specialties by vendor
+  const specialtiesByVendor = useMemo(() => {
+    const result: Record<string, SpecialtyData[]> = {};
     
     surveys.forEach(survey => {
+      const vendorName = formatVendorName(survey.vendor);
+      if (!result[vendorName]) {
+        result[vendorName] = [];
+      }
+      
       survey.data.forEach(item => {
         if (item.specialty && typeof item.specialty === 'string') {
-          const specialty = item.specialty.trim();
-          if (!uniqueSpecialties.has(specialty)) {
-            uniqueSpecialties.set(specialty, {
-              specialty,
-              vendor: formatVendorName(survey.vendor)
+          // Check if specialty is already mapped
+          const isAlreadyMapped = mappedGroups.some(group =>
+            group.specialties.some(s => 
+              s.specialty === item.specialty && s.vendor === vendorName
+            )
+          );
+          
+          if (!isAlreadyMapped) {
+            result[vendorName].push({
+              specialty: item.specialty.trim(),
+              vendor: vendorName,
+              metrics: {
+                tcc: item.tcc,
+                wrvu: item.wrvu,
+                cf: item.cf
+              }
             });
           }
         }
       });
     });
-    
-    return Array.from(uniqueSpecialties.values());
-  }, [surveys]);
 
-  // Get unmapped specialties
-  const unmappedSpecialties = useMemo((): UnmappedSpecialty[] => {
-    const unmapped = allSpecialties.filter(item => 
-      !Object.keys(mappings).includes(item.specialty) &&
-      !resolvedSpecialties.has(item.specialty) &&
-      item.specialty.trim() !== ''
-    );
-    console.log('Unmapped specialties:', unmapped);
-    return unmapped;
-  }, [allSpecialties, mappings, resolvedSpecialties]);
-
-  // Get mapped specialties with their connections
-  const mappedSpecialties = useMemo((): MappedSpecialty[] => {
-    const mapped = Object.entries(mappings).map(([specialty, connections]) => ({
-      specialty,
-      vendor: allSpecialties.find(s => s.specialty === specialty)?.vendor || '',
-      connections: connections.map(conn => ({
-        specialty: conn,
-        vendor: allSpecialties.find(s => s.specialty === conn)?.vendor || ''
-      }))
-    }));
-
-    // Add resolved specialties
-    const resolved = Array.from(resolvedSpecialties)
-      .filter(specialty => !Object.keys(mappings).includes(specialty))
-      .map(specialty => {
-        const specialtyInfo = allSpecialties.find(s => s.specialty === specialty);
-        return {
-          specialty,
-          vendor: specialtyInfo?.vendor || '',
-          connections: [],
-          resolved: true
-        };
-      });
-
-    return [...mapped, ...resolved];
-  }, [mappings, allSpecialties, resolvedSpecialties]);
-
-  // Get unique vendors
-  const uniqueVendors = useMemo(() => {
-    return Array.from(new Set(surveys.map(s => s.vendor)));
-  }, [surveys]);
-
-  // Enhanced similar specialties display with confidence indicators
-  const SimilarSpecialtyItem: React.FC<{
-    specialty: SimilarSpecialty;
-    isSelected: boolean;
-    onToggle: () => void;
-  }> = ({ specialty, isSelected, onToggle }) => {
-    return (
-      <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-medium">{specialty.specialty}</span>
-            <span className={`px-2 py-1 text-xs rounded-full ${
-              specialty.matchType === 'exact' ? 'bg-green-100 text-green-800' :
-              specialty.matchType === 'synonym' ? 'bg-blue-100 text-blue-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {specialty.matchType === 'exact' ? 'Exact Match' :
-               specialty.matchType === 'synonym' ? 'Synonym Match' :
-               'Similar Match'}
-            </span>
-            <span className="text-sm text-gray-500">from {specialty.vendor}</span>
-          </div>
-          
-          {specialty.synonyms && specialty.synonyms.length > 0 && (
-            <div className="mt-2 text-sm text-gray-500">
-              Also known as: {specialty.synonyms.join(', ')}
-            </div>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {specialty.confidence < 1 && (
-            <span className="text-sm text-gray-500">
-              {Math.round(specialty.confidence * 100)}% Match
-            </span>
-          )}
-          <button
-            onClick={onToggle}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              isSelected
-                ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            {isSelected ? 'Selected' : 'Select'}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Enhanced filtering of similar specialties
-  const filteredSimilarSpecialties = useMemo(() => {
-    if (!selectedSpecialty) return [];
-    
-    console.log('Finding matches for:', selectedSpecialty.specialty);
-    
-    const allMatches: SimilarSpecialty[] = [];
-    const processedSpecialties = new Set<string>();
-    
-    // First, get all possible synonyms for the selected specialty
-    const selectedSynonyms = getSpecialtySynonyms(selectedSpecialty.specialty);
-    console.log('Synonyms for selected specialty:', selectedSynonyms);
-
-    // Look through all available specialties
-    availableSpecialties.forEach(item => {
-      // Skip if from same vendor or already processed
-      if (formatVendorName(item.vendor) === formatVendorName(selectedSpecialty.vendor) ||
-          processedSpecialties.has(item.specialty)) {
-        return;
-      }
-      
-      processedSpecialties.add(item.specialty);
-      
-      // Check for exact match or synonym match
-      if (areSpecialtiesSynonyms(selectedSpecialty.specialty, item.specialty)) {
-        allMatches.push({
-          specialty: item.specialty,
-          vendor: item.vendor,
-          confidence: 0.95,
-          matchType: 'synonym',
-          synonyms: getSpecialtySynonyms(item.specialty)
-        });
-        return;
-      }
-
-      // If no synonym match, check string similarity
-      const similarity = calculateStringSimilarity(
-        normalizeSpecialtyName(selectedSpecialty.specialty),
-        normalizeSpecialtyName(item.specialty)
-      );
-
-      if (similarity > 0.6) {
-        allMatches.push({
-          specialty: item.specialty,
-          vendor: item.vendor,
-          confidence: similarity,
-          matchType: 'fuzzy',
-          synonyms: getSpecialtySynonyms(item.specialty)
-        });
-      }
+    // Sort specialties alphabetically within each vendor
+    Object.keys(result).forEach(vendor => {
+      result[vendor].sort((a, b) => a.specialty.localeCompare(b.specialty));
     });
 
-    console.log('Found matches:', allMatches);
+    return result;
+  }, [surveys, mappedGroups]);
 
-    // Filter by search term if provided
-    if (searchTerm) {
-      const searchTerms = searchTerm.toLowerCase().split(' ').filter(Boolean);
-      return allMatches.filter(item => {
-        const specialtyText = item.specialty.toLowerCase();
-        const vendorText = formatVendorName(item.vendor).toLowerCase();
-        const synonymText = item.synonyms?.join(' ').toLowerCase() || '';
-        return searchTerms.every(term =>
-          specialtyText.includes(term) || 
-          vendorText.includes(term) || 
-          synonymText.includes(term)
-        );
-      });
-    }
-
-    return allMatches.sort((a, b) => b.confidence - a.confidence);
-  }, [selectedSpecialty, searchTerm, availableSpecialties]);
-
-  // Enhanced filtering with vendor filter
+  // Filter specialties based on search
   const filteredSpecialties = useMemo(() => {
-    let specialties = viewMode === 'unmapped' ? unmappedSpecialties : mappedSpecialties;
-    
-    // Filter by vendors
-    specialties = specialties.filter(item => 
-      filters.selectedVendors.has(formatVendorName(item.vendor))
-    );
-    
-    // Filter by search term
-    if (filters.searchTerm) {
-      const searchTerms = filters.searchTerm.toLowerCase().split(' ').filter(Boolean);
-      specialties = specialties.filter(item => {
-        const specialtyText = item.specialty.toLowerCase();
-        const vendorText = formatVendorName(item.vendor).toLowerCase();
-        return searchTerms.every(term =>
-          specialtyText.includes(term) || vendorText.includes(term)
-        );
-      });
-    }
-    
-    return specialties;
-  }, [viewMode, unmappedSpecialties, mappedSpecialties, filters]);
+    const result: Record<string, SpecialtyData[]> = {};
+    const searchTerm = searchQuery.toLowerCase();
 
-  // Handle selecting/deselecting a match
-  const handleMatchToggle = useCallback((targetSpecialty: string) => {
-    setSelectedMatches(prev => {
-      const updated = new Set(prev);
-      if (updated.has(targetSpecialty)) {
-        updated.delete(targetSpecialty);
-      } else {
-        updated.add(targetSpecialty);
-      }
-      return updated;
-    });
-  }, []);
-
-  // Handle completing the mapping with all selected matches
-  const handleCompleteMappings = useCallback(() => {
-    if (!selectedSpecialty) return;
-    
-    const mappedSpecialties = Array.from(selectedMatches);
-    if (mappedSpecialties.length > 0) {
-      setMappings(prev => {
-        const existing = prev[selectedSpecialty.specialty] || [];
-        const updated = Array.from(new Set([...existing, ...mappedSpecialties]));
-        return { ...prev, [selectedSpecialty.specialty]: updated };
-      });
-      onMappingChange(selectedSpecialty.specialty, mappedSpecialties);
-      setSelectedMatches(new Set());
-      setSelectedSpecialty(null);
-      setSearchTerm('');
-    }
-  }, [selectedSpecialty, selectedMatches, onMappingChange]);
-
-  // Clear selections when changing specialty
-  useEffect(() => {
-    setSelectedMatches(new Set());
-  }, [selectedSpecialty]);
-
-  // Add these new functions near the other handler functions
-  const handleClearMapping = useCallback((specialty: string) => {
-    setMappings(prev => {
-      const updated = { ...prev };
-      delete updated[specialty];
-      return updated;
-    });
-    onMappingChange(specialty, []);
-  }, [onMappingChange]);
-
-  const handleClearAllMappings = useCallback(() => {
-    setMappings({});
-    // Notify parent component that all mappings are cleared
-    Object.keys(mappings).forEach(specialty => {
-      onMappingChange(specialty, []);
-    });
-  }, [mappings, onMappingChange]);
-
-  // Toggle vendor filter
-  const toggleVendorFilter = (vendor: string) => {
-    setFilters(prev => {
-      const newVendors = new Set(prev.selectedVendors);
-      if (newVendors.has(vendor)) {
-        newVendors.delete(vendor);
-      } else {
-        newVendors.add(vendor);
-      }
-      return { ...prev, selectedVendors: newVendors };
-    });
-  };
-
-  // Add this function before the return statement
-  const autoArrangeSpecialties = () => {
-    // Get all unmapped specialties
-    const unmappedList = unmappedSpecialties;
-    
-    // Process each unmapped specialty
-    unmappedList.forEach(source => {
-      // Skip if already mapped
-      if (Object.keys(mappings).includes(source.specialty)) return;
-
-      // Find potential matches from other vendors
-      const potentialMatches = allSpecialties
-        .filter(target => 
-          // Only look at specialties from other vendors
-          target.vendor !== source.vendor &&
-          // Not already mapped
-          !Object.values(mappings).flat().includes(target.specialty)
-        )
-        .map(target => ({
-          specialty: target.specialty,
-          vendor: target.vendor,
-          confidence: calculateStringSimilarity(source.specialty, target.specialty)
-        }))
-        .filter(match => match.confidence > 0.8) // Only consider high confidence matches
-        .sort((a, b) => b.confidence - a.confidence);
-
-      // If we found good matches, create the mapping
-      if (potentialMatches.length > 0) {
-        const matchedSpecialties = potentialMatches.map(m => m.specialty);
-        onMappingChange(source.specialty, matchedSpecialties);
-        
-        // Update local mappings state
-        setMappings(prev => ({
-          ...prev,
-          [source.specialty]: matchedSpecialties
-        }));
-      }
-    });
-
-    toast.success('Auto-arrangement complete!');
-  };
-
-  // Update progress calculation to be more accurate
-  const calculateProgress = () => {
-    const uniqueSpecialties = new Set(allSpecialties.map(s => s.specialty));
-    const totalSpecialties = uniqueSpecialties.size;
-    const mappedCount = Object.keys(mappings).length;
-    const resolvedCount = Array.from(resolvedSpecialties).filter(
-      specialty => !Object.keys(mappings).includes(specialty)
-    ).length;
-    
-    const progress = Math.round(totalSpecialties > 0 ? ((mappedCount + resolvedCount) / totalSpecialties) * 100 : 0);
-    
-    // Dispatch progress event
-    window.dispatchEvent(new CustomEvent('specialtyMappingProgress', { 
-      detail: progress 
-    }));
-    
-    return progress;
-  };
-
-  // Update handler for resolving specialties
-  const handleResolveSpecialty = useCallback((specialty: string, notes?: string) => {
-    setResolvedSpecialties(prev => {
-      const updated = new Set(prev);
-      updated.add(specialty);
-      return updated;
-    });
-    // Notify parent component that this specialty has been resolved
-    onMappingChange(specialty, [], notes, true);
-  }, [onMappingChange]);
-
-  // Fix getSpecialtySourceInfo to be a useCallback instead of useMemo
-  const getSpecialtySourceInfo = useCallback((specialty: string): SpecialtySourceInfo => {
-    const sources = new Map<string, number>();
-    
-    surveys.forEach(survey => {
-      const count = survey.data.filter(item => 
-        item.specialty.trim().toLowerCase() === specialty.toLowerCase()
-      ).length;
-      
-      if (count > 0) {
-        sources.set(formatVendorName(survey.vendor), count);
-      }
-    });
-    
-    return {
-      specialty,
-      sources: Array.from(sources.entries()).map(([vendor, count]) => ({ vendor, count })),
-      totalSources: sources.size
-    };
-  }, [surveys]);
-
-  // Add new function to get all available specialties except current vendor
-  const getAllOtherSpecialties = useMemo(() => {
-    if (!selectedSpecialty) return [];
-    
-    return availableSpecialties
-      .filter(item => formatVendorName(item.vendor) !== formatVendorName(selectedSpecialty.vendor))
-      .map(item => ({
-        specialty: item.specialty,
-        vendor: item.vendor,
-        synonyms: getSpecialtySynonyms(item.specialty)
-      }));
-  }, [selectedSpecialty, availableSpecialties]);
-
-  // Add function to search all specialties
-  const searchedSpecialties = useMemo(() => {
-    if (!completeSearchTerm) return [];
-    
-    const searchTerms = completeSearchTerm.toLowerCase().split(' ').filter(Boolean);
-    return getAllOtherSpecialties.filter(item => {
-      const specialtyText = item.specialty.toLowerCase();
-      const vendorText = formatVendorName(item.vendor).toLowerCase();
-      const synonymText = item.synonyms.join(' ').toLowerCase();
-      
-      return searchTerms.every(term =>
-        specialtyText.includes(term) || 
-        vendorText.includes(term) || 
-        synonymText.includes(term)
+    Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
+      result[vendor] = specialties.filter(item =>
+        item.specialty.toLowerCase().includes(searchTerm)
       );
     });
-  }, [completeSearchTerm, getAllOtherSpecialties]);
 
-  // Add function to get current mappings for a specialty
-  const getCurrentMappings = useCallback((specialty: string) => {
-    return mappings[specialty] || [];
-  }, [mappings]);
+    return result;
+  }, [specialtiesByVendor, searchQuery]);
 
-  // Update the right pane render function to show current mappings
-  const renderSimilarSpecialties = () => {
-    const hasMatches = filteredSimilarSpecialties.length > 0;
-    const selectedSynonyms = selectedSpecialty ? getSpecialtySynonyms(selectedSpecialty.specialty) : [];
-    const currentMappings = selectedSpecialty ? getCurrentMappings(selectedSpecialty.specialty) : [];
-    
-    return (
-      <div className="space-y-4">
-        {/* Current Mappings Section */}
-        {selectedSpecialty && (
-          <div className="bg-blue-50/50 border-2 border-blue-200 rounded-lg overflow-hidden">
-            <div className="bg-blue-100/50 px-4 py-3 border-b border-blue-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ArrowsRightLeftIcon className="h-4 w-4 text-blue-600" />
-                  <h4 className="font-medium text-blue-900">Current Mappings</h4>
-                </div>
-                <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
-                  {currentMappings.length} mapped
-                </span>
-              </div>
-            </div>
-            <div className="p-4">
-              {currentMappings.length > 0 ? (
-                <div className="space-y-2">
-                  {currentMappings.map(mappedSpecialty => {
-                    const mappedVendor = allSpecialties.find(s => s.specialty === mappedSpecialty)?.vendor || '';
-                    return (
-                      <div key={mappedSpecialty} className="flex items-center justify-between p-3 bg-white border-2 border-blue-100 rounded-lg shadow-sm">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-blue-900">{mappedSpecialty}</span>
-                            <span className="text-sm text-blue-600">from {formatVendorName(mappedVendor)}</span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            const updatedMappings = currentMappings.filter(s => s !== mappedSpecialty);
-                            setMappings(prev => ({
-                              ...prev,
-                              [selectedSpecialty.specialty]: updatedMappings
-                            }));
-                            onMappingChange(selectedSpecialty.specialty, updatedMappings);
-                          }}
-                          className="p-1.5 text-blue-600 hover:text-red-600 rounded-full hover:bg-red-50"
-                          title="Remove mapping"
-                        >
-                          <XMarkIcon className="h-5 w-5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-3">
-                  <p className="text-sm text-blue-700">No current mappings</p>
-                  <p className="text-xs text-blue-600 mt-1">Select from suggested matches below or search for specialties</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+  // New function to find potential matches for a specialty
+  const findPotentialMatches = (specialty: SpecialtyData): AutoMapSuggestion => {
+    const suggestions: AutoMapSuggestion = {
+      sourceSpecialty: specialty,
+      suggestedMatches: []
+    };
 
-        {/* Show known variations section */}
-        {selectedSpecialty && selectedSynonyms.length > 1 && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">Known Variations</h4>
-            <div className="flex flex-wrap gap-2">
-              {selectedSynonyms.map(synonym => (
-                <span key={synonym} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {synonym}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+    // Look through all vendors except the source vendor
+    Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
+      if (vendor !== specialty.vendor) {
+        specialties.forEach(targetSpecialty => {
+          // Calculate similarity
+          const similarity = calculateStringSimilarity(
+            specialty.specialty,
+            targetSpecialty.specialty
+          );
 
-        {/* Suggested Matches Section */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium text-gray-900">Suggested Matches</h4>
-              {hasMatches && (
-                <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full">
-                  {filteredSimilarSpecialties.length} suggestions
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="space-y-3">
-              {hasMatches ? (
-                filteredSimilarSpecialties
-                  .filter(item => !currentMappings.includes(item.specialty))
-                  .map((item) => (
-                    <SimilarSpecialtyItem
-                      key={`${item.specialty}-${item.vendor}`}
-                      specialty={item}
-                      isSelected={selectedMatches.has(item.specialty)}
-                      onToggle={() => handleMatchToggle(item.specialty)}
-                    />
-                  ))
-              ) : (
-                <p className="text-sm text-gray-500 py-2">No automatic matches found</p>
-              )}
-            </div>
-          </div>
-        </div>
+          let reason = '';
+          let confidence = similarity;
 
-        {/* Complete Search Section */}
-        <div className="bg-gray-50 border-2 border-gray-200 rounded-lg overflow-hidden">
-          <div className="bg-gray-100 px-4 py-3 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MagnifyingGlassIcon className="h-4 w-4 text-gray-600" />
-                <h4 className="font-medium text-gray-900">Search All Specialties</h4>
-              </div>
-              {searchedSpecialties.length > 0 && (
-                <span className="text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded-full">
-                  {searchedSpecialties.length} found
-                </span>
-              )}
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="relative mb-4">
-              <input
-                type="text"
-                placeholder="Search all available specialties..."
-                value={completeSearchTerm}
-                onChange={(e) => setCompleteSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
-              <MagnifyingGlassIcon className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
-            </div>
+          // Exact match
+          if (similarity === 1) {
+            reason = 'Exact match';
+            confidence = 1;
+          }
+          // Check for synonyms
+          else if (areSpecialtiesSynonyms(specialty.specialty, targetSpecialty.specialty)) {
+            reason = 'Known synonym';
+            confidence = 0.95;
+          }
+          // High similarity
+          else if (similarity >= 0.8) {
+            reason = 'Very similar name';
+          }
+          // Moderate similarity
+          else if (similarity >= 0.6) {
+            reason = 'Similar name';
+          }
 
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {searchedSpecialties.map((item) => (
-                <div
-                  key={`${item.specialty}-${item.vendor}`}
-                  className="flex items-center justify-between p-4 bg-white border rounded-lg hover:bg-gray-50"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{item.specialty}</span>
-                      <span className="text-sm text-gray-500">from {item.vendor}</span>
-                    </div>
-                    {item.synonyms.length > 1 && (
-                      <div className="mt-1 text-sm text-gray-500">
-                        Also known as: {item.synonyms.filter(s => s !== item.specialty).join(', ')}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleMatchToggle(item.specialty)}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-                      selectedMatches.has(item.specialty)
-                        ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    {selectedMatches.has(item.specialty) ? 'Selected' : 'Select'}
-                  </button>
-                </div>
-              ))}
-              {completeSearchTerm && searchedSpecialties.length === 0 && (
-                <p className="text-sm text-gray-500 py-2">No specialties found matching your search</p>
-              )}
-            </div>
-          </div>
-        </div>
+          if (confidence >= 0.6) {
+            suggestions.suggestedMatches.push({
+              specialty: targetSpecialty,
+              confidence,
+              reason
+            });
+          }
+        });
+      }
+    });
 
-        {/* Action buttons - Only show once at the bottom */}
-        {selectedMatches.size > 0 && (
-          <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 mt-6">
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setSelectedSpecialty(null);
-                  setSelectedMatches(new Set());
-                  setCompleteSearchTerm('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCompleteMappings}
-                className="px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Confirm Mapping ({selectedMatches.size} selected)
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    // Sort by confidence
+    suggestions.suggestedMatches.sort((a, b) => b.confidence - a.confidence);
+    return suggestions;
   };
 
-  // Update the specialty item rendering
-  const renderSpecialtyItem = (item: UnmappedSpecialty | MappedSpecialty) => {
-    const sourceInfo = getSpecialtySourceInfo(item.specialty);
-    const isSingleSource = sourceInfo.totalSources === 1;
+  // Update the toggleSpecialtySelection function
+  const toggleSpecialtySelection = (specialty: SpecialtyData) => {
+    const key = `${specialty.vendor}:${specialty.specialty}`;
+    
+    setSelectedSpecialties(prev => {
+      const updated = new Set(prev);
+      if (updated.has(key)) {
+        updated.delete(key);
+        setAutoMapSuggestions(null);
+      } else {
+        updated.clear(); // Clear previous selections
+        updated.add(key);
+        // Find and set suggestions
+        const suggestions = findPotentialMatches(specialty);
+        setAutoMapSuggestions(suggestions);
+      }
+      return updated;
+    });
+  };
+
+  // New function to accept suggested matches
+  const acceptSuggestedMatches = (suggestion: AutoMapSuggestion) => {
+    const selectedItems: SpecialtyData[] = [
+      suggestion.sourceSpecialty,
+      ...suggestion.suggestedMatches.map(match => match.specialty)
+    ];
+
+    const newGroup: MappedGroup = {
+      id: Math.random().toString(36).substr(2, 9),
+      specialties: selectedItems,
+      createdAt: new Date()
+    };
+
+    setMappedGroups(prev => [...prev, newGroup]);
+    setSelectedSpecialties(new Set());
+    setAutoMapSuggestions(null);
+    
+    // Notify parent component
+    const mappedSpecialties = suggestion.suggestedMatches.map(match => match.specialty.specialty);
+    onMappingChange(suggestion.sourceSpecialty.specialty, mappedSpecialties);
+    
+    toast.success('Created new mapping group from suggestions');
+  };
+
+  // Render a specialty card
+  const renderSpecialtyCard = (specialty: SpecialtyData) => {
+    const isSelected = selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`);
     
     return (
-      <div
-        key={`${item.specialty}-${item.vendor}`}
-        onClick={() => !('resolved' in item) && setSelectedSpecialty(item)}
-        className={`p-4 rounded-lg border transition-all duration-200 ${
-          selectedSpecialty?.specialty === item.specialty
-            ? 'border-blue-300 bg-blue-50 ring-1 ring-blue-200'
-            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-        } ${!('resolved' in item) ? 'cursor-pointer' : ''}`}
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        className={`
+          px-3 py-2 rounded-md transition-all cursor-pointer
+          ${isSelected 
+            ? 'bg-indigo-50 border-indigo-200 shadow-sm' 
+            : 'hover:bg-gray-50'
+          }
+        `}
+        onClick={() => toggleSpecialtySelection(specialty)}
       >
         <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900">{item.specialty}</span>
-              <span className="text-sm text-gray-500">
-                {isSingleSource ? 'Single Source' : `${sourceInfo.totalSources} Sources`}
-              </span>
+          <div className="flex-1 min-w-0">
+            <div className={`font-medium truncate ${isSelected ? 'text-indigo-900' : 'text-gray-900'}`}>
+              {specialty.specialty}
             </div>
-            <div className="flex items-center mt-2 gap-2">
-              {sourceInfo.sources.map((source) => (
-                <span
-                  key={source.vendor}
-                  className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-full ${
-                    source.vendor === 'MGMA' ? 'bg-purple-50 text-purple-700' :
-                    source.vendor === 'GALLAGHER' ? 'bg-green-50 text-green-700' :
-                    'bg-blue-50 text-blue-700'
-                  }`}
-                >
-                  {source.vendor}
-                </span>
-              ))}
-            </div>
-          </div>
-          
-          {isSingleSource && !('resolved' in item) && (
-            <div className="group relative">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleResolveSpecialty(item.specialty, 'Single source specialty - no mapping needed');
-                }}
-                className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200"
-              >
-                <CheckIcon className="h-3 w-3 mr-1.5" />
-                Accept Single Source
-              </button>
-              <div className="absolute bottom-full mb-2 right-0 w-48 hidden group-hover:block">
-                <div className="bg-gray-900 text-white text-xs rounded-lg p-2 text-center">
-                  Mark this specialty as complete since it only appears in one survey
-                </div>
-              </div>
-            </div>
-          )}
-
-          {('resolved' in item && item.resolved) && (
-            <span className="inline-flex items-center text-sm text-green-600">
-              <CheckIcon className="h-4 w-4 mr-1" />
-              Accepted
-            </span>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  // Update the findSimilarSpecialties function
-  const findSimilarSpecialties = useCallback((specialty: string): SimilarSpecialty[] => {
-    const results: SimilarSpecialty[] = [];
-    const processedSpecialties = new Set<string>();
-    
-    availableSpecialties.forEach(item => {
-      if (processedSpecialties.has(item.specialty)) return;
-      processedSpecialties.add(item.specialty);
-
-      // Check for exact match
-      if (item.specialty.toLowerCase() === specialty.toLowerCase()) {
-        results.push({
-          specialty: item.specialty,
-          vendor: item.vendor,
-          confidence: 1,
-          matchType: 'exact'
-        });
-        return;
-      }
-
-      // Check for synonyms
-      if (areSpecialtiesSynonyms(specialty, item.specialty)) {
-        results.push({
-          specialty: item.specialty,
-          vendor: item.vendor,
-          confidence: 0.95,
-          matchType: 'synonym',
-          synonyms: getSpecialtySynonyms(item.specialty)
-        });
-        return;
-      }
-
-      // Fuzzy matching for remaining cases
-      const similarity = calculateStringSimilarity(specialty.toLowerCase(), item.specialty.toLowerCase());
-      if (similarity > 0.6) {
-        results.push({
-          specialty: item.specialty,
-          vendor: item.vendor,
-          confidence: similarity,
-          matchType: 'fuzzy'
-        });
-      }
-    });
-
-    return results.sort((a, b) => b.confidence - a.confidence);
-  }, [availableSpecialties]);
-
-  return (
-    <div className="bg-gray-50">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6">
-        {/* Progress Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-medium text-gray-900">Specialty Mapping Progress</h2>
-              <p className="mt-1 text-sm text-gray-500">
-                {Object.keys(mappings).length + Array.from(resolvedSpecialties).filter(
-                  specialty => !Object.keys(mappings).includes(specialty)
-                ).length} / {allSpecialties.length} specialties mapped or resolved
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={autoArrangeSpecialties}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                Auto-arrange Specialties
-              </button>
-              {Object.keys(mappings).length > 0 && (
-                <button
-                  onClick={handleClearAllMappings}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                >
-                  Clear All Mappings
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-blue-500 transition-all duration-500 specialty-mapping-progress"
-                style={{ width: `${calculateProgress()}%` }}
-                data-progress={calculateProgress()}
-              />
-            </div>
-            <span className="text-sm text-gray-600">
-              {calculateProgress()}% complete
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left side: Unmapped specialties */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[calc(100vh-120px)] overflow-auto">
-            {/* Header section */}
-            <div className="sticky top-0 border-b border-gray-200 bg-gray-50 p-4 z-10">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {viewMode === 'unmapped' ? `Unmapped Specialties (${unmappedSpecialties.length})` : 'Mapped Specialties'}
-                </h3>
-                <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
-                  <button
-                    onClick={() => setViewMode('unmapped')}
-                    className={`inline-flex items-center px-4 py-1.5 text-sm font-medium transition-colors ${
-                      viewMode === 'unmapped' 
-                        ? 'bg-blue-600 text-white rounded-md' 
-                        : 'text-gray-700 hover:text-gray-900'
-                    }`}
-                  >
-                    Unmapped
-                  </button>
-                  <button
-                    onClick={() => setViewMode('mapped')}
-                    className={`inline-flex items-center px-4 py-1.5 text-sm font-medium transition-colors ${
-                      viewMode === 'mapped'
-                        ? 'bg-blue-600 text-white rounded-md'
-                        : 'text-gray-700 hover:text-gray-900'
-                    }`}
-                  >
-                    Mapped
-                  </button>
-                </div>
-              </div>
-
-              {/* Search and filter section */}
-              <div className="space-y-3">
-                {/* Search bar */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search specialties..."
-                    value={filters.searchTerm}
-                    onChange={(e) => setFilters(prev => ({ ...prev, searchTerm: e.target.value }))}
-                    className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                  {filters.searchTerm && (
-                    <button
-                      onClick={() => setFilters(prev => ({ ...prev, searchTerm: '' }))}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                    >
-                      <XMarkIcon className="h-5 w-5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Survey vendor filters */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                    </svg>
-                    <span>Filter by survey vendor:</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {uniqueVendors.map(vendor => (
-                      <button
-                        key={vendor}
-                        onClick={() => toggleVendorFilter(formatVendorName(vendor))}
-                        className={`inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-                          filters.selectedVendors.has(formatVendorName(vendor))
-                            ? 'bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        <span className="relative flex items-center gap-1">
-                          {formatVendorName(vendor)}
-                          {filters.selectedVendors.has(formatVendorName(vendor)) ? (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          ) : (
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                            </svg>
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                  {filters.selectedVendors.size === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      Select at least one vendor to view specialties
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Specialty list */}
-            <div className="p-6">
-              <div className="space-y-2">
-                {filteredSpecialties.length > 0 ? (
-                  filteredSpecialties.map(item => renderSpecialtyItem(item))
-                ) : (
-                  <div className="text-center py-8">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
-                      <MagnifyingGlassIcon className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-1">No specialties found</h3>
-                    <p className="text-sm text-gray-500">
-                      Try adjusting your filters or search terms
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Right side: Mapping interface */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-[calc(100vh-120px)] overflow-auto">
-            {selectedSpecialty ? (
-              <div className="p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-gray-900">
-                    Map "{selectedSpecialty.specialty}"
-                  </h3>
-                  <div className="text-sm text-gray-500">
-                    from {formatVendorName(selectedSpecialty.vendor)}
-                  </div>
-                </div>
-
-                {/* Search similar specialties */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search for similar specialties..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <MagnifyingGlassIcon className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" />
-                </div>
-
-                {/* Similar specialties list */}
-                <div className="space-y-3 mt-4">
-                  {renderSimilarSpecialties()}
-                </div>
-
-                {/* Action buttons - only show if there are matches */}
-                {filteredSimilarSpecialties.length > 0 && (
-                  <div className="flex justify-end space-x-3 mt-6">
-                    <button
-                      onClick={() => {
-                        setSelectedSpecialty(null);
-                        setSelectedMatches(new Set());
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCompleteMappings}
-                      disabled={selectedMatches.size === 0}
-                      className={`px-4 py-2 text-sm font-medium rounded-md ${
-                        selectedMatches.size > 0
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      Confirm Mapping
-                    </button>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-6 text-center py-12 text-gray-500">
-                Select a specialty to start mapping
+            {specialty.metrics?.tcc && (
+              <div className="mt-0.5 text-xs text-gray-500">
+                TCC: ${(specialty.metrics.tcc.p50 / 1000).toFixed(0)}k
               </div>
             )}
           </div>
+          {isSelected && (
+            <CheckCircleIcon className="h-5 w-5 text-indigo-500 flex-shrink-0 ml-2" />
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  // New function to generate all possible mappings
+  const generateAllMappings = useCallback(() => {
+    // First, collect all mapped specialties
+    const mappedSpecialtySet = new Set(
+      mappedGroups.flatMap(group => 
+        group.specialties.map(s => `${s.specialty}:${s.vendor}`)
+      )
+    );
+
+    // Group specialties by name (ignoring vendor)
+    const specialtiesByName = new Map<string, SpecialtyData[]>();
+    
+    Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
+      specialties.forEach(specialty => {
+        const key = `${specialty.specialty}:${specialty.vendor}`;
+        // Skip if already mapped
+        if (!mappedSpecialtySet.has(key)) {
+          const existing = specialtiesByName.get(specialty.specialty) || [];
+          specialtiesByName.set(specialty.specialty, [...existing, specialty]);
+        }
+      });
+    });
+
+    // Create mappings for each unique specialty
+    const allMappings = Array.from(specialtiesByName.entries())
+      .map(([specialtyName, instances]) => {
+        // Take the first instance as source
+        const sourceSpecialty = instances[0];
+        
+        // Find matches from other vendors
+        const matches = instances.slice(1).map(match => {
+          const similarity = calculateStringSimilarity(
+            sourceSpecialty.specialty,
+            match.specialty
+          );
+
+          let reason = '';
+          let confidence = similarity;
+
+          // Exact match
+          if (similarity === 1) {
+            reason = 'Exact match';
+            confidence = 1;
+          }
+          // Check for synonyms
+          else if (areSpecialtiesSynonyms(sourceSpecialty.specialty, match.specialty)) {
+            reason = 'Known synonym';
+            confidence = 0.95;
+          }
+          // High similarity
+          else if (similarity >= 0.8) {
+            reason = 'Very similar name';
+          }
+          // Moderate similarity
+          else if (similarity >= 0.6) {
+            reason = 'Similar name';
+          }
+
+          return {
+            specialty: match,
+            confidence,
+            reason,
+            status: undefined as 'approved' | 'rejected' | undefined
+          };
+        });
+
+        // Also look for potential matches in other specialties
+        Object.entries(specialtiesByVendor).forEach(([vendor, vendorSpecialties]) => {
+          if (vendor !== sourceSpecialty.vendor) {
+            vendorSpecialties
+              .filter(s => 
+                s.specialty !== specialtyName && 
+                !mappedSpecialtySet.has(`${s.specialty}:${s.vendor}`)
+              )
+              .forEach(targetSpecialty => {
+                const similarity = calculateStringSimilarity(
+                  sourceSpecialty.specialty,
+                  targetSpecialty.specialty
+                );
+
+                if (similarity >= 0.6) {
+                  let reason = '';
+                  let confidence = similarity;
+
+                  if (areSpecialtiesSynonyms(sourceSpecialty.specialty, targetSpecialty.specialty)) {
+                    reason = 'Known synonym';
+                    confidence = 0.95;
+                  } else if (similarity >= 0.8) {
+                    reason = 'Very similar name';
+                  } else {
+                    reason = 'Similar name';
+                  }
+
+                  matches.push({
+                    specialty: targetSpecialty,
+                    confidence,
+                    reason,
+                    status: undefined
+                  });
+                }
+              });
+          }
+        });
+
+        return {
+          sourceSpecialty,
+          matches: matches.sort((a, b) => b.confidence - a.confidence)
+        };
+      })
+      .filter(item => item.matches.length > 0);
+
+    // Sort by source specialty name
+    allMappings.sort((a, b) => 
+      a.sourceSpecialty.specialty.localeCompare(b.sourceSpecialty.specialty)
+    );
+
+    setAllAutoMappings(allMappings);
+  }, [specialtiesByVendor, mappedGroups]);
+
+  // Call on mount
+  useEffect(() => {
+    generateAllMappings();
+  }, [generateAllMappings]);
+
+  // Function to approve/reject a mapping
+  const updateMappingStatus = (
+    sourceSpecialty: SpecialtyData,
+    matchSpecialty: SpecialtyData,
+    status: 'approved' | 'rejected'
+  ) => {
+    setAllAutoMappings(prev => {
+      const newMappings = prev.map(mapping => {
+        if (mapping.sourceSpecialty.specialty === sourceSpecialty.specialty &&
+            mapping.sourceSpecialty.vendor === sourceSpecialty.vendor) {
+          
+          // Update the status of the specific match
+          const updatedMatches = mapping.matches.map(match => {
+            if (match.specialty.specialty === matchSpecialty.specialty &&
+                match.specialty.vendor === matchSpecialty.vendor) {
+              return { ...match, status };
+            }
+            return match;
+          });
+
+          return { ...mapping, matches: updatedMatches };
+        }
+        return mapping;
+      });
+
+      return newMappings;
+    });
+
+    if (status === 'approved') {
+      toast.success('Match approved - approve or reject other matches to create the group');
+    } else {
+      toast.success('Match rejected');
+    }
+  };
+
+  // Effect to handle mapping group creation when matches are updated
+  useEffect(() => {
+    allAutoMappings.forEach(mapping => {
+      const allMatchesHandled = mapping.matches.every(m => m.status === 'approved' || m.status === 'rejected');
+      const approvedMatches = mapping.matches.filter(m => m.status === 'approved');
+
+      if (allMatchesHandled && approvedMatches.length > 0) {
+        // Create the mapping group
+        const newGroup: MappedGroup = {
+          id: Math.random().toString(36).substr(2, 9),
+          specialties: [
+            mapping.sourceSpecialty,
+            ...approvedMatches.map(m => m.specialty)
+          ],
+          createdAt: new Date()
+        };
+        
+        setMappedGroups(prev => [...prev, newGroup]);
+        onMappingChange(
+          mapping.sourceSpecialty.specialty, 
+          approvedMatches.map(m => m.specialty.specialty)
+        );
+
+        // Remove this mapping from auto-mappings
+        setAllAutoMappings(prev => 
+          prev.filter(m => 
+            m.sourceSpecialty.specialty !== mapping.sourceSpecialty.specialty ||
+            m.sourceSpecialty.vendor !== mapping.sourceSpecialty.vendor
+          )
+        );
+
+        toast.success('Created mapping group with all approved matches');
+      }
+    });
+  }, [allAutoMappings, onMappingChange]);
+
+  // Filter mappings based on search
+  const filteredMappings = useMemo(() => {
+    return allAutoMappings.filter(mapping =>
+      mapping.sourceSpecialty.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allAutoMappings, searchQuery]);
+
+  // Handle manual specialty selection
+  const handleSpecialtySelect = (specialty: SpecialtyData) => {
+    const key = `${specialty.vendor}:${specialty.specialty}`;
+    setSelectedSpecialties(prev => {
+      const updated = new Set(prev);
+      if (updated.has(key)) {
+        updated.delete(key);
+      } else {
+        updated.add(key);
+      }
+      return updated;
+    });
+  };
+
+  // Create manual mapping group
+  const createManualMapping = () => {
+    if (selectedSpecialties.size < 2) {
+      toast.error('Please select at least 2 specialties to map together');
+      return;
+    }
+
+    const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(key => {
+      const [vendor, specialty] = key.split(':');
+      return {
+        specialty,
+        vendor,
+        metrics: specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.metrics
+      };
+    });
+
+    const newGroup: MappedGroup = {
+      id: Math.random().toString(36).substr(2, 9),
+      specialties: selectedItems,
+      createdAt: new Date()
+    };
+
+    setMappedGroups(prev => [...prev, newGroup]);
+    setSelectedSpecialties(new Set());
+    
+    // Notify parent component
+    const sourceSpecialty = selectedItems[0].specialty;
+    const mappedSpecialties = selectedItems.slice(1).map(item => item.specialty);
+    onMappingChange(sourceSpecialty, mappedSpecialties);
+    
+    toast.success('Created new mapping group');
+  };
+
+  // Add click outside handler to close dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (showAddMore && !(event.target as Element).closest('.relative')) {
+        setShowAddMore(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showAddMore]);
+
+  return (
+    <div className="h-full flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">
+                Specialty Mapping Studio
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Map similar specialties across different survey vendors
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg shadow-sm">
+                <button
+                  onClick={() => setViewMode('auto')}
+                  className={`px-4 py-2 text-sm font-medium rounded-l-lg border
+                    ${viewMode === 'auto'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                >
+                  Auto-Map Mode
+                </button>
+                <button
+                  onClick={() => setViewMode('manual')}
+                  className={`px-4 py-2 text-sm font-medium border-y
+                    ${viewMode === 'manual'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                >
+                  Manual Map Mode
+                </button>
+                <button
+                  onClick={() => setViewMode('mapped')}
+                  className={`px-4 py-2 text-sm font-medium rounded-r-lg border
+                    ${viewMode === 'mapped'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
+                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                >
+                  View Mapped
+                </button>
+              </div>
+              <button
+                onClick={generateAllMappings}
+                className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium
+                  bg-white text-gray-700 hover:bg-gray-50 border border-gray-300
+                  transition-colors duration-150 ease-in-out shadow-sm"
+              >
+                <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Help Text */}
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-start">
+              <InformationCircleIcon className="h-5 w-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
+              <div className="text-sm text-blue-700">
+                <p className="font-medium mb-1">How to use:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  {viewMode === 'manual' ? (
+                    <>
+                      <li>Search for specialties using the search bar below</li>
+                      <li>Select specialties you want to map together</li>
+                      <li>Click "Create Mapping" to group selected specialties</li>
+                      <li>Selected specialties will be removed from the list</li>
+                    </>
+                  ) : viewMode === 'auto' ? (
+                    <>
+                      <li>Search for specialties using the search bar below</li>
+                      <li>Review suggested matches in the table</li>
+                      <li>Click ✓ to approve or ✕ to reject matches</li>
+                      <li>Approved matches will be grouped automatically</li>
+                    </>
+                  ) : (
+                    <>
+                      <li>View all your mapped specialty groups</li>
+                      <li>Review mapping details and metrics</li>
+                      <li>Remove mappings if needed</li>
+                      <li>Export or print your mappings</li>
+                    </>
+                  )}
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative max-w-2xl mx-auto">
+            <MagnifyingGlassIcon 
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
+            />
+            <input
+              type="text"
+              placeholder="Type to search specialties across all vendors..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg 
+                focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                shadow-sm text-base placeholder-gray-400"
+            />
+          </div>
         </div>
       </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-auto p-6 space-y-6">
+        {viewMode === 'mapped' ? (
+          // Mapped Specialties View
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium text-gray-900">Mapped Specialties</h3>
+                <span className="text-sm text-gray-500">
+                  {mappedGroups.filter(group =>
+                    searchQuery ? 
+                      group.specialties.some(s => 
+                        s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                      ) : true
+                  ).length} groups
+                </span>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-200">
+              {mappedGroups
+                .filter(group =>
+                  searchQuery ? 
+                    group.specialties.some(s => 
+                      s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                    ) : true
+                )
+                .map((group) => (
+                <div key={group.id} className="px-6 py-4 hover:bg-gray-50">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex flex-wrap gap-2">
+                        {group.specialties.map((specialty, index) => (
+                          <div key={`${specialty.vendor}:${specialty.specialty}`} 
+                               className="flex items-center">
+                            <span className="inline-flex items-center px-3 py-1 rounded-md text-sm
+                              bg-gray-100 text-gray-900 border border-gray-200">
+                              {specialty.specialty}
+                              <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-blue-100 text-blue-700">
+                                {specialty.vendor}
+                              </span>
+                            </span>
+                            {index < group.specialties.length - 1 && (
+                              <ArrowsRightLeftIcon className="h-4 w-4 mx-2 text-gray-400" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 text-xs text-gray-500">
+                        Created {new Date(group.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setMappedGroups(prev => prev.filter(g => g.id !== group.id));
+                        generateAllMappings();
+                        toast.success('Mapping removed');
+                      }}
+                      className="ml-4 p-2 text-gray-400 hover:text-red-500 rounded-md
+                        hover:bg-red-50 transition-colors"
+                      title="Remove mapping"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {(mappedGroups.length === 0 || 
+                (searchQuery && !mappedGroups.some(group => 
+                  group.specialties.some(s => 
+                    s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                ))) && (
+                <div className="px-6 py-8 text-center text-gray-500">
+                  {searchQuery
+                    ? "No mapped specialties match your search. Try adjusting your search terms."
+                    : "No specialties have been mapped yet. Use Auto-Map or Manual Map mode to create mappings."}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : viewMode === 'manual' ? (
+          // Manual Mapping Interface
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="h-full flex gap-6 p-6">
+              {/* Specialty Selection Panes */}
+              <div className="flex-1 grid grid-cols-3 gap-6">
+                {Object.entries(filteredSpecialties).map(([vendor, specialties]) => (
+                  <div key={vendor} className="flex flex-col min-w-0 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-semibold text-gray-900">{vendor}</h3>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                          {specialties.length} specialties
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-1.5 bg-gray-50">
+                      <AnimatePresence>
+                        {specialties.map(specialty => (
+                          <motion.div
+                            key={`${specialty.vendor}:${specialty.specialty}`}
+                            layout
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className={`
+                              px-3 py-2.5 rounded-md transition-all cursor-pointer
+                              border shadow-sm
+                              ${selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`)
+                                ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                                : 'bg-white border-gray-200 hover:bg-gray-50'
+                              }
+                            `}
+                            onClick={() => handleSpecialtySelect(specialty)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className={`font-medium truncate ${
+                                  selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`)
+                                    ? 'text-blue-900'
+                                    : 'text-gray-900'
+                                }`}>
+                                  {specialty.specialty}
+                                </div>
+                                {specialty.metrics?.tcc && (
+                                  <div className="mt-1 text-xs text-gray-500">
+                                    TCC: {formatCurrency(specialty.metrics.tcc.p50)}
+                                  </div>
+                                )}
+                              </div>
+                              {selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`) && (
+                                <CheckCircleIcon className="h-5 w-5 text-blue-500 flex-shrink-0 ml-2" />
+                              )}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                      {specialties.length === 0 && (
+                        <div className="px-3 py-4 text-center text-sm text-gray-500">
+                          No specialties found
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Selected Specialties Panel */}
+              <div className="w-80 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900">Selected Specialties</h3>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                      {selectedSpecialties.size} selected
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
+                  <div className="space-y-2">
+                    {Array.from(selectedSpecialties).map(key => {
+                      const [vendor, specialty] = key.split(':');
+                      return (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200 shadow-sm hover:bg-gray-50"
+                        >
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {specialty}
+                            </div>
+                            <div className="mt-0.5 text-xs text-gray-500">
+                              {vendor}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleSpecialtySelect({ specialty, vendor })}
+                            className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50"
+                          >
+                            <XMarkIcon className="h-5 w-5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {selectedSpecialties.size === 0 && (
+                      <div className="px-3 py-4 text-center text-sm text-gray-500">
+                        Select specialties to map together
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="p-3 bg-gradient-to-r from-gray-50 to-white border-t border-gray-200">
+                  <button
+                    onClick={createManualMapping}
+                    disabled={selectedSpecialties.size < 2}
+                    className="w-full px-4 py-2 text-sm font-medium rounded-md
+                      text-white bg-blue-600 hover:bg-blue-700
+                      disabled:opacity-50 disabled:cursor-not-allowed
+                      transition-colors duration-150 ease-in-out shadow-sm"
+                  >
+                    Create Mapping ({selectedSpecialties.size} selected)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Auto-Mapping Interface
+          <div className="bg-white rounded-lg shadow-lg border border-gray-200">
+            {/* Table Header Summary */}
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    Showing {filteredMappings.length} potential matches
+                  </span>
+                  {searchQuery && (
+                    <span className="text-sm text-gray-500">
+                      for "{searchQuery}"
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th scope="col" className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Source Specialty
+                    </th>
+                    <th scope="col" className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Vendor
+                    </th>
+                    <th scope="col" className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Potential Matches
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredMappings.map((mapping) => (
+                    <tr key={`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`}
+                        className="hover:bg-gray-50 group">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-start space-x-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {mapping.sourceSpecialty.specialty}
+                            </div>
+                            {mapping.sourceSpecialty.metrics?.tcc && (
+                              <div className="mt-1 text-xs text-gray-500">
+                                TCC: {formatCurrency(mapping.sourceSpecialty.metrics.tcc.p50)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-800 border border-blue-100">
+                          {mapping.sourceSpecialty.vendor}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="space-y-3">
+                          {/* Add "Accept All" button if there are multiple matches */}
+                          {mapping.matches.length > 1 && (
+                            <div className="flex justify-end mb-2">
+                              <button
+                                onClick={() => {
+                                  // Approve all matches
+                                  mapping.matches.forEach(match => {
+                                    if (!match.status) {
+                                      updateMappingStatus(mapping.sourceSpecialty, match.specialty, 'approved');
+                                    }
+                                  });
+                                }}
+                                className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg
+                                  text-white bg-green-600 hover:bg-green-700 shadow-sm
+                                  transition-colors duration-150 ease-in-out border border-green-500"
+                              >
+                                <CheckIcon className="h-4 w-4 mr-2" />
+                                Accept All Matches ({mapping.matches.length})
+                              </button>
+                            </div>
+                          )}
+                          
+                          {mapping.matches.map((match) => (
+                            <div
+                              key={`${match.specialty.vendor}:${match.specialty.specialty}`}
+                              className={`flex items-center justify-between p-3 rounded-lg border transition-all
+                                ${match.status === 'approved' 
+                                  ? 'bg-green-50 border-green-200 shadow-sm' 
+                                  : match.status === 'rejected'
+                                  ? 'bg-red-50 border-red-200 shadow-sm'
+                                  : 'bg-white border-gray-200 shadow-sm group-hover:border-gray-300'}`}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center flex-wrap gap-2">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {match.specialty.specialty}
+                                  </span>
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
+                                    {match.specialty.vendor}
+                                  </span>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                    ${match.confidence >= 0.95 
+                                      ? 'bg-green-50 text-green-700 border border-green-200' 
+                                      : match.confidence >= 0.8
+                                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                      : 'bg-yellow-50 text-yellow-700 border border-yellow-200'}`}
+                                  >
+                                    {Math.round(match.confidence * 100)}% match
+                                  </span>
+                                  {match.status === 'approved' && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
+                                      Approved
+                                    </span>
+                                  )}
+                                  {match.status === 'rejected' && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                                      Rejected
+                                    </span>
+                                  )}
+                                </div>
+                                {match.specialty.metrics?.tcc && (
+                                  <div className="mt-1.5 text-xs text-gray-500">
+                                    TCC: {formatCurrency(match.specialty.metrics.tcc.p50)}
+                                  </div>
+                                )}
+                                <div className="mt-1.5 text-xs text-gray-500 flex items-center">
+                                  <InformationCircleIcon className="h-4 w-4 mr-1 text-gray-400" />
+                                  {match.reason}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {/* Action buttons */}
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => updateMappingStatus(mapping.sourceSpecialty, match.specialty, 'approved')}
+                                    disabled={match.status === 'approved'}
+                                    className={`p-2 rounded-md transition-colors
+                                      ${match.status === 'approved'
+                                        ? 'bg-green-100 text-green-700 border border-green-200'
+                                        : 'hover:bg-green-50 text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-200'}`}
+                                    title="Approve match"
+                                  >
+                                    <CheckIcon className="h-5 w-5" />
+                                  </button>
+                                  <button
+                                    onClick={() => updateMappingStatus(mapping.sourceSpecialty, match.specialty, 'rejected')}
+                                    disabled={match.status === 'rejected'}
+                                    className={`p-2 rounded-md transition-colors
+                                      ${match.status === 'rejected'
+                                        ? 'bg-red-100 text-red-700 border border-red-200'
+                                        : 'hover:bg-red-50 text-gray-500 hover:text-red-700 border border-gray-200 hover:border-red-200'}`}
+                                    title="Reject match"
+                                  >
+                                    <XMarkIcon className="h-5 w-5" />
+                                  </button>
+                                </div>
+
+                                {/* Undo button for rejected matches */}
+                                {match.status === 'rejected' && (
+                                  <button
+                                    onClick={() => {
+                                      const updatedMappings = allAutoMappings.map(m => {
+                                        if (m.sourceSpecialty.specialty === mapping.sourceSpecialty.specialty) {
+                                          return {
+                                            ...m,
+                                            matches: m.matches.map(mm => 
+                                              mm.specialty.specialty === match.specialty.specialty
+                                                ? { ...mm, status: undefined }
+                                                : mm
+                                            )
+                                          };
+                                        }
+                                        return m;
+                                      });
+                                      setAllAutoMappings(updatedMappings);
+                                    }}
+                                    className="p-2 rounded-md transition-colors hover:bg-gray-50 text-gray-500 hover:text-gray-700 border border-gray-200"
+                                    title="Undo rejection"
+                                  >
+                                    <ArrowPathIcon className="h-5 w-5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Replace the "Add More" button with inline search */}
+                          <div className="relative mt-2">
+                            <div className="flex items-center gap-2">
+                              <div className="relative flex-1">
+                                <input
+                                  type="text"
+                                  placeholder="Search to add more specialties..."
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  onFocus={() => setShowAddMore(true)}
+                                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md
+                                    focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                                <MagnifyingGlassIcon 
+                                  className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+                                />
+                              </div>
+                              <button
+                                onClick={() => setShowAddMore(true)}
+                                className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md
+                                  text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200"
+                              >
+                                <PlusIcon className="h-4 w-4 mr-1.5" />
+                                Add
+                              </button>
+                            </div>
+
+                            {/* Dropdown for search results */}
+                            {showAddMore && (
+                              <div className="absolute z-50 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200">
+                                <div className="max-h-60 overflow-y-auto py-1">
+                                  {Object.entries(specialtiesByVendor).map(([vendor, specialties]) => {
+                                    // Filter out already mapped specialties and current matches
+                                    const availableSpecialties = specialties.filter(s => 
+                                      !mappedGroups.some(group => 
+                                        group.specialties.some(gs => 
+                                          gs.specialty === s.specialty && gs.vendor === s.vendor
+                                        )
+                                      ) &&
+                                      !mapping.matches.some(m => 
+                                        m.specialty.specialty === s.specialty && m.specialty.vendor === s.vendor
+                                      ) &&
+                                      s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                                    );
+
+                                    if (availableSpecialties.length === 0) return null;
+
+                                    return (
+                                      <div key={vendor}>
+                                        <div className="px-3 py-1 text-xs font-medium text-gray-500 bg-gray-50">
+                                          {vendor}
+                                        </div>
+                                        {availableSpecialties.map(specialty => (
+                                          <button
+                                            key={`${specialty.vendor}:${specialty.specialty}`}
+                                            onClick={() => {
+                                              // Add as a new match
+                                              const newMatch = {
+                                                specialty,
+                                                confidence: calculateStringSimilarity(
+                                                  mapping.sourceSpecialty.specialty,
+                                                  specialty.specialty
+                                                ),
+                                                reason: 'Manually added',
+                                                status: 'approved' as const
+                                              };
+                                              
+                                              setAllAutoMappings(prev => prev.map(m => 
+                                                m.sourceSpecialty.specialty === mapping.sourceSpecialty.specialty
+                                                  ? { ...m, matches: [...m.matches, newMatch] }
+                                                  : m
+                                              ));
+                                              
+                                              setShowAddMore(false);
+                                              setSearchQuery('');
+                                              
+                                              toast.success('Added new specialty to mapping');
+                                            }}
+                                            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between"
+                                          >
+                                            <span className="font-medium text-gray-900">
+                                              {specialty.specialty}
+                                            </span>
+                                            <PlusIcon className="h-4 w-4 text-gray-400" />
+                                          </button>
+                                        ))}
+                                      </div>
+                                    );
+                                  })}
+                                  {!Object.entries(specialtiesByVendor).some(([_, specialties]) => 
+                                    specialties.some(s => 
+                                      s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                                    )) && (
+                                    <div className="px-3 py-2 text-sm text-gray-500">
+                                      No matching specialties found
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="border-t px-3 py-2 bg-gray-50">
+                                  <button
+                                    onClick={() => {
+                                      setShowAddMore(false);
+                                      setSearchQuery('');
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-gray-700"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Empty State - Only show in Auto-Map mode */}
+      {viewMode === 'auto' && filteredMappings.length === 0 && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto p-6">
+            <div className="mx-auto h-12 w-12 text-gray-400">
+              <MagnifyingGlassIcon className="h-12 w-12" />
+            </div>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No specialties found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {searchQuery
+                ? "Try adjusting your search terms"
+                : "Start by searching for specialties above"}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
