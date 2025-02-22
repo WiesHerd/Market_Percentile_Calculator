@@ -155,6 +155,8 @@ interface SpecialtySourceInfo {
   totalSources: number;
 }
 
+const STORAGE_KEY = 'specialty-mappings';
+
 const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   surveys,
   onMappingChange,
@@ -162,7 +164,24 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
-  const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>([]);
+  const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>(() => {
+    // Load initial state from localStorage
+    const savedMappings = localStorage.getItem(STORAGE_KEY);
+    if (savedMappings) {
+      try {
+        const parsed = JSON.parse(savedMappings);
+        // Convert date strings back to Date objects
+        return parsed.map((group: any) => ({
+          ...group,
+          createdAt: new Date(group.createdAt)
+        }));
+      } catch (error) {
+        console.error('Error loading saved mappings:', error);
+        return [];
+      }
+    }
+    return [];
+  });
   const [autoMapSuggestions, setAutoMapSuggestions] = useState<AutoMapSuggestion | null>(null);
   const [viewMode, setViewMode] = useState<'auto' | 'manual' | 'mapped'>('auto');
   const [allAutoMappings, setAllAutoMappings] = useState<Array<{
@@ -649,9 +668,19 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showAddMore]);
 
-  // Add clearAllMappings function
+  // Add effect to save mappings whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedGroups));
+    } catch (error) {
+      console.error('Error saving mappings:', error);
+    }
+  }, [mappedGroups]);
+
+  // Update clearAllMappings function
   const clearAllMappings = () => {
     setMappedGroups([]);
+    localStorage.removeItem(STORAGE_KEY); // Clear from localStorage
     generateAllMappings();
     setShowClearConfirmation(false);
     toast.success('All mappings cleared');
