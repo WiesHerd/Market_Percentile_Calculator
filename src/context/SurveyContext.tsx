@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { MappingState, SpecialtyMappingState } from '@/types/mapping';
+import { MappingState, SpecialtyMapping } from '@/types/mapping';
 
 interface SurveyData {
   vendor: string;
@@ -65,14 +65,7 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
 
   const loadSurveyData = () => {
     try {
-      // First, try to load specialty mappings from localStorage
-      const storedMappings = localStorage.getItem('specialtyMappings');
-      if (storedMappings) {
-        const parsedMappings = JSON.parse(storedMappings);
-        setSpecialtyMappings(parsedMappings);
-      }
-
-      // Then load survey data
+      // Load survey data
       const storedSurveys = localStorage.getItem('uploadedSurveys');
       if (storedSurveys) {
         const parsedSurveys = JSON.parse(storedSurveys);
@@ -120,19 +113,25 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
 
         setSurveyData(transformedSurveys);
         
-        // Only set specialty mappings from survey if none were found in localStorage
-        if (!storedMappings) {
-          // Set up the mappings exactly as shown in the first line of mapped specialties
-          const defaultMappings: MappingState = {
-            'Allergy and Immunology': {
-              mappedSpecialties: ['Allergy/Immunology'],
-              notes: 'Standard mapping for Allergy and Immunology variations',
-              resolved: true
-            }
-          };
-
-          setSpecialtyMappings(defaultMappings);
-          localStorage.setItem('specialtyMappings', JSON.stringify(defaultMappings));
+        // Get the most recent specialty mappings from the surveys
+        const sortedSurveys = [...parsedSurveys].sort((a, b) => 
+          (parseInt(b.id) || 0) - (parseInt(a.id) || 0)
+        );
+        
+        if (sortedSurveys.length > 0 && sortedSurveys[0].specialtyMappings) {
+          setSpecialtyMappings(sortedSurveys[0].specialtyMappings);
+          
+          // Calculate confidence scores based on string similarity
+          const scores: Record<string, number> = {};
+          const typedMappings = sortedSurveys[0].specialtyMappings as Record<string, SpecialtyMapping>;
+          Object.entries(typedMappings).forEach(([source, mapping]) => {
+            const maxScore = mapping.mappedSpecialties.reduce((max: number, target: string) => {
+              const similarity = calculateStringSimilarity(source, target);
+              return Math.max(max, similarity);
+            }, 0);
+            scores[source] = maxScore;
+          });
+          setConfidenceScores(scores);
         }
       }
     } catch (error) {

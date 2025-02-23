@@ -2097,59 +2097,39 @@ export default function SurveyManagementPage(): JSX.Element {
   }, []);
 
   const calculateSpecialtyProgress = (): number => {
-    // Log initial state
-    console.log('Calculating specialty progress...');
-    console.log('Number of uploaded surveys:', uploadedSurveys.length);
+    if (!uploadedSurveys.length) return 0;
 
-    // If no surveys are uploaded, return 100%
-    if (uploadedSurveys.length === 0) {
-      console.log('No surveys uploaded, returning 100%');
-      return 100;
-    }
-
-    // Get all unique specialties from uploaded surveys
+    // Get all unique specialties from all surveys
     const allSpecialties = new Set<string>();
     const mappedSpecialties = new Set<string>();
 
-    // Collect all specialties and check which ones are mapped
+    // First collect all specialties
     uploadedSurveys.forEach(survey => {
-      const specialtyColumn = survey.mappings.specialty;
-      if (!specialtyColumn) return;
-
       survey.data.forEach(row => {
-        const specialty = String(row[specialtyColumn] || '').trim();
+        const specialty = String(row[survey.mappings.specialty] || '').trim();
         if (specialty) {
           allSpecialties.add(specialty);
-          // Check if this specialty is mapped
-          const mapping = specialtyMappings[specialty];
-          if (mapping && (mapping.isSingleSource || (mapping.mappedSpecialties && mapping.mappedSpecialties.length > 0))) {
-            mappedSpecialties.add(specialty);
-          }
         }
       });
     });
 
+    // Then count mapped specialties (including single source)
+    allSpecialties.forEach(specialty => {
+      const mapping = specialtyMappings[specialty];
+      if (mapping && (mapping.isSingleSource || (mapping.mappedSpecialties && mapping.mappedSpecialties.length > 0))) {
+        mappedSpecialties.add(specialty);
+      }
+    });
+
     // Log detailed information
-    console.log('Total unique specialties found:', allSpecialties.size);
-    console.log('All specialties:', Array.from(allSpecialties));
-    console.log('Number of mapped specialties:', mappedSpecialties.size);
-    console.log('Mapped specialties:', Array.from(mappedSpecialties));
+    console.log('Specialty Mapping Progress:', {
+      totalSpecialties: allSpecialties.size,
+      mappedCount: mappedSpecialties.size,
+      unmappedSpecialties: Array.from(allSpecialties).filter(s => !mappedSpecialties.has(s))
+    });
 
-    // If there are no specialties at all, return 100%
-    if (allSpecialties.size === 0) {
-      console.log('No specialties found in surveys, returning 100%');
-      return 100;
-    }
-
-    // If all specialties are mapped, return 100%
-    if (mappedSpecialties.size === allSpecialties.size) {
-      console.log('All specialties are mapped, returning 100%');
-      return 100;
-    }
-
-    // Otherwise return -1 to indicate "In Process"
-    console.log('Some specialties are unmapped, returning -1 (In Process)');
-    return -1;
+    // Return 100 if all specialties are mapped, -1 otherwise
+    return mappedSpecialties.size === allSpecialties.size ? 100 : -1;
   };
 
   const handleSaveSurvey = () => {

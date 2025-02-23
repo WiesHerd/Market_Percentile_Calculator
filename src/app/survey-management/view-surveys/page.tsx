@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { MagnifyingGlassIcon, ArrowPathIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { useSurveyContext, SurveyProvider } from '@/context/SurveyContext';
-import { MappingState } from '@/types/mapping';
 
 interface SurveyData {
   specialty: string;
@@ -36,14 +34,12 @@ interface UploadedSurvey {
   data: SurveyData[];
 }
 
-function ViewSurveysContent() {
+export default function ViewSurveysPage() {
   const [surveys, setSurveys] = useState<UploadedSurvey[]>([]);
   const [selectedSurvey, setSelectedSurvey] = useState<UploadedSurvey | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showAggregated, setShowAggregated] = useState(false);
   const searchParams = useSearchParams();
-  const { specialtyMappings } = useSurveyContext();
 
   useEffect(() => {
     const loadSurveys = () => {
@@ -160,76 +156,9 @@ function ViewSurveysContent() {
     return vendorMap[vendor.toLowerCase()] || vendor;
   };
 
-  const aggregateSurveys = (): SurveyData[] => {
-    // Get all unique specialties across all surveys
-    const allSpecialties = new Set<string>();
-    surveys.forEach(survey => {
-      survey.data.forEach(item => {
-        allSpecialties.add(item.specialty);
-      });
-    });
-
-    return Array.from(allSpecialties).map(specialty => {
-      // Find this specialty in all surveys
-      const specialtyData = surveys.flatMap(survey =>
-        survey.data.filter(item => item.specialty === specialty)
-      );
-
-      // Calculate averages for each metric and percentile
-      const aggregated: SurveyData = {
-        specialty,
-        tcc: {
-          p25: 0,
-          p50: 0,
-          p75: 0,
-          p90: 0
-        },
-        wrvu: {
-          p25: 0,
-          p50: 0,
-          p75: 0,
-          p90: 0
-        },
-        cf: {
-          p25: 0,
-          p50: 0,
-          p75: 0,
-          p90: 0
-        }
-      };
-
-      ['tcc', 'wrvu', 'cf'].forEach((metric) => {
-        ['p25', 'p50', 'p75', 'p90'].forEach((percentile) => {
-          const values = specialtyData
-            .map(d => {
-              const metricData = d[metric as keyof SurveyData];
-              return metricData && typeof metricData === 'object' ? 
-                (metricData as Record<string, number>)[percentile] : 
-                undefined;
-            })
-            .filter((v): v is number => typeof v === 'number' && !isNaN(v));
-          
-          if (values.length > 0) {
-            const avg = values.reduce((a, b) => a + b, 0) / values.length;
-            const metricObj = aggregated[metric as keyof SurveyData];
-            if (metricObj && typeof metricObj === 'object') {
-              (metricObj as Record<string, number>)[percentile] = avg;
-            }
-          }
-        });
-      });
-
-      return aggregated;
-    });
-  };
-
-  const filteredData = showAggregated 
-    ? aggregateSurveys().filter(item =>
-        item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : (selectedSurvey?.data.filter(item =>
-        item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
-      ) || []);
+  const filteredData = selectedSurvey?.data.filter(item =>
+    item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -242,33 +171,20 @@ function ViewSurveysContent() {
             </p>
           </div>
           <div className="flex gap-4">
-            {!showAggregated && (
-              <select
-                value={selectedSurvey?.id || ''}
-                onChange={(e) => {
-                  const survey = surveys.find(s => s.id === e.target.value);
-                  setSelectedSurvey(survey || null);
-                }}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                {surveys.map(survey => (
-                  <option key={survey.id} value={survey.id}>
-                    {formatVendorName(survey.vendor)}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={() => setShowAggregated(!showAggregated)}
-              className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                showAggregated
-                  ? 'border-blue-600 text-blue-600 bg-blue-50 hover:bg-blue-100'
-                  : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-              }`}
+            <select
+              value={selectedSurvey?.id || ''}
+              onChange={(e) => {
+                const survey = surveys.find(s => s.id === e.target.value);
+                setSelectedSurvey(survey || null);
+              }}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              <ChartBarIcon className="h-4 w-4 mr-2" />
-              {showAggregated ? 'Show Individual Surveys' : 'Show Aggregated Data'}
-            </button>
+              {surveys.map(survey => (
+                <option key={survey.id} value={survey.id}>
+                  {formatVendorName(survey.vendor)}
+                </option>
+              ))}
+            </select>
             <Link
               href="/survey-management"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -278,22 +194,11 @@ function ViewSurveysContent() {
           </div>
         </div>
 
-        {selectedSurvey && !showAggregated && (
+        {selectedSurvey && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-center">
             <p className="text-sm text-gray-600">
               Note: This is synthetic data generated for illustration purposes only and does not represent actual survey information.
             </p>
-          </div>
-        )}
-
-        {showAggregated && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center">
-              <ChartBarIcon className="h-5 w-5 text-blue-500 mr-2" />
-              <p className="text-sm text-blue-700">
-                Showing averaged data across all surveys. Values represent the mean of each percentile across all available surveys.
-              </p>
-            </div>
           </div>
         )}
 
@@ -365,17 +270,7 @@ function ViewSurveysContent() {
                     {filteredData.map((item, index) => (
                       <tr key={item.specialty} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                         <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit">
-                          <Link 
-                            href={`/survey-analytics?specialty=${encodeURIComponent(
-                              // Find parent specialty or use current if no mapping exists
-                              Object.entries(specialtyMappings).find(([parent, mapping]) => 
-                                mapping.mappedSpecialties.includes(item.specialty) || parent === item.specialty
-                              )?.[0] || item.specialty
-                            )}`}
-                            className="text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            {item.specialty}
-                          </Link>
+                          {item.specialty}
                         </td>
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">{item.tcc ? formatValue(item.tcc.p25, 'tcc') : 'N/A'}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.tcc ? formatValue(item.tcc.p50, 'tcc') : 'N/A'}</td>
@@ -408,13 +303,5 @@ function ViewSurveysContent() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function ViewSurveysPage() {
-  return (
-    <SurveyProvider>
-      <ViewSurveysContent />
-    </SurveyProvider>
   );
 } 

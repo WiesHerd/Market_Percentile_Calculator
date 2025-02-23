@@ -1,15 +1,18 @@
 'use client';
 
-import SurveyAnalytics from '@/components/SurveyAnalytics';
+import React from 'react';
 import { SurveyProvider } from '@/context/SurveyContext';
+import { default as SurveyAnalytics } from '@/components/SurveyAnalytics';
 
 export default function SurveyAnalyticsPage() {
   return (
-    <SurveyProvider>
-      <div className="container mx-auto px-4 py-8">
-        <SurveyAnalytics />
+    <div className="min-h-screen bg-gray-50">
+      <div className="px-8 sm:px-12 lg:px-8">
+        <SurveyProvider>
+          <SurveyAnalytics />
+        </SurveyProvider>
       </div>
-    </SurveyProvider>
+    </div>
   );
 }
  

@@ -17,11 +17,7 @@ import {
   ChevronDoubleRightIcon,
   UserIcon,
   ArrowUpTrayIcon,
-  ClockIcon,
-  PresentationChartBarIcon,
-  ChartPieIcon,
-  BookOpenIcon,
-  TableCellsIcon
+  ClockIcon
 } from '@heroicons/react/24/outline';
 
 interface AppLayoutProps {
@@ -74,7 +70,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     {
       name: 'Percentile Calculator',
       href: '/',
-      icon: ChartPieIcon
+      icon: ChartBarIcon
     },
     { 
       name: 'Survey Management', 
@@ -92,11 +88,6 @@ export function AppLayout({ children }: AppLayoutProps) {
           icon: DocumentTextIcon 
         },
         { 
-          name: 'Manual Upload', 
-          href: '/market-data', 
-          icon: TableCellsIcon 
-        },
-        { 
           name: 'Recent Uploads', 
           href: '/survey-management/recent', 
           icon: ClockIcon 
@@ -105,13 +96,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     { 
       name: 'Market Analysis', 
-      href: '#',
+      href: '/market-data', 
       icon: ChartBarIcon,
       subItems: [
         {
           name: 'Specialty Review',
           href: '/survey-analytics',
-          icon: PresentationChartBarIcon
+          icon: ChartBarIcon
         },
         { 
           name: 'Compare Specialties', 
@@ -128,7 +119,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         { 
           name: 'Documentation', 
           href: '/help',
-          icon: BookOpenIcon 
+          icon: QuestionMarkCircleIcon 
         },
         { 
           name: 'About Me', 
@@ -164,9 +155,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             {navigationItems.map((item) => (
               <div key={item.name} className="mb-4">
                 {item.href === '#' ? (
-                  <div className={`flex items-center px-3 py-2 text-sm font-medium text-gray-600 ${isCollapsed ? 'justify-center' : ''}`}>
-                    <item.icon className={`h-5 w-5 ${isCollapsed ? '' : 'mr-3'} text-gray-400`} />
-                    {!isCollapsed && <span className="truncate">{item.name}</span>}
+                  <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-600">
+                    <item.icon className="h-5 w-5 mr-3 text-gray-400" />
+                    <span className="truncate">{item.name}</span>
                   </div>
                 ) : (
                   <Link
@@ -174,7 +165,6 @@ export function AppLayout({ children }: AppLayoutProps) {
                     title={isCollapsed ? item.name : ''}
                     className={`
                       group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                      ${isCollapsed ? 'justify-center' : ''}
                       ${pathname === item.href
                         ? 'bg-blue-50 text-blue-600'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -182,8 +172,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                     `}
                   >
                     <item.icon className={`
-                      h-5 w-5
-                      ${isCollapsed ? '' : 'mr-3'}
+                      ${isCollapsed ? '' : 'mr-3'} h-5 w-5
                       ${pathname === item.href
                         ? 'text-blue-600'
                         : 'text-gray-400 group-hover:text-gray-500'
@@ -194,16 +183,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                 )}
 
                 {/* Sub-items */}
-                {item.subItems && (
-                  <div className={`mt-2 space-y-1 ${isCollapsed ? 'px-0' : 'ml-6'}`}>
+                {!isCollapsed && item.subItems && item.subItems.length > 0 && (
+                  <div className="ml-6 mt-2 space-y-1">
                     {item.subItems.map((subItem) => (
                       <Link
                         key={subItem.href}
                         href={subItem.href}
-                        title={isCollapsed ? subItem.name : ''}
                         className={`
                           group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
-                          ${isCollapsed ? 'justify-center' : ''}
                           ${pathname === subItem.href
                             ? 'bg-blue-50 text-blue-600'
                             : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
@@ -211,14 +198,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                         `}
                       >
                         <subItem.icon className={`
-                          h-4 w-4
-                          ${isCollapsed ? '' : 'mr-3'}
+                          mr-3 h-4 w-4
                           ${pathname === subItem.href
                             ? 'text-blue-600'
                             : 'text-gray-400 group-hover:text-gray-500'
                           }
                         `} />
-                        {!isCollapsed && <span className="truncate">{subItem.name}</span>}
+                        <span className="truncate">{subItem.name}</span>
                       </Link>
                     ))}
                   </div>
