@@ -250,6 +250,15 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       result[vendor].sort((a, b) => a.specialty.localeCompare(b.specialty));
     });
 
+    // Log the total count of unmapped specialties
+    const totalUnmapped = Object.values(result).reduce((acc, curr) => acc + curr.length, 0);
+    console.log('=== Unmapped Specialties Count ===');
+    console.log(`Total unmapped: ${totalUnmapped}`);
+    Object.entries(result).forEach(([vendor, specialties]) => {
+      console.log(`${vendor}: ${specialties.length} specialties`);
+    });
+    console.log('================================');
+
     return result;
   }, [surveys, mappedGroups]);
 
