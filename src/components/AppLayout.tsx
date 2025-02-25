@@ -8,8 +8,9 @@ import { Transition } from '@headlessui/react';
 import { 
   ChartBarIcon, 
   DocumentChartBarIcon,
-  PresentationChartBarIcon,
-  ArrowsRightLeftIcon,
+  ChartPieIcon,
+  Square3Stack3DIcon,
+  ArrowsPointingOutIcon,
   Bars3Icon,
   XMarkIcon,
   HomeIcon,
@@ -81,7 +82,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     { 
       name: 'Survey Management',
-      href: '#',
+      href: './survey-management',
       icon: FolderIcon,
       subItems: [
         { 
@@ -104,28 +105,28 @@ export function AppLayout({ children }: AppLayoutProps) {
     { 
       name: 'Survey Comparison', 
       href: '#', 
-      icon: PresentationChartBarIcon,
+      icon: ChartBarIcon,
       subItems: [
         {
           name: 'Survey Aggregation',
           href: '/survey-analytics',
-          icon: MagnifyingGlassIcon
+          icon: Square3Stack3DIcon
         },
         { 
           name: 'Compare Specialties', 
           href: '/compare', 
-          icon: ArrowsRightLeftIcon 
+          icon: ArrowsPointingOutIcon 
         }
       ]
     },
     { 
       name: 'Help & Resources', 
-      href: '/help',
+      href: './help',
       icon: QuestionMarkCircleIcon,
       subItems: [
         { 
           name: 'Documentation', 
-          href: '/help',
+          href: './help',
           icon: BookOpenIcon 
         },
         { 
@@ -151,9 +152,23 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className={`p-4 ${isCollapsed ? 'px-3' : ''}`}>
               <Link href="/" className={`block ${isCollapsed ? 'mx-auto w-10' : ''}`}>
                 <div className="flex items-center">
-                  <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
-                    <span className="text-white font-bold text-xl">WH</span>
+                  <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tl from-blue-700 via-blue-600 to-blue-500 flex items-center justify-center overflow-hidden group shadow-lg shadow-blue-500/20 ring-2 ring-blue-400/20">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="relative flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M3 13.5L7 9.5M7 9.5L11 13.5M7 9.5V20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M21 10.5L17 14.5M17 14.5L13 10.5M17 14.5V4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path className="opacity-50" d="M12 4L14 6L12 8L10 6L12 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path className="opacity-75" d="M12 16L14 18L12 20L10 18L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
                   </div>
+                  {!isCollapsed && (
+                    <div className="ml-3">
+                      <p className="text-sm font-semibold text-gray-900 tracking-wide">Market Intelligence</p>
+                      <p className="text-xs font-medium bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">Analytics Suite</p>
+                    </div>
+                  )}
                 </div>
               </Link>
             </div>
@@ -299,20 +314,17 @@ export function AppLayout({ children }: AppLayoutProps) {
             {/* Footer */}
             <div className={`p-4 border-t border-gray-200 ${isCollapsed ? 'px-3' : ''}`}>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">WH</span>
+                {!isCollapsed && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Market Intelligence</p>
+                    <p className="text-xs text-blue-600">Analytics Suite v1.0.0</p>
                   </div>
-                  {!isCollapsed && (
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Market Intelligence</p>
-                      <p className="text-xs text-gray-500">Version 1.0.0</p>
-                    </div>
-                  )}
-                </div>
+                )}
                 <button
                   onClick={() => setIsCollapsed(!isCollapsed)}
-                  className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 ease-in-out"
+                  className={`p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 ease-in-out ${
+                    isCollapsed ? 'w-full flex justify-center' : ''
+                  }`}
                   title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
                   {isCollapsed ? (
