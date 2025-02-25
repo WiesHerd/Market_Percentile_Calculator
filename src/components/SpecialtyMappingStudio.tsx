@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { MagnifyingGlassIcon, ArrowsRightLeftIcon, XMarkIcon, CheckIcon, CheckCircleIcon, ArrowPathIcon, PlusIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { Dialog } from '@headlessui/react';
+import { MagnifyingGlassIcon, ArrowsRightLeftIcon, XMarkIcon, CheckIcon, CheckCircleIcon, ArrowPathIcon, PlusIcon, InformationCircleIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { calculateStringSimilarity } from '@/utils/string';
 import { findMatchingSpecialties } from '@/utils/surveySpecialtyMapping';
 import type { SurveyVendor, SpecialtyMapping } from '@/utils/surveySpecialtyMapping';
@@ -13,7 +14,7 @@ import {
 } from '@/utils/specialtyMapping';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatCurrency, formatNumber } from '@/utils/formatting';
-import { Dialog, Transition } from '@headlessui/react';
+import { Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 
 interface SpecialtyMetrics {
@@ -196,6 +197,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const [manualMappingMode, setManualMappingMode] = useState(false);
   const [showAddMore, setShowAddMore] = useState(false);
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Format vendor name consistently
   const formatVendorName = (vendor: string): string => {
@@ -249,15 +251,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     Object.keys(result).forEach(vendor => {
       result[vendor].sort((a, b) => a.specialty.localeCompare(b.specialty));
     });
-
-    // Log the total count of unmapped specialties
-    const totalUnmapped = Object.values(result).reduce((acc, curr) => acc + curr.length, 0);
-    console.log('=== Unmapped Specialties Count ===');
-    console.log(`Total unmapped: ${totalUnmapped}`);
-    Object.entries(result).forEach(([vendor, specialties]) => {
-      console.log(`${vendor}: ${specialties.length} specialties`);
-    });
-    console.log('================================');
 
     return result;
   }, [surveys, mappedGroups]);
@@ -695,6 +688,18 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     toast.success('All mappings cleared');
   };
 
+  // Check if all specialties are mapped
+  const allSpecialtiesMapped = useMemo(() => {
+    // Count total unmapped specialties across all vendors
+    let totalUnmapped = 0;
+    
+    Object.values(specialtiesByVendor).forEach(specialties => {
+      totalUnmapped += specialties.length;
+    });
+    
+    return totalUnmapped === 0;
+  }, [specialtiesByVendor]);
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -702,14 +707,42 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         <div className="px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Specialty Mapping Studio
-              </h2>
+              <div className="flex items-center">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Specialty Mapping Studio
+                </h2>
+                <button
+                  onClick={() => setShowHelpModal(true)}
+                  className="ml-2 text-gray-400 hover:text-blue-500 focus:outline-none"
+                  title="View help information"
+                >
+                  <InformationCircleIcon className="h-5 w-5" />
+                </button>
+              </div>
               <p className="mt-1 text-sm text-gray-500">
                 Map similar specialties across different survey vendors
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                className={`inline-flex items-center px-4 py-2 rounded-md text-sm font-medium
+                  ${allSpecialtiesMapped 
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-yellow-50 text-yellow-700 border border-yellow-200'}
+                  transition-colors duration-150 ease-in-out shadow-sm`}
+              >
+                {allSpecialtiesMapped ? (
+                  <>
+                    <CheckCircleIcon className="h-4 w-4 mr-1.5" />
+                    100% Complete
+                  </>
+                ) : (
+                  <>
+                    <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+                    In Progress
+                  </>
+                )}
+              </button>
               <div className="flex rounded-lg shadow-sm">
                 <button
                   onClick={() => setViewMode('auto')}
@@ -740,15 +773,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 </button>
               </div>
               <button
-                onClick={generateAllMappings}
-                className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium
-                  bg-white text-gray-700 hover:bg-gray-50 border border-gray-300
-                  transition-colors duration-150 ease-in-out shadow-sm"
-              >
-                <ArrowPathIcon className="h-4 w-4 mr-1.5" />
-                Refresh
-              </button>
-              <button
                 onClick={() => setShowClearConfirmation(true)}
                 className="inline-flex items-center px-4 py-2 rounded-md text-sm font-medium
                   bg-white text-red-600 hover:bg-red-50 border border-red-200
@@ -760,39 +784,92 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             </div>
           </div>
 
-          {/* Help Text */}
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div className="flex items-start">
-              <InformationCircleIcon className="h-5 w-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" />
-              <div className="text-sm text-blue-700">
-                <p className="font-medium mb-1">How to use:</p>
-                <ol className="list-decimal list-inside space-y-1">
-                  {viewMode === 'manual' ? (
-                    <>
-                      <li>Search for specialties using the search bar below</li>
-                      <li>Select specialties you want to map together</li>
-                      <li>Click "Create Mapping" to group selected specialties</li>
-                      <li>Selected specialties will be removed from the list</li>
-                    </>
-                  ) : viewMode === 'auto' ? (
-                    <>
-                      <li>Search for specialties using the search bar below</li>
+          {/* Help Modal */}
+          <Dialog
+            open={showHelpModal}
+            onClose={() => setShowHelpModal(false)}
+            className="relative z-50"
+          >
+            <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
+            
+            <div className="fixed inset-0 flex items-start justify-end p-4">
+              <Dialog.Panel className="w-[480px] mt-16 mr-4 rounded-xl bg-white shadow-xl border border-gray-100">
+                <div className="p-5 border-b border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <Dialog.Title className="text-lg font-semibold text-gray-900 flex items-center">
+                      <InformationCircleIcon className="h-5 w-5 text-blue-500 mr-2" />
+                      How to Use
+                    </Dialog.Title>
+                    <button
+                      onClick={() => setShowHelpModal(false)}
+                      className="text-gray-400 hover:text-gray-500 hover:bg-gray-100 rounded-full p-1 transition-colors"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-5 space-y-5 max-h-[calc(100vh-200px)] overflow-y-auto">
+                  <div className="rounded-lg border border-gray-100 p-4">
+                    <h3 className="text-sm font-semibold text-blue-700 mb-2">Auto-Map Mode</h3>
+                    <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                      <li>Search for specialties using the search bar</li>
                       <li>Review suggested matches in the table</li>
                       <li>Click ✓ to approve or ✕ to reject matches</li>
                       <li>Approved matches will be grouped automatically</li>
-                    </>
-                  ) : (
-                    <>
+                      <li>Similar specialties will be suggested based on name matching</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-gradient-to-r from-blue-50 to-blue-50/50 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-blue-700 mb-2">Manual Map Mode</h3>
+                    <div className="space-y-4">
+                      <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                        <li>Search for specialties using the search bar</li>
+                        <li>Select specialties you want to map together</li>
+                        <li>Click "Create Mapping" to group selected specialties</li>
+                        <li>Selected specialties will be removed from the list</li>
+                      </ol>
+                      
+                      <div className="bg-white rounded-md p-3 border border-blue-100">
+                        <p className="font-medium text-gray-700 mb-2">Single Source Mapping:</p>
+                        <p className="text-sm text-gray-600 mb-2">Use this when a specialty exists in only one survey vendor and has no equivalent matches in other surveys.</p>
+                        <p className="font-medium text-gray-700 mb-1">When to use:</p>
+                        <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                          <li>Specialty is unique to one vendor</li>
+                          <li>No similar specialties exist in other surveys</li>
+                          <li>Specialty should be included in final dataset</li>
+                        </ul>
+                        <p className="text-xs text-blue-600 mt-2">💡 Tip: Use single source mapping to preserve unique specialties rather than forcing incorrect matches.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-gray-100 p-4">
+                    <h3 className="text-sm font-semibold text-blue-700 mb-2">View Mapped</h3>
+                    <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
                       <li>View all your mapped specialty groups</li>
                       <li>Review mapping details and metrics</li>
                       <li>Remove mappings if needed</li>
                       <li>Export or print your mappings</li>
-                    </>
-                  )}
-                </ol>
-              </div>
+                      <li>Track mapping progress and completion status</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-blue-700 mb-2">Pro Tips</h3>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-gray-600">
+                      <li>Use search to quickly find specialties</li>
+                      <li>Auto-Map mode for faster similar specialty mapping</li>
+                      <li>Manual mode for more mapping control</li>
+                      <li>Clear all mappings to start over if needed</li>
+                      <li>Progress indicator shows mapping completion</li>
+                    </ul>
+                  </div>
+                </div>
+              </Dialog.Panel>
             </div>
-          </div>
+          </Dialog>
 
           {/* Search Bar */}
           <div className="relative max-w-2xl mx-auto">
@@ -1280,7 +1357,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                     className={`p-2 rounded-md transition-colors
                                       ${match.status === 'approved'
                                         ? 'bg-green-100 text-green-700 border border-green-200'
-                                        : 'hover:bg-green-50 text-gray-500 hover:text-green-700 border border-gray-200 hover:border-green-200'}`}
+                                        : 'hover:bg-green-50 text-gray-500 hover:text-green-700 border border-gray-200'}`}
                                     title="Approve match"
                                   >
                                     <CheckIcon className="h-5 w-5" />

@@ -2097,52 +2097,59 @@ export default function SurveyManagementPage(): JSX.Element {
   }, []);
 
   const calculateSpecialtyProgress = (): number => {
-    if (!uploadedSurveys || uploadedSurveys.length === 0) {
-      console.log('Specialty Mapping Progress: No surveys uploaded (0%)');
-      return 0;
+    // Log initial state
+    console.log('Calculating specialty progress...');
+    console.log('Number of uploaded surveys:', uploadedSurveys.length);
+
+    // If no surveys are uploaded, return 100%
+    if (uploadedSurveys.length === 0) {
+      console.log('No surveys uploaded, returning 100%');
+      return 100;
     }
 
-    // Use a Set to track unique unmapped specialties
-    const unmappedSpecialties = new Set<string>();
-    const unmappedDetails: { specialty: string; vendor: string }[] = [];
+    // Get all unique specialties from uploaded surveys
+    const allSpecialties = new Set<string>();
+    const mappedSpecialties = new Set<string>();
 
+    // Collect all specialties and check which ones are mapped
     uploadedSurveys.forEach(survey => {
+      const specialtyColumn = survey.mappings.specialty;
+      if (!specialtyColumn) return;
+
       survey.data.forEach(row => {
-        if (row.specialty && typeof row.specialty === 'string') {
-          const specialty = row.specialty.trim();
-          // Check if specialty is not resolved and not marked as single source
-          if (!survey.specialtyMappings?.[specialty]?.resolved && 
-              !survey.specialtyMappings?.[specialty]?.isSingleSource) {
-            unmappedSpecialties.add(specialty);
-            unmappedDetails.push({
-              specialty: specialty,
-              vendor: survey.vendor
-            });
+        const specialty = String(row[specialtyColumn] || '').trim();
+        if (specialty) {
+          allSpecialties.add(specialty);
+          // Check if this specialty is mapped
+          const mapping = specialtyMappings[specialty];
+          if (mapping && (mapping.isSingleSource || (mapping.mappedSpecialties && mapping.mappedSpecialties.length > 0))) {
+            mappedSpecialties.add(specialty);
           }
         }
       });
     });
 
-    const unmappedCount = unmappedSpecialties.size;
+    // Log detailed information
+    console.log('Total unique specialties found:', allSpecialties.size);
+    console.log('All specialties:', Array.from(allSpecialties));
+    console.log('Number of mapped specialties:', mappedSpecialties.size);
+    console.log('Mapped specialties:', Array.from(mappedSpecialties));
 
-    // Log detailed progress information
-    console.log('=== Specialty Mapping Progress ===');
-    console.log(`Total unmapped specialties: ${unmappedCount}`);
-    
-    if (unmappedCount > 0) {
-      console.log('\nUnmapped Specialties:');
-      unmappedDetails.forEach(detail => {
-        console.log(`- ${detail.specialty} (${detail.vendor})`);
-      });
-      console.log('\nProgress: In Process');
-      console.log(`Remaining: ${unmappedCount} specialties to map`);
-      return -1;
-    } else {
-      console.log('\nAll specialties have been mapped!');
-      console.log('Status: 100% Complete');
-      console.log('=== Mapping Complete! ===');
+    // If there are no specialties at all, return 100%
+    if (allSpecialties.size === 0) {
+      console.log('No specialties found in surveys, returning 100%');
       return 100;
     }
+
+    // If all specialties are mapped, return 100%
+    if (mappedSpecialties.size === allSpecialties.size) {
+      console.log('All specialties are mapped, returning 100%');
+      return 100;
+    }
+
+    // Otherwise return -1 to indicate "In Process"
+    console.log('Some specialties are unmapped, returning -1 (In Process)');
+    return -1;
   };
 
   const handleSaveSurvey = () => {

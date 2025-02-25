@@ -39,6 +39,7 @@ export default function ViewSurveysPage() {
   const [selectedSurvey, setSelectedSurvey] = useState<UploadedSurvey | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showAggregated, setShowAggregated] = useState(false);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -171,20 +172,38 @@ export default function ViewSurveysPage() {
             </p>
           </div>
           <div className="flex gap-4">
-            <select
-              value={selectedSurvey?.id || ''}
-              onChange={(e) => {
-                const survey = surveys.find(s => s.id === e.target.value);
-                setSelectedSurvey(survey || null);
-              }}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            {!showAggregated && (
+              <select
+                value={selectedSurvey?.id || ''}
+                onChange={(e) => {
+                  // If the value is "manual-upload", navigate to the market-data page
+                  if (e.target.value === "manual-upload") {
+                    window.location.href = "/market-data";
+                    return;
+                  }
+                  const survey = surveys.find(s => s.id === e.target.value);
+                  setSelectedSurvey(survey || null);
+                }}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                {surveys.map(survey => (
+                  <option key={survey.id} value={survey.id}>
+                    {formatVendorName(survey.vendor)}
+                  </option>
+                ))}
+                <option value="manual-upload">Manual Upload</option>
+              </select>
+            )}
+            <button
+              onClick={() => setShowAggregated(!showAggregated)}
+              className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                showAggregated
+                  ? 'border-blue-600 text-blue-600 bg-blue-50 hover:bg-blue-100'
+                  : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+              }`}
             >
-              {surveys.map(survey => (
-                <option key={survey.id} value={survey.id}>
-                  {formatVendorName(survey.vendor)}
-                </option>
-              ))}
-            </select>
+              {showAggregated ? 'Show Individual Surveys' : 'Show Aggregated Data'}
+            </button>
             <Link
               href="/survey-management"
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -206,20 +225,17 @@ export default function ViewSurveysPage() {
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="p-6">
             <div className="flex items-center justify-between mb-6">
-              <div className="max-w-xs w-full">
-                <label htmlFor="search" className="sr-only">Search specialties</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    id="search"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search specialty..."
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                  />
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                    <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
-                  </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  id="search"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search specialty..."
+                  className="block w-64 rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                />
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
+                  <MagnifyingGlassIcon className="h-4 w-4 text-gray-400" />
                 </div>
               </div>
             </div>
