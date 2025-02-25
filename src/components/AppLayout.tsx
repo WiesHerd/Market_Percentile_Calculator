@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Popover } from '@headlessui/react';
+import { Transition } from '@headlessui/react';
 import { 
   ChartBarIcon, 
   DocumentChartBarIcon,
-  PresentationChartBarIcon, 
+  PresentationChartBarIcon,
   ArrowsRightLeftIcon,
   Bars3Icon,
   XMarkIcon,
@@ -17,12 +18,13 @@ import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   UserIcon,
-  ArrowUpTrayIcon,
   ClockIcon,
   FolderIcon,
   CalculatorIcon,
   BookOpenIcon,
-  TableCellsIcon
+  TableCellsIcon,
+  MagnifyingGlassIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline';
 
 interface AppLayoutProps {
@@ -107,7 +109,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         {
           name: 'Specialty Review',
           href: '/survey-analytics',
-          icon: DocumentChartBarIcon
+          icon: MagnifyingGlassIcon
         },
         { 
           name: 'Compare Specialties', 
@@ -161,69 +163,89 @@ export function AppLayout({ children }: AppLayoutProps) {
               {navigationItems.map((item) => (
                 <div key={item.name}>
                   {item.href === '#' ? (
-                    // Section Header - Hide in collapsed state
-                    !isCollapsed && (
-                      <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-600">
-                        <item.icon className="h-5 w-5 flex-shrink-0 text-gray-400 mr-3" />
-                        <span className="truncate">{item.name}</span>
-                      </div>
-                    )
-                  ) : (
-                    // Navigation Link
-                    <Popover className="relative">
-                      {({ open }) => (
+                    <div className="relative group">
+                      {!isCollapsed ? (
+                        // Section Header - Show only in expanded state
+                        <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-600">
+                          <item.icon className="h-5 w-5 flex-shrink-0 text-gray-400 mr-3" />
+                          <span className="truncate">{item.name}</span>
+                        </div>
+                      ) : (
+                        // Show icon with submenu in collapsed state
                         <>
-                          <Link
-                            href={item.href}
-                            className={`
-                              group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors w-full
-                              ${pathname === item.href
-                                ? 'bg-blue-50 text-blue-600'
-                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                              }
-                            `}
-                          >
-                            <item.icon className={`
-                              h-5 w-5 flex-shrink-0
-                              ${pathname === item.href
-                                ? 'text-blue-600'
-                                : 'text-gray-400 group-hover:text-gray-500'
-                              }
-                            `} />
-                            {!isCollapsed && (
-                              <span className="ml-3 truncate">{item.name}</span>
-                            )}
-                            {isCollapsed && (
-                              <Popover.Panel className="absolute z-50 left-full ml-2 transform -translate-y-1/2 top-1/2">
-                                <div className="bg-gray-900 text-white text-sm font-medium px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
-                                  {item.name}
-                                </div>
-                              </Popover.Panel>
-                            )}
-                          </Link>
+                          <div className="flex items-center px-3 py-2 text-sm font-medium text-gray-600">
+                            <item.icon className="h-5 w-5 flex-shrink-0 text-gray-400" />
+                          </div>
+                          <div className="absolute left-full top-0 ml-2 invisible group-hover:visible">
+                            <div className="bg-white rounded-md shadow-lg border border-gray-100 py-1.5 w-48">
+                              <div className="px-4 py-2 text-sm font-medium text-gray-600 border-b border-gray-100">
+                                {item.name}
+                              </div>
+                              {item.subItems?.map((subItem) => (
+                                <Link
+                                  key={subItem.href}
+                                  href={subItem.href}
+                                  className={`
+                                    flex items-center px-4 py-2 text-sm transition-colors
+                                    ${pathname === subItem.href
+                                      ? 'text-blue-600 bg-blue-50'
+                                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                    }
+                                  `}
+                                >
+                                  <subItem.icon className={`
+                                    h-4 w-4 flex-shrink-0
+                                    ${pathname === subItem.href
+                                      ? 'text-blue-600'
+                                      : 'text-gray-400 group-hover:text-gray-500'
+                                    }
+                                  `} />
+                                  <span className="ml-3">{subItem.name}</span>
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
                         </>
                       )}
-                    </Popover>
-                  )}
-
-                  {/* Sub-items - Always show in collapsed state if parent is active */}
-                  {((!isCollapsed || (isCollapsed && (pathname.startsWith(item.href) || item.href === '#'))) && 
-                    item.subItems && item.subItems.length > 0) && (
-                    <div className={`
-                      mt-1 space-y-1
-                      ${isCollapsed ? 'px-1' : 'ml-6'}
-                    `}>
-                      {item.subItems.map((subItem) => (
-                        <Popover key={subItem.href} className="relative">
-                          {({ open }) => (
-                            <>
+                    </div>
+                  ) : (
+                    <div className="relative group">
+                      <Link
+                        href={item.href}
+                        className={`
+                          group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors w-full
+                          ${pathname === item.href
+                            ? 'bg-blue-50 text-blue-600'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          }
+                        `}
+                      >
+                        <item.icon className={`
+                          h-5 w-5 flex-shrink-0
+                          ${pathname === item.href
+                            ? 'text-blue-600'
+                            : 'text-gray-400 group-hover:text-gray-500'
+                          }
+                        `} />
+                        {!isCollapsed && (
+                          <span className="ml-3 truncate">{item.name}</span>
+                        )}
+                      </Link>
+                      {isCollapsed && item.subItems && (
+                        <div className="absolute left-full top-0 ml-2 invisible group-hover:visible">
+                          <div className="bg-white rounded-md shadow-lg border border-gray-100 py-1.5 w-48">
+                            <div className="px-4 py-2 text-sm font-medium text-gray-600 border-b border-gray-100">
+                              {item.name}
+                            </div>
+                            {item.subItems.map((subItem) => (
                               <Link
+                                key={subItem.href}
                                 href={subItem.href}
                                 className={`
-                                  group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors w-full
+                                  flex items-center px-4 py-2 text-sm transition-colors
                                   ${pathname === subItem.href
-                                    ? 'bg-blue-50 text-blue-600'
-                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                                    ? 'text-blue-600 bg-blue-50'
+                                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                   }
                                 `}
                               >
@@ -234,20 +256,39 @@ export function AppLayout({ children }: AppLayoutProps) {
                                     : 'text-gray-400 group-hover:text-gray-500'
                                   }
                                 `} />
-                                {!isCollapsed && (
-                                  <span className="ml-3 truncate">{subItem.name}</span>
-                                )}
-                                {isCollapsed && (
-                                  <Popover.Panel className="absolute z-50 left-full ml-2 transform -translate-y-1/2 top-1/2">
-                                    <div className="bg-gray-900 text-white text-sm font-medium px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
-                                      {subItem.name}
-                                    </div>
-                                  </Popover.Panel>
-                                )}
+                                <span className="ml-3">{subItem.name}</span>
                               </Link>
-                            </>
-                          )}
-                        </Popover>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sub-items for expanded state */}
+                  {(!isCollapsed && item.subItems && item.subItems.length > 0) && (
+                    <div className="mt-1 ml-6 space-y-1">
+                      {item.subItems.map((subItem) => (
+                        <Link
+                          key={subItem.href}
+                          href={subItem.href}
+                          className={`
+                            group flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors
+                            ${pathname === subItem.href
+                              ? 'bg-blue-50 text-blue-600'
+                              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                            }
+                          `}
+                        >
+                          <subItem.icon className={`
+                            h-4 w-4 flex-shrink-0
+                            ${pathname === subItem.href
+                              ? 'text-blue-600'
+                              : 'text-gray-400 group-hover:text-gray-500'
+                            }
+                          `} />
+                          <span className="ml-3 truncate">{subItem.name}</span>
+                        </Link>
                       ))}
                     </div>
                   )}
@@ -269,27 +310,17 @@ export function AppLayout({ children }: AppLayoutProps) {
                     </div>
                   )}
                 </div>
-                <Popover>
-                  {({ open }) => (
-                    <>
-                      <Popover.Button
-                        onClick={() => setIsCollapsed(!isCollapsed)}
-                        className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 ease-in-out"
-                      >
-                        {isCollapsed ? (
-                          <ChevronDoubleRightIcon className="h-5 w-5 text-gray-500" />
-                        ) : (
-                          <ChevronDoubleLeftIcon className="h-5 w-5 text-gray-500" />
-                        )}
-                      </Popover.Button>
-                      <Popover.Panel className="absolute z-50 bottom-4 left-full ml-2">
-                        <div className="bg-gray-900 text-white text-sm font-medium px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
-                          {isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                        </div>
-                      </Popover.Panel>
-                    </>
+                <button
+                  onClick={() => setIsCollapsed(!isCollapsed)}
+                  className="p-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200 ease-in-out"
+                  title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                >
+                  {isCollapsed ? (
+                    <ChevronDoubleRightIcon className="h-5 w-5 text-gray-500" />
+                  ) : (
+                    <ChevronDoubleLeftIcon className="h-5 w-5 text-gray-500" />
                   )}
-                </Popover>
+                </button>
               </div>
             </div>
           </div>
@@ -318,7 +349,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </div>
 
-        {/* Overlay - Only shown on mobile when sidebar is open */}
+        {/* Overlay */}
         {isSidebarOpen && (
           <div
             className="fixed inset-0 bg-gray-600 bg-opacity-50 z-40 transition-opacity lg:hidden"
