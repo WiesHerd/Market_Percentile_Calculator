@@ -95,19 +95,19 @@ export function AppLayout({ children }: AppLayoutProps) {
           icon: DocumentTextIcon 
         },
         { 
-          name: 'Recent Uploads', 
+          name: 'Upload History', 
           href: '/survey-management/recent', 
           icon: ClockIcon 
         }
       ]
     },
     { 
-      name: 'Market Analysis', 
-      href: '/market-data', 
+      name: 'Survey Comparison', 
+      href: '#', 
       icon: PresentationChartBarIcon,
       subItems: [
         {
-          name: 'Specialty Review',
+          name: 'Survey Aggregation',
           href: '/survey-analytics',
           icon: MagnifyingGlassIcon
         },
