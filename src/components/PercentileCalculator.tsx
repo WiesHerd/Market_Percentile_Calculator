@@ -80,8 +80,8 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     const loadData = async () => {
       try {
         setLoading(true);
-        setError(null);
-        
+    setError(null);
+
         // Get uploaded surveys from localStorage
         const uploadedSurveys = localStorage.getItem('uploadedSurveys');
         let data: MarketData[] = [];
@@ -103,7 +103,7 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
 
               if (!aggregatedData.has(specialty)) {
                 aggregatedData.set(specialty, {
-                  specialty,
+                specialty,
                   tcc: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
                   wrvu: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
                   cf: Array(4).fill(null).map(() => ({ sum: 0, count: 0 }))
@@ -184,21 +184,21 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
         }
 
         // If no survey data, show an error
-        if (!Array.isArray(data) || data.length === 0) {
+      if (!Array.isArray(data) || data.length === 0) {
           throw new Error('No survey data available. Please upload survey data first.');
-        }
-        
-        setMarketData(data);
+      }
+      
+      setMarketData(data);
         if (onDataSourceSelected) {
           onDataSourceSelected();
         }
       } catch (error) {
         console.error('Error loading market data:', error);
         setError(error instanceof Error ? error.message : 'Failed to load market data');
-      } finally {
-        setLoading(false);
-      }
-    };
+    } finally {
+      setLoading(false);
+    }
+  };
 
     loadData();
   }, [onDataSourceSelected]);
@@ -1256,13 +1256,13 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-blue-900">
-                      Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
-                    </div>
-                    <p className="mt-1 text-sm text-blue-700">
-                      Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
-                    </p>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-blue-900">
+                        Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
+                      </div>
+                      <p className="mt-1 text-sm text-blue-700">
+                        Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
+                      </p>
                   </div>
                 </div>
               )}

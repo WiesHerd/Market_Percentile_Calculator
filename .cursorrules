@@ -269,6 +269,31 @@
         "requireChunkProcessing": true,
         "maxChunkSize": "1kb",
         "requireBackpressure": true
+      },
+      "safetyControls": {
+        "preventHallucinations": {
+          "requireExplicitConfirmation": true,
+          "scopeOfChanges": "strict",
+          "requireChangeValidation": true,
+          "validateAgainstUserIntent": true
+        },
+        "changeManagement": {
+          "requireMinimalChanges": true,
+          "preserveExistingStyles": true,
+          "preserveUserCustomizations": true,
+          "requireChangeDocumentation": true
+        },
+        "codeModification": {
+          "requireExplicitScope": true,
+          "validateBeforeAfter": true,
+          "preserveFormattingAndStyle": true,
+          "requireAtomicChanges": true
+        },
+        "userInteraction": {
+          "requireConfirmationForMajorChanges": true,
+          "explainChangesBeforeApplying": true,
+          "allowUserToRevertChanges": true
+        }
       }
     },
     "analytics": {

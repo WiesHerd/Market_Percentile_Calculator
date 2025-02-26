@@ -1031,128 +1031,91 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   const renderStepIndicator = () => (
-    <div className="mb-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-8">
-          <button
-            onClick={() => setActiveStep('upload')}
-            className={`flex items-center ${
-              activeStep === 'upload' 
-                ? 'text-blue-600' 
-                : uploadedSurveys.length > 0 
-                  ? 'text-green-600' 
-                  : 'text-gray-400 hover:text-blue-500'
-            } transition-colors group`}
-          >
-            <div className={`
-              flex items-center justify-center w-10 h-10 rounded-xl border-2 
-              ${activeStep === 'upload' 
-                ? 'border-blue-600 bg-blue-50' 
-                : uploadedSurveys.length > 0
-                  ? 'border-green-600 bg-green-50'
-                  : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
-              transition-all duration-300
-            `}>
-              {uploadedSurveys.length > 0 ? (
-                <CheckCircleIcon className="w-5 h-5 text-green-600" />
-              ) : (
-                <ArrowUpTrayIcon className="w-5 h-5" />
-              )}
-            </div>
-            <div className="ml-3">
-              <span className="block font-medium">Upload Surveys</span>
-            </div>
-          </button>
+    <div className="flex items-center justify-center mb-6 max-w-4xl mx-auto">
+      <div className="flex flex-col items-center">
+        <button
+          onClick={() => setActiveStep('upload')}
+          disabled={!uploadedSurveys.length}
+          className={`
+            flex items-center justify-center w-12 h-12 rounded-xl border-2
+            ${uploadedSurveys.length > 0
+              ? 'border-green-200 bg-green-50 text-green-600'
+              : 'border-gray-200 bg-gray-50 text-gray-400'
+            }
+            transition-all duration-200 hover:bg-opacity-80
+          `}
+        >
+          {uploadedSurveys.length > 0 ? (
+            <CheckCircleIcon className="w-6 h-6 text-green-600" />
+          ) : (
+            <ArrowUpTrayIcon className="w-6 h-6" />
+          )}
+        </button>
+        <span className="mt-1.5 text-base font-medium text-gray-600">
+          Upload Surveys
+        </span>
+        <span className="mt-0.5 text-sm text-gray-500">
+          {uploadedSurveys.length} uploaded
+        </span>
+      </div>
 
-          <button
-            onClick={() => setActiveStep('mapping')}
-            disabled={uploadedSurveys.length === 0}
-            className={`flex items-center ${
-              activeStep === 'mapping' 
-                ? 'text-blue-600' 
-                : calculateProgress() === 100 
-                  ? 'text-green-600' 
-                  : uploadedSurveys.length === 0
-                    ? 'text-gray-300' 
-                    : 'text-gray-400 hover:text-blue-500'
-            } transition-colors group`}
-          >
-            <div className={`
-              flex items-center justify-center w-10 h-10 rounded-xl border-2 
-              ${activeStep === 'mapping' 
-                ? 'border-blue-600 bg-blue-50' 
-                : calculateProgress() === 100
-                  ? 'border-green-600 bg-green-50'
-                  : uploadedSurveys.length === 0
-                    ? 'border-gray-200 bg-gray-50' 
-                    : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
-              transition-all duration-300
-            `}>
-              {calculateProgress() === 100 ? (
-                <CheckCircleIcon className="w-5 h-5 text-green-600" />
-              ) : (
-                <TableCellsIcon className="w-5 h-5" />
-              )}
-            </div>
-            <div className="ml-3 flex flex-col">
-              <span className="block font-medium">Map Columns</span>
-              <span
-                className={`inline-flex items-center px-3 py-1 mt-1 rounded-md text-sm font-medium
-                  ${calculateProgress() === 100 
-                    ? 'bg-green-100 text-green-700 border border-green-200'
-                    : 'bg-yellow-100 text-yellow-700 border border-yellow-200'}
-                  transition-colors duration-150 ease-in-out`}
-              >
-                {calculateProgress() === 100 ? (
-                  <>
-                    <CheckIcon className="w-4 h-4 mr-1" />
-                    100% Complete
-                  </>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="w-4 h-4 mr-1 animate-spin" />
-                    {`${calculateProgress()}% Complete`}
-                  </>
-                )}
-              </span>
-            </div>
-          </button>
+      <div className={`w-16 h-0.5 mx-4 ${uploadedSurveys.length > 0 ? 'bg-green-200' : 'bg-gray-200'}`} />
 
-          <button
-            onClick={() => setActiveStep('specialties')}
-            disabled={uploadedSurveys.length === 0 || calculateProgress() !== 100}
-            className={`flex items-center ${
-              activeStep === 'specialties' 
-                ? 'text-blue-600' 
-                : calculateSpecialtyProgress() === 100 
-                  ? 'text-green-600' 
-                  : uploadedSurveys.length === 0 || calculateProgress() !== 100
-                    ? 'text-gray-300' 
-                    : 'text-gray-400 hover:text-blue-500'
-            } transition-colors group`}
-          >
-            <div className={`
-              flex items-center justify-center w-10 h-10 rounded-xl border-2 
-              ${activeStep === 'specialties' 
-                ? 'border-blue-600 bg-blue-50' 
-                : calculateSpecialtyProgress() === 100
-                  ? 'border-green-600 bg-green-50'
-                  : uploadedSurveys.length === 0 || calculateProgress() !== 100
-                    ? 'border-gray-200 bg-gray-50' 
-                    : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
-              transition-all duration-300
-            `}>
-              {calculateSpecialtyProgress() === 100 ? (
-                <CheckCircleIcon className="w-5 h-5 text-green-600" />
-              ) : (
-                <DocumentChartBarIcon className="w-5 h-5" />
-              )}
-            </div>
-            <div className="ml-3">
-              <span className="block font-medium">Map Specialties</span>
-            </div>
-          </button>
-        </div>
+      <div className="flex flex-col items-center">
+        <button
+          onClick={() => uploadedSurveys.length && setActiveStep('mapping')}
+          disabled={!uploadedSurveys.length}
+          className={`
+            flex items-center justify-center w-12 h-12 rounded-xl border-2
+            ${calculateProgress() === 100
+              ? 'border-green-200 bg-green-50 text-green-600'
+              : uploadedSurveys.length
+                ? 'border-blue-200 bg-blue-50 text-blue-600'
+                : 'border-gray-200 bg-gray-50 text-gray-400'
+            }
+            transition-all duration-200 hover:bg-opacity-80
+          `}
+        >
+          {calculateProgress() === 100 ? (
+            <CheckCircleIcon className="w-6 h-6 text-green-600" />
+          ) : (
+            <TableCellsIcon className="w-6 h-6" />
+          )}
+        </button>
+        <span className="mt-1.5 text-base font-medium text-gray-600">
+          Map Columns
+        </span>
+        <span className="mt-0.5 text-sm text-gray-500">
+          {calculateProgress()}% complete
+        </span>
+      </div>
+
+      <div className={`w-16 h-0.5 mx-4 ${calculateProgress() === 100 ? 'bg-green-200' : 'bg-gray-200'}`} />
+
+      <div className="flex flex-col items-center">
+        <button
+          onClick={() => calculateProgress() === 100 && setActiveStep('specialties')}
+          disabled={uploadedSurveys.length === 0 || calculateProgress() !== 100}
+          className={`
+            flex items-center justify-center w-12 h-12 rounded-xl border-2
+            ${calculateSpecialtyProgress() === 100
+              ? 'border-green-200 bg-green-50 text-green-600'
+              : calculateProgress() === 100
+                ? 'border-blue-200 bg-blue-50 text-blue-600'
+                : 'border-gray-200 bg-gray-50 text-gray-400'
+            }
+            transition-all duration-200 hover:bg-opacity-80
+          `}
+        >
+          {calculateSpecialtyProgress() === 100 ? (
+            <CheckCircleIcon className="w-6 h-6 text-green-600" />
+          ) : (
+            <CheckCircleIcon className="w-6 h-6" />
+          )}
+        </button>
+        <span className="mt-1.5 text-base font-medium text-gray-600">
+          Map Specialties
+        </span>
       </div>
     </div>
   );
@@ -1480,15 +1443,13 @@ export default function SurveyManagementPage(): JSX.Element {
                   Upload your compensation survey data files (CSV format). You can upload multiple surveys before mapping.
                 </p>
                 <div className="mt-2 flex items-center space-x-4">
-                  <a
-                    href="/survey-format-guide.md"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    href="/survey-format-guide"
                     className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
                   >
                     <DocumentTextIcon className="w-4 h-4 mr-1" />
                     View Format Guide
-                  </a>
+                  </Link>
                   <a
                     href="/sample-survey-template.csv"
                     download
@@ -2300,169 +2261,70 @@ export default function SurveyManagementPage(): JSX.Element {
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                </svg>
+                  </svg>
                   Save Mappings
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Enhanced Step Indicator */}
-          <div className="px-6 py-4 border-t border-gray-100">
-            <div className="flex items-center justify-center">
-              <button
-                onClick={() => setActiveStep('upload')}
-                className={`flex items-center ${activeStep === 'upload' ? 'text-blue-600' : uploadedSurveys.length > 0 ? 'text-green-600' : 'text-gray-400'} hover:text-blue-500 transition-colors group`}
-              >
-                <div className={`
-                  flex items-center justify-center w-10 h-10 rounded-xl border-2 
-                  ${activeStep === 'upload' 
-                    ? 'border-blue-600 bg-blue-50' 
-                    : uploadedSurveys.length > 0
-                      ? 'border-green-600 bg-green-50'
-                      : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
-                  transition-all duration-300
-                `}>
-                  {uploadedSurveys.length > 0 ? (
-                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <ArrowUpTrayIcon className="w-5 h-5" />
-                  )}
-                </div>
-                <div className="ml-3">
-                  <span className="block font-medium">Upload Surveys</span>
-                  <span className="text-sm text-gray-500">{uploadedSurveys.length} uploaded</span>
-                </div>
-              </button>
-              <div className={`w-16 h-0.5 mx-4 ${uploadedSurveys.length > 0 ? 'bg-green-200' : 'bg-gray-200'}`}></div>
-              <button
-                onClick={() => setActiveStep('mapping')}
-                disabled={uploadedSurveys.length === 0}
-                className={`flex items-center ${
-                  activeStep === 'mapping' 
-                    ? 'text-blue-600' 
-                    : calculateProgress() === 100 
-                      ? 'text-green-600' 
-                      : uploadedSurveys.length === 0
-                        ? 'text-gray-300' 
-                        : 'text-gray-400 hover:text-blue-500'
-                } transition-colors group`}
-              >
-                <div className={`
-                  flex items-center justify-center w-10 h-10 rounded-xl border-2 
-                  ${activeStep === 'mapping' 
-                    ? 'border-blue-600 bg-blue-50' 
-                    : calculateProgress() === 100
-                      ? 'border-green-600 bg-green-50'
-                      : uploadedSurveys.length === 0
-                        ? 'border-gray-200 bg-gray-50' 
-                        : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
-                  transition-all duration-300
-                `}>
-                  {calculateProgress() === 100 ? (
-                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <DocumentTextIcon className="w-5 h-5" />
-                  )}
-                </div>
-                <div className="ml-3">
-                  <span className="block font-medium">Map Columns</span>
-                  <span className="text-sm text-gray-500">{calculateProgress()}% complete</span>
-                </div>
-              </button>
-              <div className={`w-16 h-0.5 mx-4 ${calculateProgress() === 100 ? 'bg-green-200' : 'bg-gray-200'}`}></div>
-              <button
-                onClick={() => setActiveStep('specialties')}
-                disabled={uploadedSurveys.length === 0 || calculateProgress() !== 100}
-                className={`flex items-center ${
-                  activeStep === 'specialties' 
-                    ? 'text-blue-600' 
-                    : calculateSpecialtyProgress() === 100 
-                      ? 'text-green-600' 
-                      : uploadedSurveys.length === 0 || calculateProgress() !== 100
-                        ? 'text-gray-300' 
-                        : 'text-gray-400 hover:text-blue-500'
-                } transition-colors group`}
-              >
-                <div className={`
-                  flex items-center justify-center w-10 h-10 rounded-xl border-2 
-                  ${activeStep === 'specialties' 
-                    ? 'border-blue-600 bg-blue-50' 
-                    : calculateSpecialtyProgress() === 100
-                      ? 'border-green-600 bg-green-50'
-                      : uploadedSurveys.length === 0 || calculateProgress() !== 100
-                        ? 'border-gray-200 bg-gray-50' 
-                        : 'border-gray-200 group-hover:border-blue-200 group-hover:bg-blue-50'}
-                  transition-all duration-300
-                `}>
-                  {calculateSpecialtyProgress() === 100 ? (
-                    <CheckCircleIcon className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <DocumentChartBarIcon className="w-5 h-5" />
-                  )}
-                </div>
-                <div className="ml-3">
-                  <span className="block font-medium">Map Specialties</span>
-                </div>
-              </button>
+          {renderStepIndicator()}
+
+          {/* Main Content */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
+            <div className="p-6">
+              {activeStep === 'upload' ? (
+                renderDataPreview()
+              ) : activeStep === 'mapping' ? (
+                renderMappingInterface()
+              ) : showPreview ? (
+                renderDataPreview()
+              ) : (
+                renderSpecialtyMappingStep()
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
-          <div className="p-6">
-            {activeStep === 'upload' ? (
-              renderDataPreview()
-            ) : activeStep === 'mapping' ? (
-              renderMappingInterface()
-            ) : showPreview ? (
-              renderDataPreview()
-            ) : (
-              renderSpecialtyMappingStep()
-            )}
-          </div>
-        </div>
+          {showTemplateSaveModal && renderTemplateSaveModal()}
 
-        {showTemplateSaveModal && renderTemplateSaveModal()}
-
-        {/* Save Confirmation Dialog */}
-        <Dialog 
-          open={showSaveConfirmation} 
-          onClose={() => setShowSaveConfirmation(false)}
-          className="fixed inset-0 z-50 overflow-y-auto"
-        >
-          <div className="flex items-center justify-center min-h-screen">
-            <div className="fixed inset-0 bg-black opacity-30" />
-            
-            <Dialog.Panel className="relative bg-white rounded-lg max-w-md w-full mx-4 p-6 shadow-xl">
-              <Dialog.Title className="text-lg font-medium text-gray-900">
-                Save Specialty Mappings
-              </Dialog.Title>
+          {/* Save Confirmation Dialog */}
+          <Dialog 
+            open={showSaveConfirmation} 
+            onClose={() => setShowSaveConfirmation(false)}
+            className="fixed inset-0 z-50 overflow-y-auto"
+          >
+            <div className="flex items-center justify-center min-h-screen">
+              <div className="fixed inset-0 bg-black opacity-30" />
               
-              <div className="mt-4">
-                <p className="text-sm text-gray-500">
-                  Are you sure you want to save the current specialty mappings? This will update all surveys with the new mappings.
-                </p>
-              </div>
+              <Dialog.Panel className="relative bg-white rounded-lg max-w-md w-full mx-4 p-6 shadow-xl">
+                <Dialog.Title className="text-lg font-medium text-gray-900">
+                  Save Specialty Mappings
+                </Dialog.Title>
+                
+                <div className="mt-4">
+                  <p className="text-sm text-gray-500">
+                    Are you sure you want to save the current specialty mappings? This will update all surveys with the new mappings.
+                  </p>
+                </div>
 
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowSaveConfirmation(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveMappings}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Save Mappings
-                </button>
-              </div>
-            </Dialog.Panel>
-          </div>
-        </Dialog>
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowSaveConfirmation(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveMappings}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Save Mappings
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </div>
+          </Dialog>
+        </div>
       </div>
     </div>
   );

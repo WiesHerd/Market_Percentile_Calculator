@@ -2,6 +2,12 @@ import './globals.css';
 import { Providers } from './providers';
 import { AppLayout } from '@/components/AppLayout';
 
+export const viewport = {
+  themeColor: '#2563eb',
+  width: 'device-width',
+  initialScale: 1.0,
+};
+
 export const metadata = {
   title: 'Market Intelligence Suite',
   description: 'Advanced analytics tool for healthcare compensation benchmarking and market positioning analysis',
@@ -38,8 +44,6 @@ export const metadata = {
     ]
   },
   manifest: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/manifest.json`,
-  themeColor: '#2563eb',
-  viewport: 'width=device-width, initial-scale=1.0',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

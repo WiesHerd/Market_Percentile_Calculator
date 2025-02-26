@@ -47,7 +47,7 @@ export default function UploadHistoryPage() {
   const [sortField, setSortField] = useState<keyof SurveyUpload>('uploadTime');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Load surveys from localStorage
+    // Load surveys from localStorage
   const loadSurveys = (): SurveyUpload[] => {
     try {
       const storedSurveys = localStorage.getItem('uploadedSurveys');
@@ -81,8 +81,8 @@ export default function UploadHistoryPage() {
           }, 0);
           
           return {
-            id: survey.id,
-            vendor: survey.vendor,
+          id: survey.id,
+          vendor: survey.vendor,
             uploadTime,
             specialties: specialties.size,
             mappedFields: Object.keys(survey.mappings).length,
@@ -138,13 +138,13 @@ export default function UploadHistoryPage() {
 
   const handleDelete = (id: string) => {
     if (!confirm('Are you sure you want to delete this survey?')) return;
-    
+
     try {
-      const storedSurveys = localStorage.getItem('uploadedSurveys');
-      if (storedSurveys) {
-        const surveys = JSON.parse(storedSurveys);
+    const storedSurveys = localStorage.getItem('uploadedSurveys');
+    if (storedSurveys) {
+      const surveys = JSON.parse(storedSurveys);
         const updatedSurveys = surveys.filter((s: any) => s.id !== id);
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+      localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
         // Force re-render
         setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
       }
@@ -178,7 +178,7 @@ export default function UploadHistoryPage() {
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-lg shadow">
-          {/* Header */}
+        {/* Header */}
           <div className="px-6 py-5 border-b border-gray-200">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
@@ -197,17 +197,17 @@ export default function UploadHistoryPage() {
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-                </div>
-                <Link
+            </div>
+            <Link
                   href="/survey-management"
                   className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
-                  Upload New Survey
-                </Link>
-              </div>
-            </div>
+            >
+              <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
+              Upload New Survey
+            </Link>
           </div>
+        </div>
+                  </div>
 
           {/* Table */}
           <div className="overflow-x-auto">
@@ -372,17 +372,17 @@ export default function UploadHistoryPage() {
                             : 'Get started by uploading your first survey'}
                         </p>
                         {!searchTerm && (
-                          <div className="mt-6">
-                            <Link
+              <div className="mt-6">
+                <Link
                               href="/survey-management"
                               className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            >
-                              <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
+                >
+                  <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
                               Upload New Survey
-                            </Link>
-                          </div>
+                </Link>
+              </div>
                         )}
-                      </div>
+            </div>
                     </td>
                   </tr>
                 )}
