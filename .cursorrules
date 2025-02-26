@@ -1,0 +1,341 @@
+{
+  "version": 1,
+  "rules": {
+    "formatting": {
+      "indentSize": 2,
+      "indentStyle": "space",
+      "maxLineLength": 100,
+      "endOfLine": "lf",
+      "insertFinalNewline": true,
+      "trimTrailingWhitespace": true,
+      "bracketSpacing": true,
+      "jsxBracketSameLine": false,
+      "arrowParens": "always",
+      "semi": true,
+      "singleQuote": false,
+      "trailingComma": "es5",
+      "proseWrap": "always",
+      "htmlWhitespaceSensitivity": "css",
+      "vueIndentScriptAndStyle": true
+    },
+    "typescript": {
+      "importOrder": [
+        "^react",
+        "^next",
+        "^@heroicons/",
+        "^@headlessui/",
+        "^@/components/(.*)$",
+        "^@/context/(.*)$",
+        "^@/utils/(.*)$",
+        "^@/types/(.*)$",
+        "^@/hooks/(.*)$",
+        "^[./]"
+      ],
+      "importSeparator": true,
+      "strictNullChecks": true,
+      "noImplicitAny": true,
+      "noUnusedLocals": true,
+      "noUnusedParameters": true,
+      "allowUnreachableCode": false,
+      "noImplicitReturns": true,
+      "noFallthroughCasesInSwitch": true,
+      "exactOptionalPropertyTypes": true,
+      "allowSyntheticDefaultImports": true,
+      "esModuleInterop": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "isolatedModules": true,
+      "strict": true,
+      "noUncheckedIndexedAccess": true,
+      "useUnknownInCatchVariables": true,
+      "noPropertyAccessFromIndexSignature": true
+    },
+    "react": {
+      "hooks": {
+        "exhaustiveDeps": true,
+        "rulesOfHooks": true,
+        "customHooks": {
+          "prefix": "use",
+          "allowedHooks": ["useState", "useEffect", "useCallback", "useMemo", "useRef"]
+        }
+      },
+      "jsx": {
+        "quoteStyle": "double",
+        "maxPropsPerLine": 3,
+        "maxAttributeLength": 80,
+        "noUnescapedEntities": true,
+        "booleanAttributes": "never",
+        "closingBracketLocation": "tag-aligned",
+        "enforceShorthandArrowFunctions": true,
+        "sortAttributes": true,
+        "enforceEventHandlerPrefix": "handle"
+      },
+      "componentNaming": {
+        "pattern": "^[A-Z][a-zA-Z0-9]+$",
+        "ignorePatterns": ["index"]
+      },
+      "stateManagement": {
+        "preferReducer": true,
+        "requireActionTypes": true,
+        "enforceImmutability": true
+      }
+    },
+    "naming": {
+      "components": "PascalCase",
+      "functions": "camelCase",
+      "variables": "camelCase",
+      "constants": "UPPER_CASE",
+      "types": "PascalCase",
+      "interfaces": "PascalCase",
+      "enums": "PascalCase",
+      "typeAliases": "PascalCase",
+      "genericTypeParameters": "PascalCase",
+      "booleanPrefix": ["is", "has", "should", "can", "will", "did"],
+      "eventHandlerPrefix": "handle",
+      "asyncSuffix": "Async",
+      "testPrefix": "test",
+      "privatePrefix": "_"
+    },
+    "organization": {
+      "groupImports": true,
+      "sortImports": true,
+      "componentStructure": [
+        "imports",
+        "types",
+        "interfaces",
+        "constants",
+        "hooks",
+        "component",
+        "styles",
+        "exports"
+      ],
+      "maxFileLength": 500,
+      "maxFunctionLength": 50,
+      "maxLineLength": 100,
+      "maxParams": 4,
+      "maxDepth": 3,
+      "maxComplexity": 10,
+      "enforceLayeredArchitecture": true,
+      "layerOrder": [
+        "presentation",
+        "application",
+        "domain",
+        "infrastructure"
+      ]
+    },
+    "documentation": {
+      "requireJSDoc": true,
+      "components": true,
+      "functions": true,
+      "interfaces": true,
+      "types": true,
+      "props": true,
+      "hooks": true,
+      "context": true,
+      "utils": true,
+      "minimumDescriptionLength": 20,
+      "requireExample": true,
+      "requireReturnType": true,
+      "requireParamType": true,
+      "requireChangelogEntry": true
+    },
+    "testing": {
+      "requireTests": true,
+      "testFilePattern": "**/*.test.{ts,tsx}",
+      "coverage": {
+        "statements": 80,
+        "branches": 80,
+        "functions": 80,
+        "lines": 80
+      },
+      "requireTestPlans": true,
+      "requireSnapshots": false,
+      "maxTestFileSize": 500,
+      "enforceTestNaming": "^(test|describe|it)\\s.+",
+      "requireMocking": true,
+      "requireErrorTesting": true,
+      "requireEdgeCaseTesting": true
+    },
+    "git": {
+      "ignorePatterns": [
+        "node_modules",
+        ".next",
+        "out",
+        "build",
+        "coverage",
+        "*.log",
+        ".env*",
+        "*.generated.*",
+        "*.min.*",
+        "dist",
+        ".cache",
+        "public/data"
+      ],
+      "commitMessageFormat": "conventional",
+      "requireIssueReference": true,
+      "maxCommitMessageLength": 72,
+      "branchNaming": "^(feature|bugfix|hotfix|release)/[A-Z]+-\\d+"
+    },
+    "security": {
+      "noConsole": "warn",
+      "noDebugger": "warn",
+      "noAlertConfirmPrompt": "warn",
+      "noEval": "error",
+      "noDangerouslySetInnerHTML": "warn",
+      "noInlineStyles": "warn",
+      "requireHttps": true,
+      "requireCSP": true,
+      "requireSRI": true,
+      "requireHsts": true,
+      "requireXssProtection": true,
+      "requireFrameOptions": true,
+      "requireReferrerPolicy": true,
+      "requirePermissionsPolicy": true
+    },
+    "performance": {
+      "noUnusedImports": true,
+      "preferConstOverLet": true,
+      "noRedundantInitializations": true,
+      "noNestedTernary": true,
+      "noMultipleReturnStatements": true,
+      "maxInlineSize": 100,
+      "preferEarlyReturn": true,
+      "preferOptionalChaining": true,
+      "preferNullishCoalescing": true,
+      "noLargeObjects": {
+        "maxProperties": 20,
+        "maxDepth": 3
+      },
+      "requireLazyLoading": true,
+      "requireImageOptimization": true,
+      "requireCaching": true,
+      "maxBundleSize": "250kb",
+      "requireCodeSplitting": true
+    },
+    "accessibility": {
+      "requireAltText": true,
+      "requireAriaLabels": true,
+      "requireSemanticHeadings": true,
+      "requireLabelFor": true,
+      "requireRole": true,
+      "noRedundantRoles": true,
+      "noAccessKey": true,
+      "noAutofocus": true,
+      "noPositiveTabIndex": true,
+      "requireFocusManagement": true,
+      "colorContrast": {
+        "minimum": 4.5,
+        "enhanced": 7
+      },
+      "requireKeyboardNavigation": true,
+      "requireSkipLinks": true,
+      "requireLandmarks": true
+    },
+    "dataHandling": {
+      "requireDataValidation": true,
+      "requireErrorBoundaries": true,
+      "requireLoadingStates": true,
+      "requireErrorStates": true,
+      "requireEmptyStates": true,
+      "maxDataFetchSize": "1MB",
+      "cacheStrategy": "stale-while-revalidate",
+      "retryStrategy": {
+        "maxAttempts": 3,
+        "backoff": "exponential"
+      },
+      "requireDataTransformation": true,
+      "requireDataNormalization": true,
+      "requireOptimisticUpdates": true
+    },
+    "ai": {
+      "promptFormatting": {
+        "requireSystemMessage": true,
+        "maxTokenLength": 4096,
+        "requireTemperature": true,
+        "requireTopP": true
+      },
+      "modelConfiguration": {
+        "defaultModel": "gpt-4",
+        "fallbackModel": "gpt-3.5-turbo",
+        "requireTimeout": true,
+        "maxRetries": 3
+      },
+      "responseParsing": {
+        "requireJsonValidation": true,
+        "requireErrorHandling": true,
+        "requireTypeSafety": true
+      },
+      "streamHandling": {
+        "requireChunkProcessing": true,
+        "maxChunkSize": "1kb",
+        "requireBackpressure": true
+      }
+    },
+    "analytics": {
+      "requireEventTracking": true,
+      "requireErrorTracking": true,
+      "requirePerformanceTracking": true,
+      "requireUserTracking": true,
+      "requirePrivacyCompliance": true,
+      "maxEventProperties": 20,
+      "requireSampling": true
+    },
+    "shell": {
+      "powershell": {
+        "commandChaining": {
+          "allowedOperators": [";", "|", "`"],
+          "disallowedOperators": ["&&", "||"],
+          "explanation": "PowerShell uses different command chaining operators than bash/shell. Use ; for sequential execution, | for piping, and ` for line continuation"
+        },
+        "bestPractices": {
+          "separateCommands": "Run git and other shell commands separately rather than chaining when using PowerShell",
+          "errorHandling": "Always check $LASTEXITCODE for command success in PowerShell scripts",
+          "escaping": "Use backtick (`) for escaping special characters in PowerShell"
+        }
+      },
+      "bash": {
+        "commandChaining": {
+          "allowedOperators": ["&&", "||", ";", "|"],
+          "explanation": "Bash/shell allows && for conditional execution and || for fallback execution"
+        }
+      },
+      "crossPlatform": {
+        "requirePlatformCheck": true,
+        "platformSpecificCommands": {
+          "windows": "Use PowerShell syntax when process.platform === 'win32'",
+          "unix": "Use Bash syntax when process.platform !== 'win32'"
+        }
+      }
+    }
+  },
+  "overrides": {
+    "files": ["*.test.{ts,tsx}", "*.spec.{ts,tsx}"],
+    "rules": {
+      "typescript": {
+        "noUnusedLocals": false,
+        "noUnusedParameters": false
+      },
+      "maxFileLength": 800,
+      "maxFunctionLength": 100
+    },
+    "files:survey-management": {
+      "maxFileLength": 1000,
+      "maxComplexity": 15,
+      "performance": {
+        "maxInlineSize": 150
+      }
+    }
+  },
+  "ignoreFiles": [
+    "node_modules/**",
+    ".next/**",
+    "out/**",
+    "build/**",
+    "coverage/**",
+    "*.generated.*",
+    "public/data/**",
+    "**/vendor/**",
+    "**/*.min.*",
+    "**/dist/**"
+  ]
+} 

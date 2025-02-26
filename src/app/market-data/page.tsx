@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { MarketData, DataSourceType } from '@/types/market-data';
 import { ArrowUpTrayIcon, ArrowPathIcon, InformationCircleIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { DataSourceSelector } from '@/components/DataSourceSelector';
 
 export default function MarketDataPage() {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
@@ -13,7 +12,6 @@ export default function MarketDataPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showGuide, setShowGuide] = useState(false);
-  const [dataSource, setDataSource] = useState<DataSourceType>('market_intelligence');
 
   const loadMarketIntelligenceData = async () => {
     try {
@@ -178,13 +176,7 @@ export default function MarketDataPage() {
       setLoading(true);
       setError(null);
 
-      let data: MarketData[] = [];
-      
-      if (dataSource === 'market_intelligence') {
-        data = await loadMarketIntelligenceData();
-      } else if (dataSource === 'aggregated_survey') {
-        data = loadAggregatedSurveyData();
-      }
+      const data = await loadMarketIntelligenceData();
 
       if (!Array.isArray(data) || data.length === 0) {
         throw new Error('No valid market data available');
@@ -202,7 +194,7 @@ export default function MarketDataPage() {
 
   useEffect(() => {
     loadData();
-  }, [dataSource]);
+  }, []);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -286,7 +278,7 @@ export default function MarketDataPage() {
             localStorage.setItem('uploadedMarketData', JSON.stringify(processedData));
             setMarketData(processedData);
             // Switch to aggregated survey view
-            setDataSource('aggregated_survey');
+            setShowGuide(true);
           } else {
             setError('No valid data found in the CSV file');
           }
@@ -325,10 +317,6 @@ export default function MarketDataPage() {
     row.specialty.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleResetToDefault = () => {
-    setDataSource('market_intelligence');
-  };
-
   const downloadSampleCSV = () => {
     const headers = 'specialty,p25_TCC,p50_TCC,p75_TCC,p90_TCC,p25_wrvu,p50_wrvu,p75_wrvu,p90_wrvu,p25_cf,p50_cf,p75_cf,p90_cf\n';
     const sampleData = 'Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25\n';
@@ -353,46 +341,44 @@ export default function MarketDataPage() {
           </div>
           <div className="flex gap-4">
             <button
-              onClick={handleResetToDefault}
+              onClick={() => loadData()}
               className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              <ArrowPathIcon className="w-4 h-4 mr-2" />
-              Reset to Default Data
+              <ArrowPathIcon className="h-4 w-4 mr-2" />
+              Refresh
             </button>
-            <Link
-              href="/"
+            <button
+              onClick={() => setShowGuide(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <DocumentTextIcon className="h-4 w-4 mr-2" />
+              View Guide
+            </button>
+            <button
+              onClick={() => window.location.href = "/calculator"}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Back to Calculator
-            </Link>
+            </button>
           </div>
         </div>
 
-        <DataSourceSelector
-          currentSource={dataSource}
-          onSourceChange={setDataSource}
-          isLoading={loading}
-          onRefresh={loadData}
-        />
-
         {/* Data Disclosure Banner */}
-        {dataSource === 'market_intelligence' && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <InformationCircleIcon className="h-5 w-5 text-yellow-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">Data Disclosure</h3>
-                <div className="mt-1 text-sm text-yellow-700">
-                  Please note that the preloaded market data is synthetic and for demonstration purposes only. 
-                  It does not represent actual survey trends or market benchmarks. 
-                  For accurate market data, please upload your own validated compensation survey data.
-                </div>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <InformationCircleIcon className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">Data Disclosure</h3>
+              <div className="mt-1 text-sm text-yellow-700">
+                Please note that the preloaded market data is synthetic and for demonstration purposes only. 
+                It does not represent actual survey trends or market benchmarks. 
+                For accurate market data, please upload your own validated compensation survey data.
               </div>
             </div>
           </div>
-        )}
+        </div>
 
         {/* Market Data Table Section */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -418,14 +404,6 @@ export default function MarketDataPage() {
               </div>
 
               <div className="flex items-center gap-4">
-                <button
-                  onClick={() => setShowGuide(!showGuide)}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <DocumentTextIcon className="h-4 w-4 mr-2" />
-                  {showGuide ? 'Hide Guide' : 'View Guide'}
-                </button>
-
                 <label className={`inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer ${
                   loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
                 } text-white`}>
@@ -504,11 +482,6 @@ export default function MarketDataPage() {
                       <th colSpan={4} scope="col" className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
                         Conversion Factor
                       </th>
-                      {dataSource === 'aggregated_survey' && (
-                        <th scope="col" className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
-                          Data Points
-                        </th>
-                      )}
                     </tr>
                     <tr>
                       <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50">
@@ -526,11 +499,6 @@ export default function MarketDataPage() {
                             {percentile}th
                           </th>
                         ))
-                      )}
-                      {dataSource === 'aggregated_survey' && (
-                        <th scope="col" className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
-                          Count
-                        </th>
                       )}
                     </tr>
                   </thead>
@@ -552,11 +520,6 @@ export default function MarketDataPage() {
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{formatValue(row.p50_cf, 'cf')}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{formatValue(row.p75_cf, 'cf')}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{formatValue(row.p90_cf, 'cf')}</td>
-                        {dataSource === 'aggregated_survey' && (
-                          <td className="px-3 py-2 whitespace-nowrap text-sm text-center text-gray-900 border-l">
-                            {row.dataPoints || 0}
-                          </td>
-                        )}
                       </tr>
                     ))}
                   </tbody>

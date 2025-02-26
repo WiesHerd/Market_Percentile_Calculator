@@ -8,19 +8,23 @@ export const metadata = {
   icons: {
     icon: [
       {
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/favicon.ico`,
+        sizes: 'any',
+      },
+      {
         url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/icon.svg`,
         type: 'image/svg+xml',
       }
     ],
     shortcut: [
       {
-        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/icon.svg`,
-        type: 'image/svg+xml',
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/favicon.ico`,
+        sizes: 'any',
       }
     ],
     apple: [
       {
-        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/apple-icon.png`,
+        url: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/apple-touch-icon.png`,
         sizes: '180x180',
         type: 'image/png',
       }
@@ -36,6 +40,11 @@ export const metadata = {
   manifest: `${process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : ''}/manifest.json`,
   themeColor: '#2563eb',
   viewport: 'width=device-width, initial-scale=1.0',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Market Intelligence',
+  },
 };
 
 export default function RootLayout({

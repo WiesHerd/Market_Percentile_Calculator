@@ -152,10 +152,10 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className={`p-4 ${isCollapsed ? 'px-3' : ''}`}>
               <Link href="/" className={`block ${isCollapsed ? 'mx-auto w-10' : ''}`}>
                 <div className="flex items-center">
-                  <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tl from-blue-700 via-blue-600 to-blue-500 flex items-center justify-center overflow-hidden group shadow-lg shadow-blue-500/20 ring-2 ring-blue-400/20">
+                  <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tl from-blue-700 via-blue-600 to-blue-500 flex items-center justify-center overflow-hidden group shadow-lg shadow-blue-500/20 ring-2 ring-blue-400/20 transition-transform duration-300 hover:scale-110">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     <div className="relative flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <svg className="w-6 h-6 text-white transform transition-transform duration-300 group-hover:rotate-12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M3 13.5L7 9.5M7 9.5L11 13.5M7 9.5V20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                         <path d="M21 10.5L17 14.5M17 14.5L13 10.5M17 14.5V4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                         <path className="opacity-50" d="M12 4L14 6L12 8L10 6L12 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -165,7 +165,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </div>
                   {!isCollapsed && (
                     <div className="ml-3">
-                      <p className="text-sm font-semibold text-gray-900 tracking-wide">Market Intelligence</p>
+                      <p className="text-lg font-semibold text-gray-900 tracking-wide">Market Intelligence</p>
                       <p className="text-xs font-medium bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">Analytics Suite</p>
                     </div>
                   )}
@@ -316,8 +316,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="flex items-center justify-between">
                 {!isCollapsed && (
                   <div>
-                    <p className="text-sm font-medium text-gray-900">Market Intelligence</p>
-                    <p className="text-xs text-blue-600">Analytics Suite v1.0.0</p>
+                    <p className="text-lg font-semibold text-gray-900">Market Intelligence</p>
+                    <p className="text-xs font-medium bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">Analytics Suite v1.0.0</p>
                   </div>
                 )}
                 <button

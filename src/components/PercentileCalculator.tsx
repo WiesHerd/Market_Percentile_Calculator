@@ -55,9 +55,6 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   const [physicianName, setPhysicianName] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [calculationHistory, setCalculationHistory] = useState<CalculationHistory[]>([]);
-  const [showInitialChoice, setShowInitialChoice] = useState(true);
-  const [hasUserMadeChoice, setHasUserMadeChoice] = useState(false);
-  const [showTemplateGuide, setShowTemplateGuide] = useState(false);
   const [fte, setFte] = useState('1.0');
   const [showCustomDataModal, setShowCustomDataModal] = useState(false);
   const [customDataForm, setCustomDataForm] = useState<CustomMarketData>({
@@ -79,263 +76,132 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     { id: '1', name: 'Base Pay', value: '', notes: '', normalize: true, isPercentage: false }
   ]);
 
-  // Load initial values from localStorage on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSelectedSpecialty(localStorage.getItem('selectedSpecialty') || '');
-      setSelectedMetric((localStorage.getItem('selectedMetric') as MetricType) || 'total');
-      setInputValue(localStorage.getItem('inputValue') || '');
-      setPhysicianName(localStorage.getItem('physicianName') || '');
-      setNotes(localStorage.getItem('notes') || '');
-      
-      const savedPercentile = localStorage.getItem('calculatedPercentile');
-      if (savedPercentile) {
-        setCalculatedPercentile(parseFloat(savedPercentile));
-      }
-      
-      const savedHistory = localStorage.getItem('calculationHistory');
-      if (savedHistory) {
-        setCalculationHistory(JSON.parse(savedHistory));
-      }
-    }
-  }, []);
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Get uploaded surveys from localStorage
+        const uploadedSurveys = localStorage.getItem('uploadedSurveys');
+        let data: MarketData[] = [];
+        
+        if (uploadedSurveys) {
+          const surveys = JSON.parse(uploadedSurveys);
+          const aggregatedData = new Map<string, {
+            specialty: string;
+            tcc: { sum: number; count: number; }[];
+            wrvu: { sum: number; count: number; }[];
+            cf: { sum: number; count: number; }[];
+          }>();
 
-  useEffect(() => {
-    localStorage.setItem('selectedSpecialty', selectedSpecialty);
-  }, [selectedSpecialty]);
+          // Process each survey
+          surveys.forEach((survey: any) => {
+            survey.data.forEach((row: any) => {
+              const specialty = row[survey.mappings.specialty]?.trim();
+              if (!specialty) return;
 
-  useEffect(() => {
-    localStorage.setItem('selectedMetric', selectedMetric);
-  }, [selectedMetric]);
-
-  useEffect(() => {
-    localStorage.setItem('inputValue', inputValue);
-  }, [inputValue]);
-
-  useEffect(() => {
-    if (calculatedPercentile !== null) {
-      localStorage.setItem('calculatedPercentile', calculatedPercentile.toString());
-    } else {
-      localStorage.removeItem('calculatedPercentile');
-    }
-  }, [calculatedPercentile]);
-
-  useEffect(() => {
-    localStorage.setItem('physicianName', physicianName);
-  }, [physicianName]);
-
-  useEffect(() => {
-    localStorage.setItem('notes', notes);
-  }, [notes]);
-
-  const handleUsePreloadedData = () => {
-    localStorage.setItem('dataChoiceMade', 'true');
-    setShowInitialChoice(false);
-    setHasUserMadeChoice(true);
-    loadData();
-  };
-
-  const downloadSampleCSV = () => {
-    const headers = 'specialty,p25_TCC,p50_TCC,p75_TCC,p90_TCC,p25_wrvu,p50_wrvu,p75_wrvu,p90_wrvu,p25_cf,p50_cf,p75_cf,p90_cf\n';
-    const sampleData = 'Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25\n';
-    const blob = new Blob([headers + sampleData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'market_data_template.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handleInitialFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsProcessing(true);
-    setError(null);
-
-    if (!file.name.endsWith('.csv')) {
-      setError('Please upload a CSV file');
-      setIsProcessing(false);
-      return;
-    }
-
-    try {
-      const text = await file.text();
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          const processedData: MarketData[] = [];
-          let rowErrors: string[] = [];
-          
-          results.data.forEach((row: any, index: number) => {
-            const specialty = row.specialty?.trim();
-            if (!specialty) {
-              rowErrors.push(`Row ${index + 1}: Missing specialty`);
-              return;
-            }
-
-            try {
-              const newData: MarketData = {
-                id: `uploaded_${index}`,
-                specialty,
-                p25_total: parseFloat(row.p25_TCC || '0'),
-                p50_total: parseFloat(row.p50_TCC || '0'),
-                p75_total: parseFloat(row.p75_TCC || '0'),
-                p90_total: parseFloat(row.p90_TCC || '0'),
-                p25_wrvu: parseFloat(row.p25_wrvu || '0'),
-                p50_wrvu: parseFloat(row.p50_wrvu || '0'),
-                p75_wrvu: parseFloat(row.p75_wrvu || '0'),
-                p90_wrvu: parseFloat(row.p90_wrvu || '0'),
-                p25_cf: parseFloat(row.p25_cf || '0'),
-                p50_cf: parseFloat(row.p50_cf || '0'),
-                p75_cf: parseFloat(row.p75_cf || '0'),
-                p90_cf: parseFloat(row.p90_cf || '0')
-              };
-
-              // Validate the data
-              const hasValidData = 
-                !isNaN(newData.p25_total) && !isNaN(newData.p50_total) && 
-                !isNaN(newData.p75_total) && !isNaN(newData.p90_total) &&
-                !isNaN(newData.p25_wrvu) && !isNaN(newData.p50_wrvu) &&
-                !isNaN(newData.p75_wrvu) && !isNaN(newData.p90_wrvu) &&
-                !isNaN(newData.p25_cf) && !isNaN(newData.p50_cf) &&
-                !isNaN(newData.p75_cf) && !isNaN(newData.p90_cf);
-
-              if (hasValidData) {
-                processedData.push(newData);
-              } else {
-                rowErrors.push(`Row ${index + 1}: Invalid data format`);
-              }
-            } catch (err) {
-              rowErrors.push(`Row ${index + 1}: Error processing data`);
-            }
-          });
-
-          if (rowErrors.length > 0) {
-            setError(`Errors found in CSV:\n${rowErrors.join('\n')}`);
-          }
-
-          if (processedData.length > 0) {
-            localStorage.setItem('uploadedMarketData', JSON.stringify(processedData));
-            localStorage.setItem('dataChoiceMade', 'true');
-            setMarketData(processedData);
-            setShowInitialChoice(false);
-            setHasUserMadeChoice(true);
-          } else {
-            setError('No valid data found in the CSV file');
-          }
-          setIsProcessing(false);
-        },
-        error: (error: ParseError) => {
-          setError(`Error parsing file: ${error.message}`);
-          setIsProcessing(false);
-        }
-      });
-    } catch (err) {
-      setError(`Error reading file: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      setIsProcessing(false);
-    }
-  };
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const choiceMade = localStorage.getItem('dataChoiceMade');
-      if (!choiceMade) {
-        setShowInitialChoice(true);
-        setLoading(false);
-        return;
-      }
-
-      const storedData = localStorage.getItem('uploadedMarketData');
-      let data: MarketData[] = storedData ? JSON.parse(storedData) : [];
-      
-      if (data.length === 0) {
-        try {
-          const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
-          const csvResponse = await fetch(`${basePath}/data/market-reference-data.csv`);
-          if (!csvResponse.ok) {
-            throw new Error(`Failed to fetch CSV data: ${csvResponse.statusText}`);
-          }
-          const csvText = await csvResponse.text();
-          
-          const Papa = (await import('papaparse')).default;
-          const parsedData: MarketData[] = [];
-          
-          await new Promise<void>((resolve) => {
-            Papa.parse(csvText, {
-              header: true,
-              skipEmptyLines: true,
-              complete: (results) => {
-                results.data.forEach((row: any, index: number) => {
-                  if (!row.specialty) return;
-                  
-                  const newData: MarketData = {
-                    id: `default_${index + 1}`,
-                    specialty: row.specialty,
-                    p25_total: parseFloat(row.p25_TCC || '0'),
-                    p50_total: parseFloat(row.p50_TCC || '0'),
-                    p75_total: parseFloat(row.p75_TCC || '0'),
-                    p90_total: parseFloat(row.p90_TCC || '0'),
-                    p25_wrvu: parseFloat(row.p25_wrvu || '0'),
-                    p50_wrvu: parseFloat(row.p50_wrvu || '0'),
-                    p75_wrvu: parseFloat(row.p75_wrvu || '0'),
-                    p90_wrvu: parseFloat(row.p90_wrvu || '0'),
-                    p25_cf: parseFloat(row.p25_cf || '0'),
-                    p50_cf: parseFloat(row.p50_cf || '0'),
-                    p75_cf: parseFloat(row.p75_cf || '0'),
-                    p90_cf: parseFloat(row.p90_cf || '0')
-                  };
-                  parsedData.push(newData);
+              if (!aggregatedData.has(specialty)) {
+                aggregatedData.set(specialty, {
+                  specialty,
+                  tcc: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
+                  wrvu: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
+                  cf: Array(4).fill(null).map(() => ({ sum: 0, count: 0 }))
                 });
-                data = parsedData;
-                resolve();
-              },
-              error: (error: ParseError) => {
-                throw new Error(`Failed to parse CSV: ${error.message}`);
               }
+
+              const specialtyData = aggregatedData.get(specialty)!;
+
+              // Aggregate TCC data
+              const tccFields = [
+                survey.mappings.tcc.p25,
+                survey.mappings.tcc.p50,
+                survey.mappings.tcc.p75,
+                survey.mappings.tcc.p90
+              ];
+              tccFields.forEach((field, index) => {
+                const value = parseFloat(row[field]);
+                if (!isNaN(value) && value > 0) {
+                  specialtyData.tcc[index].sum += value;
+                  specialtyData.tcc[index].count += 1;
+                }
+              });
+
+              // Aggregate WRVU data
+              const wrvuFields = [
+                survey.mappings.wrvu.p25,
+                survey.mappings.wrvu.p50,
+                survey.mappings.wrvu.p75,
+                survey.mappings.wrvu.p90
+              ];
+              wrvuFields.forEach((field, index) => {
+                const value = parseFloat(row[field]);
+                if (!isNaN(value) && value > 0) {
+                  specialtyData.wrvu[index].sum += value;
+                  specialtyData.wrvu[index].count += 1;
+                }
+              });
+
+              // Aggregate CF data
+              const cfFields = [
+                survey.mappings.cf.p25,
+                survey.mappings.cf.p50,
+                survey.mappings.cf.p75,
+                survey.mappings.cf.p90
+              ];
+              cfFields.forEach((field, index) => {
+                const value = parseFloat(row[field]);
+                if (!isNaN(value) && value > 0) {
+                  specialtyData.cf[index].sum += value;
+                  specialtyData.cf[index].count += 1;
+                }
+              });
             });
           });
-        } catch (csvError) {
-          console.warn('Failed to load CSV, falling back to JSON:', csvError);
-          const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
-          const jsonResponse = await fetch(`${basePath}/data/market-data.json`);
-          if (!jsonResponse.ok) {
-            throw new Error(`Failed to fetch JSON data: ${jsonResponse.statusText}`);
-          }
-          data = await jsonResponse.json();
+
+          // Convert aggregated data to MarketData format
+          data = Array.from(aggregatedData.values()).map((item, index) => ({
+            id: `aggregated_${index + 1}`,
+            specialty: item.specialty,
+            p25_total: item.tcc[0].count > 0 ? item.tcc[0].sum / item.tcc[0].count : 0,
+            p50_total: item.tcc[1].count > 0 ? item.tcc[1].sum / item.tcc[1].count : 0,
+            p75_total: item.tcc[2].count > 0 ? item.tcc[2].sum / item.tcc[2].count : 0,
+            p90_total: item.tcc[3].count > 0 ? item.tcc[3].sum / item.tcc[3].count : 0,
+            p25_wrvu: item.wrvu[0].count > 0 ? item.wrvu[0].sum / item.wrvu[0].count : 0,
+            p50_wrvu: item.wrvu[1].count > 0 ? item.wrvu[1].sum / item.wrvu[1].count : 0,
+            p75_wrvu: item.wrvu[2].count > 0 ? item.wrvu[2].sum / item.wrvu[2].count : 0,
+            p90_wrvu: item.wrvu[3].count > 0 ? item.wrvu[3].sum / item.wrvu[3].count : 0,
+            p25_cf: item.cf[0].count > 0 ? item.cf[0].sum / item.cf[0].count : 0,
+            p50_cf: item.cf[1].count > 0 ? item.cf[1].sum / item.cf[1].count : 0,
+            p75_cf: item.cf[2].count > 0 ? item.cf[2].sum / item.cf[2].count : 0,
+            p90_cf: item.cf[3].count > 0 ? item.cf[3].sum / item.cf[3].count : 0,
+            source: {
+              type: 'aggregated_survey',
+              name: 'Aggregated Survey Data',
+              timestamp: new Date().toISOString()
+            }
+          }));
         }
-      }
-      
-      if (!Array.isArray(data) || data.length === 0) {
-        throw new Error('No valid market data available');
-      }
-      
-      setMarketData(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load market data. Please try again later.');
-      console.error('Error loading market data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
+        // If no survey data, show an error
+        if (!Array.isArray(data) || data.length === 0) {
+          throw new Error('No survey data available. Please upload survey data first.');
+        }
+        
+        setMarketData(data);
+        if (onDataSourceSelected) {
+          onDataSourceSelected();
+        }
+      } catch (error) {
+        console.error('Error loading market data:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load market data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadData();
-  }, []);
-
-  // Call onDataSourceSelected when data is loaded
-  useEffect(() => {
-    if (marketData.length > 0 && !showInitialChoice) {
-      onDataSourceSelected?.();
-    }
-  }, [marketData.length, showInitialChoice, onDataSourceSelected]);
+  }, [onDataSourceSelected]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value;
@@ -1032,85 +898,18 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     setTimeout(updateTotalTcc, 0);
   };
 
-  if (showInitialChoice) {
+  if (loading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
         <div className="max-w-md w-full mx-4">
           <div className="bg-white rounded-lg p-8 shadow-lg border border-gray-200">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Choose Your Data Source</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Loading...</h2>
             <p className="text-gray-600 mb-6">
-              Would you like to use our preloaded market data or upload your own data?
+              Please wait while we load the market data.
             </p>
-            <div className="space-y-4">
-              <button
-                onClick={handleUsePreloadedData}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Use Market Intelligence Data
-              </button>
-              <div className="relative">
-                <label className="w-full px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer flex items-center justify-center">
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleInitialFileUpload}
-                    className="hidden"
-                  />
-                  Upload My Own Data (CSV)
-                </label>
-              </div>
-              <button
-                onClick={() => setShowTemplateGuide(!showTemplateGuide)}
-                className="w-full px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center"
-              >
-                <DocumentTextIcon className="w-4 h-4 mr-2" />
-                {showTemplateGuide ? 'Hide CSV Guide' : 'View CSV Template & Guide'}
-              </button>
-            </div>
-
-            {showTemplateGuide && (
-              <div className="mt-6 border-t border-gray-200 pt-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">CSV File Format</h3>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <div className="font-medium text-gray-700 mb-2">Required Columns:</div>
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <div>• specialty (text)</div>
-                          <div>• p25_TCC, p50_TCC, p75_TCC, p90_TCC (numbers)</div>
-                          <div>• p25_wrvu, p50_wrvu, p75_wrvu, p90_wrvu (numbers)</div>
-                          <div>• p25_cf, p50_cf, p75_cf, p90_cf (decimals)</div>
-                        </div>
-                      </div>
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <div className="font-medium text-blue-900 mb-2">Example Row:</div>
-                        <code className="text-xs bg-white p-2 rounded block overflow-x-auto">
-                          Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25
-                        </code>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={downloadSampleCSV}
-                    className="w-full px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center"
-                  >
-                    <ArrowUpTrayIcon className="w-4 h-4 mr-2" />
-                    Download Sample CSV
-                  </button>
-                </div>
-              </div>
-            )}
-
             {error && (
               <div className="mt-4 p-4 bg-red-50 rounded-lg text-red-700 text-sm">
                 {error}
-              </div>
-            )}
-            {isProcessing && (
-              <div className="mt-4 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-3 text-gray-600">Processing...</span>
               </div>
             )}
           </div>
@@ -1123,6 +922,7 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     <div className="space-y-8">
       {/* Calculator Form */}
       <div className="space-y-6 sm:space-y-8">
+        {/* Calculator Form */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
           {/* First Column */}
           <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
@@ -1455,14 +1255,14 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
                     <svg className="w-5 h-5 text-blue-500 mr-3 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-blue-900">
-                        Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
-                      </div>
-                      <p className="mt-1 text-sm text-blue-700">
-                        Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
-                      </p>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-blue-900">
+                      Normalized to 1.0 FTE for comparison: {formatValue(parseFloat(inputValue.replace(/[^0-9.]/g, '')) / parseFloat(fte))}
                     </div>
+                    <p className="mt-1 text-sm text-blue-700">
+                      Survey data is based on 1.0 FTE, so we normalize your input for accurate comparison.
+                    </p>
                   </div>
                 </div>
               )}

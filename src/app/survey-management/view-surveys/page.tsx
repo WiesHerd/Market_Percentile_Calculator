@@ -157,9 +157,93 @@ export default function ViewSurveysPage() {
     return vendorMap[vendor.toLowerCase()] || vendor;
   };
 
-  const filteredData = selectedSurvey?.data.filter(item =>
-    item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || [];
+  const aggregateData = (): SurveyData[] => {
+    // Create a map to store aggregated values for each specialty
+    const specialtyMap = new Map<string, {
+      tcc: Array<{ sum: number, count: number }>,
+      wrvu: Array<{ sum: number, count: number }>,
+      cf: Array<{ sum: number, count: number }>
+    }>();
+
+    // Process each survey
+    surveys.forEach(survey => {
+      survey.data.forEach(item => {
+        if (!specialtyMap.has(item.specialty)) {
+          specialtyMap.set(item.specialty, {
+            tcc: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
+            wrvu: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
+            cf: Array(4).fill(null).map(() => ({ sum: 0, count: 0 }))
+          });
+        }
+
+        const specialtyData = specialtyMap.get(item.specialty)!;
+
+        // Aggregate TCC data
+        if (item.tcc) {
+          const values = [item.tcc.p25, item.tcc.p50, item.tcc.p75, item.tcc.p90];
+          values.forEach((value, index) => {
+            if (value && value > 0) {
+              specialtyData.tcc[index].sum += value;
+              specialtyData.tcc[index].count += 1;
+            }
+          });
+        }
+
+        // Aggregate WRVU data
+        if (item.wrvu) {
+          const values = [item.wrvu.p25, item.wrvu.p50, item.wrvu.p75, item.wrvu.p90];
+          values.forEach((value, index) => {
+            if (value && value > 0) {
+              specialtyData.wrvu[index].sum += value;
+              specialtyData.wrvu[index].count += 1;
+            }
+          });
+        }
+
+        // Aggregate CF data
+        if (item.cf) {
+          const values = [item.cf.p25, item.cf.p50, item.cf.p75, item.cf.p90];
+          values.forEach((value, index) => {
+            if (value && value > 0) {
+              specialtyData.cf[index].sum += value;
+              specialtyData.cf[index].count += 1;
+            }
+          });
+        }
+      });
+    });
+
+    // Convert aggregated data back to SurveyData format
+    return Array.from(specialtyMap.entries()).map(([specialty, data]) => ({
+      specialty,
+      tcc: {
+        p25: data.tcc[0].count > 0 ? data.tcc[0].sum / data.tcc[0].count : 0,
+        p50: data.tcc[1].count > 0 ? data.tcc[1].sum / data.tcc[1].count : 0,
+        p75: data.tcc[2].count > 0 ? data.tcc[2].sum / data.tcc[2].count : 0,
+        p90: data.tcc[3].count > 0 ? data.tcc[3].sum / data.tcc[3].count : 0
+      },
+      wrvu: {
+        p25: data.wrvu[0].count > 0 ? data.wrvu[0].sum / data.wrvu[0].count : 0,
+        p50: data.wrvu[1].count > 0 ? data.wrvu[1].sum / data.wrvu[1].count : 0,
+        p75: data.wrvu[2].count > 0 ? data.wrvu[2].sum / data.wrvu[2].count : 0,
+        p90: data.wrvu[3].count > 0 ? data.wrvu[3].sum / data.wrvu[3].count : 0
+      },
+      cf: {
+        p25: data.cf[0].count > 0 ? data.cf[0].sum / data.cf[0].count : 0,
+        p50: data.cf[1].count > 0 ? data.cf[1].sum / data.cf[1].count : 0,
+        p75: data.cf[2].count > 0 ? data.cf[2].sum / data.cf[2].count : 0,
+        p90: data.cf[3].count > 0 ? data.cf[3].sum / data.cf[3].count : 0
+      }
+    }));
+  };
+
+  const filteredData = showAggregated
+    ? aggregateData().filter(item =>
+        item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : selectedSurvey?.data.filter(item =>
+        item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
+      ) || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
