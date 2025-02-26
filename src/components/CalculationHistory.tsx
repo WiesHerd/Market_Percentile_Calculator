@@ -276,7 +276,7 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
 
                   {/* TCC Components Breakdown */}
                   {showComplianceDetails === calc.id && calc.metric === 'total' && Array.isArray(calc.tccComponents) && calc.tccComponents.length > 0 && (
-                    <tr className="bg-gray-50 animate-fadeIn">
+                    <tr className="animate-fadeIn">
                       <td colSpan={7} className="px-4 py-3">
                         {/* Compact Summary Header */}
                         <div className="flex items-center justify-between mb-3">
@@ -300,16 +300,16 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
                         </div>
 
                         {/* Compact Components Table */}
-                        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
                           <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                            <thead>
                               <tr>
-                                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
-                                <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Component</th>
+                                <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Value</th>
                                 {calc.fte !== 1.0 && (
-                                  <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Normalized</th>
+                                  <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Normalized</th>
                                 )}
-                                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+                                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Notes</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 text-sm">
@@ -332,13 +332,11 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
                                 return (
                                   <tr 
                                     key={component.id || index}
-                                    className={isBaseComponent ? 'bg-blue-50' : 'bg-white'}
+                                    className={`hover:bg-gray-50 transition-colors ${isBaseComponent ? 'bg-blue-50/10 font-medium' : ''}`}
                                   >
                                     <td className="px-3 py-2 whitespace-nowrap">
                                       <div className="flex items-center">
-                                        <span className={`text-sm ${
-                                          isBaseComponent ? 'text-gray-900 bg-gray-50' : 'text-gray-900'
-                                        } font-medium`}>
+                                        <span className="text-sm text-gray-900">
                                           {component.name}
                                         </span>
                                         {component.normalize && (
@@ -351,7 +349,7 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
                                     <td className="px-3 py-2 whitespace-nowrap text-right">
                                       <div className="flex flex-col items-end">
                                         <div className="flex items-center space-x-2">
-                                          <span className="text-sm text-gray-900 font-medium">
+                                          <span className="text-sm text-gray-900">
                                             {component.isPercentage ? `${value}%` : formatValue(value, 'total')}
                                           </span>
                                           {component.isPercentage && (
@@ -366,7 +364,7 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
                                       <td className="px-3 py-2 whitespace-nowrap text-right">
                                         {component.normalize ? (
                                           <div className="flex flex-col items-end">
-                                            <span className="text-sm text-gray-700 font-medium">
+                                            <span className="text-sm text-gray-700">
                                               {component.isPercentage ? `${value}%` : formatValue(normalizedValue, 'total')}
                                             </span>
                                             {component.isPercentage && (
@@ -391,13 +389,13 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
                                 );
                               })}
                               {/* Total Row */}
-                              <tr className="bg-gray-50">
-                                <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">Total</td>
-                                <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium text-gray-900">
+                              <tr className="border-t border-gray-200 font-medium">
+                                <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Total</td>
+                                <td className="px-3 py-2 whitespace-nowrap text-right text-sm text-gray-900">
                                   {formatValue(calc.actualValue || 0, 'total')}
                                 </td>
                                 {calc.fte !== 1.0 && (
-                                  <td className="px-3 py-2 whitespace-nowrap text-right text-sm font-medium text-blue-600">
+                                  <td className="px-3 py-2 whitespace-nowrap text-right text-sm text-blue-600">
                                     {formatValue(calc.value || 0, 'total')}
                                   </td>
                                 )}
@@ -420,10 +418,10 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
                                   key={check.id}
                                   className={`flex items-center px-3 py-2 rounded-md text-sm ${
                                     check.type === 'flag'
-                                      ? 'bg-red-50 text-red-700'
+                                      ? 'text-red-600'
                                       : check.type === 'warning'
-                                      ? 'bg-yellow-50 text-yellow-700'
-                                      : 'bg-blue-50 text-blue-700'
+                                      ? 'text-yellow-600'
+                                      : 'text-blue-600'
                                   }`}
                                 >
                                   {check.type === 'flag' ? (
