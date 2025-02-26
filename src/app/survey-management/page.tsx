@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import Select, { MultiValue, StylesConfig } from 'react-select';
@@ -1479,6 +1479,25 @@ export default function SurveyManagementPage(): JSX.Element {
                 <p className="text-gray-600 max-w-2xl">
                   Upload your compensation survey data files (CSV format). You can upload multiple surveys before mapping.
                 </p>
+                <div className="mt-2 flex items-center space-x-4">
+                  <a
+                    href="/survey-format-guide.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    <DocumentTextIcon className="w-4 h-4 mr-1" />
+                    View Format Guide
+                  </a>
+                  <a
+                    href="/sample-survey-template.csv"
+                    download
+                    className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
+                    Download Template
+                  </a>
+                </div>
               </div>
               <div className="flex-shrink-0 w-64 space-y-2">
                 <select
@@ -1511,6 +1530,29 @@ export default function SurveyManagementPage(): JSX.Element {
                   />
                 )}
               </div>
+            </div>
+
+            {/* File Format Info */}
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">File Format Requirements:</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li className="flex items-center">
+                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
+                  Accepted formats: CSV (recommended), Excel (.xlsx, .xls)
+                </li>
+                <li className="flex items-center">
+                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
+                  Required columns: Specialty, TCC percentiles (25th, 50th, 75th, 90th)
+                </li>
+                <li className="flex items-center">
+                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
+                  Optional metrics: Work RVUs and Conversion Factors by percentile
+                </li>
+                <li className="flex items-center">
+                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
+                  Clean data: No currency symbols, commas, or special formatting
+                </li>
+              </ul>
             </div>
 
             {/* Enhanced Upload Area */}
