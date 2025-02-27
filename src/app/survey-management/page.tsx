@@ -13,6 +13,7 @@ import SpecialtyMappingStudio from '@/components/SpecialtyMappingStudio';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Link from 'next/link';
 import { Dialog } from '@headlessui/react';
+import { SpecialtyProgressDisplay } from '@/components/SpecialtyProgressDisplay';
 
 interface ColumnMappingMetric {
   p25: string;
@@ -1030,92 +1031,49 @@ export default function SurveyManagementPage(): JSX.Element {
     return true;
   };
 
-  const renderStepIndicator = () => (
-    <div className="flex items-center justify-center mb-6 max-w-4xl mx-auto">
-      <div className="flex flex-col items-center">
-        <button
-          onClick={() => setActiveStep('upload')}
-          disabled={!uploadedSurveys.length}
-          className={`
-            flex items-center justify-center w-12 h-12 rounded-xl border-2
-            ${uploadedSurveys.length > 0
-              ? 'border-green-200 bg-green-50 text-green-600'
-              : 'border-gray-200 bg-gray-50 text-gray-400'
-            }
-            transition-all duration-200 hover:bg-opacity-80
-          `}
-        >
-          {uploadedSurveys.length > 0 ? (
-            <CheckCircleIcon className="w-6 h-6 text-green-600" />
-          ) : (
-            <ArrowUpTrayIcon className="w-6 h-6" />
-          )}
-        </button>
-        <span className="mt-1.5 text-base font-medium text-gray-600">
-          Upload Surveys
-        </span>
-        <span className="mt-0.5 text-sm text-gray-500">
-          {uploadedSurveys.length} uploaded
-        </span>
-      </div>
+  const renderStepIndicator = (): JSX.Element => (
+    <div className="relative py-12">
+      <div className="flex items-center justify-between max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Survey Upload Step */}
+        <div className="flex flex-col items-center relative">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
+              <ArrowUpTrayIcon className="w-5 h-5 text-white" />
+            </div>
+            {uploadedSurveys.length > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                <span className="text-xs font-medium text-white">{uploadedSurveys.length}</span>
+              </div>
+            )}
+          </div>
+          <span className="mt-3 text-sm font-medium text-gray-900">Survey Upload</span>
+        </div>
 
-      <div className={`w-16 h-0.5 mx-4 ${uploadedSurveys.length > 0 ? 'bg-green-200' : 'bg-gray-200'}`} />
+        {/* Connecting Line 1 */}
+        <div className="flex-1 mx-4">
+          <div className="h-0.5 bg-[#4361ee]/20 rounded-full"></div>
+        </div>
 
-      <div className="flex flex-col items-center">
-        <button
-          onClick={() => uploadedSurveys.length && setActiveStep('mapping')}
-          disabled={!uploadedSurveys.length}
-          className={`
-            flex items-center justify-center w-12 h-12 rounded-xl border-2
-            ${calculateProgress() === 100
-              ? 'border-green-200 bg-green-50 text-green-600'
-              : uploadedSurveys.length
-                ? 'border-blue-200 bg-blue-50 text-blue-600'
-                : 'border-gray-200 bg-gray-50 text-gray-400'
-            }
-            transition-all duration-200 hover:bg-opacity-80
-          `}
-        >
-          {calculateProgress() === 100 ? (
-            <CheckCircleIcon className="w-6 h-6 text-green-600" />
-          ) : (
-            <TableCellsIcon className="w-6 h-6" />
-          )}
-        </button>
-        <span className="mt-1.5 text-base font-medium text-gray-600">
-          Map Columns
-        </span>
-        <span className="mt-0.5 text-sm text-gray-500">
-          {calculateProgress()}% complete
-        </span>
-      </div>
+        {/* Map Columns Step */}
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
+            <TableCellsIcon className="w-5 h-5 text-white" />
+          </div>
+          <span className="mt-3 text-sm font-medium text-gray-900">Map Columns</span>
+        </div>
 
-      <div className={`w-16 h-0.5 mx-4 ${calculateProgress() === 100 ? 'bg-green-200' : 'bg-gray-200'}`} />
+        {/* Connecting Line 2 */}
+        <div className="flex-1 mx-4">
+          <div className="h-0.5 bg-[#4361ee]/20 rounded-full"></div>
+        </div>
 
-      <div className="flex flex-col items-center">
-        <button
-          onClick={() => calculateProgress() === 100 && setActiveStep('specialties')}
-          disabled={uploadedSurveys.length === 0 || calculateProgress() !== 100}
-          className={`
-            flex items-center justify-center w-12 h-12 rounded-xl border-2
-            ${calculateSpecialtyProgress() === 100
-              ? 'border-green-200 bg-green-50 text-green-600'
-              : calculateProgress() === 100
-                ? 'border-blue-200 bg-blue-50 text-blue-600'
-                : 'border-gray-200 bg-gray-50 text-gray-400'
-            }
-            transition-all duration-200 hover:bg-opacity-80
-          `}
-        >
-          {calculateSpecialtyProgress() === 100 ? (
-            <CheckCircleIcon className="w-6 h-6 text-green-600" />
-          ) : (
-            <CheckCircleIcon className="w-6 h-6" />
-          )}
-        </button>
-        <span className="mt-1.5 text-base font-medium text-gray-600">
-          Map Specialties
-        </span>
+        {/* Map Specialties Step */}
+        <div className="flex flex-col items-center">
+          <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
+            <DocumentChartBarIcon className="w-5 h-5 text-white" />
+          </div>
+          <span className="mt-3 text-sm font-medium text-gray-900">Map Specialties</span>
+        </div>
       </div>
     </div>
   );
@@ -2259,10 +2217,8 @@ export default function SurveyManagementPage(): JSX.Element {
                   onClick={() => setShowSaveConfirmation(true)}
                   className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-xl shadow-lg text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105"
                 >
-                  <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                  </svg>
-                  Save Mappings
+                  <CheckCircleIcon className="w-5 h-5 mr-2" />
+                  Mapping Complete
                 </button>
               </div>
             </div>

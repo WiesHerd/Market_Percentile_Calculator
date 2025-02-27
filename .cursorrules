@@ -1,5 +1,100 @@
 {
   "version": 1,
+  "guidelines": "You are an expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, and Tailwind and Framer Motion.\n\n- Code Style and Structure\n\n  - Write concise, technical TypeScript code with accurate examples.\n  - Use functional and declarative programming patterns; avoid classes.\n  - Prefer iteration and modularization over code duplication.\n  - Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).\n  - Structure files: exported component, subcomponents, helpers, static content, types.\n\n- Naming Conventions\n\n  - All components should go in src/components and be named like new-component.tsx\n  - Use lowercase with dashes for directories (e.g., components/auth-wizard).\n  - Favor named exports for components.\n\n- TypeScript Usage\n\n  - Use TypeScript for all code; prefer interfaces over types.\n  - Avoid enums; use maps instead.\n  - Use functional components with TypeScript interfaces.\n\n- Syntax and Formatting\n\n  - Use the \"function\" keyword for pure functions.\n  - Avoid unnecessary curly braces in conditionals; use concise syntax for simple statements.\n  - Use declarative JSX.\n\n- UI and Styling\n\n  - Use Shadcn UI, and Tailwind for components and styling.\n  - Implement responsive design with Tailwind CSS; use a mobile-first approach.\n\n- Performance Optimization\n\n  - Minimize 'use client', 'useEffect', and 'setState'; favor React Server Components (RSC).\n  - Wrap client components in Suspense with fallback.\n  - Use dynamic loading for non-critical components.\n  - Optimize images: use WebP format, include size data, implement lazy loading.\n\n- Key Conventions\n\n  - Use 'nuqs' for URL search parameter state management.\n  - Optimize Web Vitals (LCP, CLS, FID).\n  - Limit 'use client':\n    - Favor server components and Next.js SSR.\n    - Use only for Web API access in small components.\n    - Avoid for data fetching or state management.\n  - Follow Next.js docs for Data Fetching, Rendering, and Routing.\n  - While creating placeholder images as a part of your seed data, use https://placekitten.com/\n  - Place both the /app and /components folders under a /src directory. This organization offers several benefits:\n    - It helps maintain a clean and organized project structure.\n    - It allows for easier navigation and management of components and pages.\n    - It adheres to common industry standards, making it easier for other developers to understand and contribute to the project.\n    - It provides a clear separation between application logic (in /src/app) and UI components (in /src/components), improving code readability and reusability.\n    - It simplifies the process of creating new pages and components, as you can easily find the corresponding files in the /src directory.\n    - It makes the project more modular and easier to scale as the application grows.\n    - It adheres to the principle of separation of concerns, where different aspects of the application are handled by different directories.\n\n## Components Organization\n\nWithin the /src/components folder, consider organizing components by type or feature:\n\nBy Type: Group components like forms, buttons, layout elements, etc.\n\nBy Feature: For larger applications, group components related to specific features or domains\n\nFor example:\n\n  /src/components\n  ├── /ui\n  │   ├── /Button\n  │   ├── /Modal\n  │   └── /Card\n  ├── /forms\n  │   ├── /TextField\n  │   └── /Select\n  └── /layout\n      ├── /Navbar\n      └── /Footer\n\n- Private Components: Use _components folder within app subdirectories\n\n- Shared Components: Use /src/components for reusable components\n\n- Modular Approach: Consider feature-based folders with components, hooks, and utilities specific to that feature.",
+  "expertise": {
+    "description": "Expert in TypeScript, Node.js, Next.js App Router, React, Shadcn UI, and Tailwind and Framer Motion",
+    "codeStyle": {
+      "description": [
+        "Write concise, technical TypeScript code with accurate examples",
+        "Use functional and declarative programming patterns; avoid classes",
+        "Prefer iteration and modularization over code duplication",
+        "Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError)",
+        "Structure files: exported component, subcomponents, helpers, static content, types"
+      ]
+    },
+    "namingConventions": {
+      "description": [
+        "All components should go in src/components and be named like new-component.tsx",
+        "Use lowercase with dashes for directories (e.g., components/auth-wizard)",
+        "Favor named exports for components"
+      ]
+    },
+    "typescriptUsage": {
+      "description": [
+        "Use TypeScript for all code; prefer interfaces over types",
+        "Avoid enums; use maps instead",
+        "Use functional components with TypeScript interfaces"
+      ]
+    },
+    "syntaxAndFormatting": {
+      "description": [
+        "Use the \"function\" keyword for pure functions",
+        "Avoid unnecessary curly braces in conditionals; use concise syntax for simple statements",
+        "Use declarative JSX"
+      ]
+    },
+    "uiAndStyling": {
+      "description": [
+        "Use Shadcn UI, and Tailwind for components and styling",
+        "Implement responsive design with Tailwind CSS; use a mobile-first approach"
+      ]
+    },
+    "performanceOptimization": {
+      "description": [
+        "Minimize 'use client', 'useEffect', and 'setState'; favor React Server Components (RSC)",
+        "Wrap client components in Suspense with fallback",
+        "Use dynamic loading for non-critical components",
+        "Optimize images: use WebP format, include size data, implement lazy loading"
+      ]
+    },
+    "keyConventions": {
+      "description": [
+        "Use 'nuqs' for URL search parameter state management",
+        "Optimize Web Vitals (LCP, CLS, FID)",
+        "Limit 'use client':",
+        "- Favor server components and Next.js SSR",
+        "- Use only for Web API access in small components",
+        "- Avoid for data fetching or state management",
+        "Follow Next.js docs for Data Fetching, Rendering, and Routing",
+        "While creating placeholder images as a part of your seed data, use https://placekitten.com/"
+      ]
+    },
+    "projectStructure": {
+      "description": [
+        "Place both the /app and /components folders under a /src directory for:",
+        "- Clean and organized project structure",
+        "- Easier navigation and management",
+        "- Industry standard adherence",
+        "- Clear separation between app logic and UI components",
+        "- Simplified page and component creation",
+        "- Improved modularity and scalability",
+        "- Better separation of concerns"
+      ]
+    },
+    "componentOrganization": {
+      "description": [
+        "Organize /src/components by type or feature:",
+        "By Type: Group components like forms, buttons, layout elements",
+        "By Feature: Group components related to specific features or domains",
+        "Example structure:",
+        "/src/components",
+        "├── /ui",
+        "│   ├── /Button",
+        "│   ├── /Modal",
+        "│   └── /Card",
+        "├── /forms",
+        "│   ├── /TextField",
+        "│   └── /Select",
+        "└── /layout",
+        "    ├── /Navbar",
+        "    └── /Footer",
+        "",
+        "Private Components: Use _components folder within app subdirectories",
+        "Shared Components: Use /src/components for reusable components",
+        "Modular Approach: Consider feature-based folders with components, hooks, and utilities"
+      ]
+    }
+  },
   "rules": {
     "formatting": {
       "indentSize": 2,
@@ -48,7 +143,18 @@
       "strict": true,
       "noUncheckedIndexedAccess": true,
       "useUnknownInCatchVariables": true,
-      "noPropertyAccessFromIndexSignature": true
+      "noPropertyAccessFromIndexSignature": true,
+      "preferences": {
+        "interfacesOverTypes": true,
+        "avoidEnums": true,
+        "functionalComponents": true,
+        "pureFunction": true
+      },
+      "nextjs": {
+        "enforceServerComponentTypes": true,
+        "enforceMetadataTypes": true,
+        "enforceRouteTypes": true
+      }
     },
     "react": {
       "hooks": {
@@ -210,7 +316,21 @@
       "requireImageOptimization": true,
       "requireCaching": true,
       "maxBundleSize": "250kb",
-      "requireCodeSplitting": true
+      "requireCodeSplitting": true,
+      "nextjs": {
+        "minimizeClientComponents": true,
+        "enforceServerComponents": true,
+        "optimizeImages": {
+          "format": "webp",
+          "sizingData": true,
+          "lazyLoading": true,
+          "placeholderService": "https://placekitten.com"
+        },
+        "stateManagement": {
+          "preferNuqs": true,
+          "minimizeClientState": true
+        }
+      }
     },
     "accessibility": {
       "requireAltText": true,
@@ -330,6 +450,81 @@
           "windows": "Use PowerShell syntax when process.platform === 'win32'",
           "unix": "Use Bash syntax when process.platform !== 'win32'"
         }
+      }
+    },
+    "nextjs": {
+      "appRouter": {
+        "enforceServerComponents": true,
+        "minimizeClientComponents": true,
+        "requireSuspenseBoundaries": true,
+        "requireErrorBoundaries": true,
+        "requireMetadata": true,
+        "requireLayoutStructure": true
+      },
+      "components": {
+        "location": "src/components",
+        "structure": {
+          "ui": ["Button", "Modal", "Card"],
+          "forms": ["TextField", "Select"],
+          "layout": ["Navbar", "Footer"]
+        },
+        "naming": {
+          "pattern": "kebab-case",
+          "extension": ".tsx",
+          "privatePrefix": "_"
+        },
+        "organization": {
+          "byType": ["ui", "forms", "layout"],
+          "byFeature": true,
+          "privateComponents": "_components"
+        }
+      },
+      "routing": {
+        "enforceAppRouter": true,
+        "requireMetadata": true,
+        "requireErrorHandling": true,
+        "requireLoading": true,
+        "requireNotFound": true
+      },
+      "dataFetching": {
+        "preferServerComponents": true,
+        "cacheStrategy": "force-cache",
+        "revalidationStrategy": "time-based",
+        "requireErrorHandling": true
+      }
+    },
+    "styling": {
+      "framework": "tailwind",
+      "ui": {
+        "library": "shadcn",
+        "customization": true,
+        "themeConsistency": true
+      },
+      "responsive": {
+        "mobileFist": true,
+        "breakpoints": ["sm", "md", "lg", "xl", "2xl"],
+        "containerQueries": true
+      },
+      "animation": {
+        "library": "framer-motion",
+        "performance": {
+          "willChange": true,
+          "gpuAcceleration": true
+        }
+      }
+    },
+    "projectStructure": {
+      "sourceDirectory": "src",
+      "enforceModularity": true,
+      "componentOrganization": {
+        "byType": true,
+        "byFeature": true,
+        "sharedComponents": "src/components",
+        "pageComponents": "src/app/_components"
+      },
+      "directoryNaming": {
+        "pattern": "kebab-case",
+        "enforceConsistency": true
       }
     }
   },
