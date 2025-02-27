@@ -1036,13 +1036,16 @@ export default function SurveyManagementPage(): JSX.Element {
       <div className="flex items-center justify-between max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Survey Upload Step */}
         <div className="flex flex-col items-center relative">
-          <div className="relative">
+          <div 
+            onClick={() => setActiveStep('upload')}
+            className="cursor-pointer relative"
+          >
             <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
               <ArrowUpTrayIcon className="w-5 h-5 text-white" />
             </div>
             {uploadedSurveys.length > 0 && (
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
-                <span className="text-xs font-medium text-white">{uploadedSurveys.length}</span>
+              <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">
+                {uploadedSurveys.length}
               </div>
             )}
           </div>
@@ -1056,8 +1059,13 @@ export default function SurveyManagementPage(): JSX.Element {
 
         {/* Map Columns Step */}
         <div className="flex flex-col items-center">
-          <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
-            <TableCellsIcon className="w-5 h-5 text-white" />
+          <div 
+            onClick={() => setActiveStep('mapping')}
+            className="cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
+              <TableCellsIcon className="w-5 h-5 text-white" />
+            </div>
           </div>
           <span className="mt-3 text-sm font-medium text-gray-900">Map Columns</span>
         </div>
@@ -1069,8 +1077,13 @@ export default function SurveyManagementPage(): JSX.Element {
 
         {/* Map Specialties Step */}
         <div className="flex flex-col items-center">
-          <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
-            <DocumentChartBarIcon className="w-5 h-5 text-white" />
+          <div 
+            onClick={() => setActiveStep('specialties')}
+            className="cursor-pointer"
+          >
+            <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
+              <DocumentChartBarIcon className="w-5 h-5 text-white" />
+            </div>
           </div>
           <span className="mt-3 text-sm font-medium text-gray-900">Map Specialties</span>
         </div>
