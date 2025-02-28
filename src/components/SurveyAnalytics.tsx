@@ -3,6 +3,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronDownIcon, ArrowDownTrayIcon, ChartBarIcon, DocumentChartBarIcon, ArrowsRightLeftIcon, MagnifyingGlassIcon, CheckIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { useSurveyContext } from '@/context/SurveyContext';
+import { 
+  areSpecialtiesSynonyms, 
+  getSpecialtySynonyms,
+  normalizeSpecialtyName,
+  areSpecialtyVariations,
+  findStandardSpecialty,
+  standardSpecialties,
+  StandardSpecialty
+} from '@/utils/specialtyMapping';
 
 interface SurveyMetric {
   p25: number;
@@ -98,32 +107,66 @@ const SurveyAnalytics: React.FC = () => {
 
   // Get all unique specialties
   const specialties = useMemo(() => {
-    const allSpecialties = Object.keys(specialtyMappings).sort();
-    console.log('Available specialties:', allSpecialties);
-    return allSpecialties;
-  }, [specialtyMappings]);
+    // Create a set to store unique primary specialties
+    const primarySpecialties = new Set<string>();
+
+    try {
+      // Load mapped groups from localStorage
+      const savedMappings = localStorage.getItem('specialty-mappings');
+      if (savedMappings) {
+        const mappedGroups = JSON.parse(savedMappings);
+        
+        // For each mapped group, add only the first specialty as the primary one
+        mappedGroups.forEach((group: { specialties: Array<{ specialty: string }> }) => {
+          if (group.specialties && group.specialties.length > 0) {
+            primarySpecialties.add(group.specialties[0].specialty);
+          }
+        });
+      }
+
+      // Add any standalone specialties from survey data that aren't mapped
+      if (surveyData && typeof surveyData === 'object') {
+        Object.entries(surveyData).forEach(([_, sectionData]) => {
+          if (sectionData && Array.isArray(sectionData)) {
+            sectionData.forEach(row => {
+              if (row && typeof row === 'object' && 'specialty' in row && typeof row.specialty === 'string') {
+                if (!primarySpecialties.has(row.specialty)) {
+                  primarySpecialties.add(row.specialty);
+                }
+              }
+            });
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error processing specialties:', error);
+    }
+
+    // Convert set to sorted array
+    return Array.from(primarySpecialties).sort();
+  }, [surveyData]);
 
   // Get survey data for selected specialty
   const specialtyData = useMemo(() => {
     if (!selectedSpecialty) return null;
 
+    // Get all related specialties from the mapping
     const mapping = specialtyMappings[selectedSpecialty];
-    if (!mapping) return null;
+    const allSpecialties = new Set([selectedSpecialty, ...(mapping?.mappedSpecialties || [])]);
 
-    const allSpecialties = [selectedSpecialty, ...mapping.mappedSpecialties];
     const surveyValues: Record<string, SurveyData> = {};
 
     // Collect data from each survey
     surveyData.forEach(survey => {
-      // Find all matching rows for the selected specialty and its mappings
+      // Find all matching rows for the selected specialty and its mapped variations
       const matchingRows = survey.data.filter(row => 
-        allSpecialties.includes(row.specialty)
+        allSpecialties.has(row.specialty)
       );
 
       if (matchingRows.length > 0) {
         // Aggregate the data for this vendor
         const aggregatedData: SurveyData = {
-          specialty: selectedSpecialty,
+          specialty: matchingRows[0].specialty,
           tcc: {
             p25: 0,
             p50: 0,
@@ -194,9 +237,11 @@ const SurveyAnalytics: React.FC = () => {
     return {
       surveyValues,
       averages,
-      mapping
+      mapping: {
+        mappedSpecialties: Array.from(allSpecialties)
+      }
     };
-  }, [selectedSpecialty, specialtyMappings, surveyData]);
+  }, [selectedSpecialty, surveyData, specialtyMappings]);
 
   // Function to determine step status
   const getStepStatus = (step: 'select' | 'analyze' | 'review') => {
@@ -230,30 +275,32 @@ const SurveyAnalytics: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Separate print view component
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
   const PrintView = () => {
     if (!selectedSpecialty || !specialtyData) return null;
     
     return (
-      <div className="print-only">
+      <div className="print-only" style={{ display: 'none' }}>
         <div className="print-content">
-          {/* Header */}
-          <div className="print-header">
-            <div className="header-title">Market Intelligence Suite</div>
-            <h1>Blended Survey Data</h1>
-            <h2>{selectedSpecialty}</h2>
-          </div>
-          
           {metricSections.map((section) => (
             <div key={section.key} className="metric-table">
               <h3>{section.title}</h3>
               <table>
                 <thead>
                   <tr>
-                    <th className="source-column">Source</th>
-                    {percentiles.map((p) => (
-                      <th key={p}>{p.replace('p', '')}th</th>
-                    ))}
+                    <th className="source-column">SOURCE</th>
+                    <th>25TH</th>
+                    <th>50TH</th>
+                    <th>75TH</th>
+                    <th>90TH</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -261,25 +308,19 @@ const SurveyAnalytics: React.FC = () => {
                     data[section.key] && (
                       <tr key={vendor}>
                         <td className="source-column">{formatVendorName(vendor)}</td>
-                        {percentiles.map((percentile) => (
-                          <td key={percentile}>
-                            {data[section.key]?.[percentile] ? 
-                              section.format(data[section.key]![percentile]) : 
-                              '—'}
-                          </td>
-                        ))}
+                        <td>{data[section.key]?.p25 !== undefined ? formatCurrency(data[section.key].p25) : '—'}</td>
+                        <td>{data[section.key]?.p50 !== undefined ? formatCurrency(data[section.key].p50) : '—'}</td>
+                        <td>{data[section.key]?.p75 !== undefined ? formatCurrency(data[section.key].p75) : '—'}</td>
+                        <td>{data[section.key]?.p90 !== undefined ? formatCurrency(data[section.key].p90) : '—'}</td>
                       </tr>
                     )
                   ))}
                   <tr className="average-row">
                     <td className="source-column">Average</td>
-                    {percentiles.map((percentile) => (
-                      <td key={percentile}>
-                        {specialtyData.averages[section.key][percentile] ? 
-                          section.format(specialtyData.averages[section.key][percentile]) : 
-                          '—'}
-                      </td>
-                    ))}
+                    <td>{formatCurrency(specialtyData.averages[section.key].p25)}</td>
+                    <td>{formatCurrency(specialtyData.averages[section.key].p50)}</td>
+                    <td>{formatCurrency(specialtyData.averages[section.key].p75)}</td>
+                    <td>{formatCurrency(specialtyData.averages[section.key].p90)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -287,10 +328,8 @@ const SurveyAnalytics: React.FC = () => {
           ))}
           
           <div className="print-footer">
-            <div className="timestamp">
-              Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
-            </div>
-            <div className="page-number">Page 1/1</div>
+            <span>Generated on {new Date().toLocaleDateString()}</span>
+            <span>Market Intelligence Suite - Confidential</span>
           </div>
         </div>
       </div>
@@ -308,61 +347,23 @@ const SurveyAnalytics: React.FC = () => {
 
   return (
     <>
-      {/* Regular view - hidden during print */}
-      <div className="min-h-screen bg-gray-50 no-print">
-        {/* Header */}
-        <div className="bg-white">
-          <div className="py-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-6">
-                <div className="space-y-3">
-                  <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-gray-900 via-blue-800 to-gray-900 bg-clip-text text-transparent">
-                    Survey Analytics
-                  </h2>
-                  <div className="h-1 w-24 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full"></div>
-                  <p className="text-sm font-medium text-gray-600 max-w-2xl tracking-wide">
-                    Analyze and compare compensation data across different specialties and surveys
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handlePrint}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <PrinterIcon className="h-4 w-4 mr-2 text-gray-500" />
-                  Print
-                </button>
-                <button
-                  onClick={handleExcelExport}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-                  Export to Excel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div className="min-h-screen no-print">
         <main className="py-8">
           <div className="space-y-6">
             {/* Search Bar */}
             <div className="relative search-bar">
-              <div className="relative">
-                <MagnifyingGlassIcon
-                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
-                  aria-hidden="true"
-                />
-                <input
-                  type="text"
-                  className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
-                  placeholder="Search specialties..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onClick={() => setIsOpen(true)}
-                />
-              </div>
+              <MagnifyingGlassIcon
+                className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+                aria-hidden="true"
+              />
+              <input
+                type="text"
+                className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
+                placeholder="Search specialties..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onClick={() => setIsOpen(true)}
+              />
 
               {/* Dropdown */}
               {isOpen && (
@@ -396,6 +397,19 @@ const SurveyAnalytics: React.FC = () => {
               )}
             </div>
 
+            {/* Empty State */}
+            {!selectedSpecialty && (
+              <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12">
+                <div className="text-center">
+                  <DocumentChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">No specialty selected</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Choose a specialty from the dropdown above to view compensation analytics
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Selected Specialty Display */}
             {selectedSpecialty && specialtyData && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 specialty-selector">
@@ -405,22 +419,14 @@ const SurveyAnalytics: React.FC = () => {
                       <h2 className="text-lg font-medium text-gray-900">
                         Selected: <span className="text-blue-600">{selectedSpecialty}</span>
                       </h2>
-                      {specialtyData.mapping.mappedSpecialties && specialtyData.mapping.mappedSpecialties.length > 0 && (
+                      {(specialtyData.mapping.mappedSpecialties || []).length > 0 && (
                         <p className="mt-1 text-sm text-gray-500">
-                          Mapped to: {specialtyData.mapping.mappedSpecialties.join(', ')}
+                          Mapped variations: {Object.entries(specialtyData.surveyValues).map(([vendor, data]) => data.specialty).join(', ')}
                         </p>
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Print-only header - hidden on screen */}
-            {selectedSpecialty && (
-              <div className="hidden print:block print-header">
-                <h1>Blended Survey Data</h1>
-                <h2>{selectedSpecialty}</h2>
               </div>
             )}
 
@@ -439,7 +445,7 @@ const SurveyAnalytics: React.FC = () => {
                       </div>
                     </div>
                     <div className="px-6 py-4 overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
+                      <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
                         <thead>
                           <tr>
                             <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -462,6 +468,9 @@ const SurveyAnalytics: React.FC = () => {
                               <tr key={vendor} className="hover:bg-gray-50">
                                 <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                                   {formatVendorName(vendor)}
+                                  <span className="text-xs text-blue-600 ml-1">
+                                    ({data.specialty})
+                                  </span>
                                 </td>
                                 {percentiles.map((percentile) => (
                                   <td key={percentile} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
@@ -495,24 +504,86 @@ const SurveyAnalytics: React.FC = () => {
                 </div>
               </div>
             )}
-
-            {/* Empty State */}
-            {!selectedSpecialty && (
-              <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12">
-                <div className="text-center">
-                  <DocumentChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">No specialty selected</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Choose a specialty from the dropdown above to view compensation analytics
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
         </main>
       </div>
 
       {/* Print view - only shown during print */}
+      <style jsx global>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          .print-only {
+            display: block !important;
+          }
+          .print-content {
+            padding: 20px;
+            font-size: 11px;
+          }
+          .metric-table {
+            margin-bottom: 24px;
+            page-break-inside: avoid;
+          }
+          .metric-table:last-child {
+            margin-bottom: 0;
+          }
+          .metric-table h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #111827;
+          }
+          .metric-table table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 4px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+          }
+          .metric-table th,
+          .metric-table td {
+            border: 1px solid #e5e7eb;
+            padding: 8px;
+            text-align: right;
+          }
+          .metric-table th.source-column,
+          .metric-table td.source-column {
+            text-align: left;
+            width: 25%;
+          }
+          .metric-table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #6b7280;
+          }
+          .metric-table td {
+            font-size: 11px;
+            color: #111827;
+          }
+          .average-row {
+            background-color: #eff6ff;
+            font-weight: 500;
+          }
+          .average-row td {
+            color: #1e40af;
+          }
+          .print-footer {
+            margin-top: 24px;
+            font-size: 9px;
+            color: #6b7280;
+            display: flex;
+            justify-content: space-between;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 12px;
+          }
+          @page {
+            margin: 0.5in;
+          }
+        }
+      `}</style>
       <PrintView />
     </>
   );

@@ -629,6 +629,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       return;
     }
 
+    console.log('Creating manual mapping from selected specialties:', selectedSpecialties);
+
     const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(key => {
       const [vendor, specialty] = key.split(':');
       return {
@@ -644,6 +646,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       createdAt: new Date(),
       isSingleSource: selectedItems.length === 1 // Mark as single source if only one specialty
     };
+
+    console.log('New mapping group created:', newGroup);
 
     setMappedGroups(prev => [...prev, newGroup]);
     setSelectedSpecialties(new Set());
@@ -673,6 +677,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Add effect to save mappings whenever they change
   useEffect(() => {
     try {
+      console.log('Saving mapped groups to localStorage:', mappedGroups);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedGroups));
     } catch (error) {
       console.error('Error saving mappings:', error);

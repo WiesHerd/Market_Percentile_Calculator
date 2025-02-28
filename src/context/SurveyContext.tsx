@@ -44,6 +44,12 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
   const [confidenceScores, setConfidenceScores] = useState<Record<string, number>>({});
 
   const updateSpecialtyMapping = (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => {
+    console.log('Updating specialty mapping:', {
+      sourceSpecialty,
+      mappedSpecialties,
+      notes
+    });
+
     const updatedMappings = {
       ...specialtyMappings,
       [sourceSpecialty]: {
@@ -52,12 +58,15 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
       }
     };
     
+    console.log('New specialty mappings state:', updatedMappings);
+    
     // Update state
     setSpecialtyMappings(updatedMappings);
     
     // Persist to localStorage
     try {
       localStorage.setItem('specialtyMappings', JSON.stringify(updatedMappings));
+      console.log('Saved specialty mappings to localStorage');
     } catch (error) {
       console.error('Error saving specialty mappings:', error);
     }
