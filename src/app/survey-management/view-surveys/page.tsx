@@ -246,54 +246,66 @@ export default function ViewSurveysPage() {
       ) || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-full mx-auto px-8">
-        <div className="pt-8 pb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Uploaded Surveys</h1>
-            <p className="mt-2 text-lg text-gray-600">
-              View and manage uploaded compensation survey data
-            </p>
-          </div>
-          <div className="flex gap-4">
-            {!showAggregated && (
-              <select
-                value={selectedSurvey?.id || ''}
-                onChange={(e) => {
-                  // If the value is "manual-upload", navigate to the market-data page
-                  if (e.target.value === "manual-upload") {
-                    window.location.href = "/market-data";
-                    return;
-                  }
-                  const survey = surveys.find(s => s.id === e.target.value);
-                  setSelectedSurvey(survey || null);
-                }}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                {surveys.map(survey => (
-                  <option key={survey.id} value={survey.id}>
-                    {formatVendorName(survey.vendor)}
-                  </option>
-                ))}
-                <option value="manual-upload">Manual Upload</option>
-              </select>
-            )}
-            <button
-              onClick={() => setShowAggregated(!showAggregated)}
-              className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                showAggregated
-                  ? 'border-blue-600 text-blue-600 bg-blue-50 hover:bg-blue-100'
-                  : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-              }`}
-            >
-              {showAggregated ? 'Show Individual Surveys' : 'Show Aggregated Data'}
-            </button>
-            <Link
-              href="/survey-management"
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Back to Survey Management
-            </Link>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Enhanced Header Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mb-8 overflow-hidden">
+          <div className="bg-blue-50 px-6 py-8">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm">
+                  <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900">Uploaded Surveys</h1>
+                  <p className="mt-2 text-gray-600 max-w-2xl">
+                    View and manage uploaded compensation survey data
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-4">
+                {!showAggregated && (
+                  <select
+                    value={selectedSurvey?.id || ''}
+                    onChange={(e) => {
+                      if (e.target.value === "manual-upload") {
+                        window.location.href = "/market-data";
+                        return;
+                      }
+                      const survey = surveys.find(s => s.id === e.target.value);
+                      setSelectedSurvey(survey || null);
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    {surveys.map(survey => (
+                      <option key={survey.id} value={survey.id}>
+                        {formatVendorName(survey.vendor)}
+                      </option>
+                    ))}
+                    <option value="manual-upload">Manual Upload</option>
+                  </select>
+                )}
+                <button
+                  onClick={() => setShowAggregated(!showAggregated)}
+                  className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                    showAggregated
+                      ? 'border-blue-600 text-blue-600 bg-blue-50 hover:bg-blue-100'
+                      : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  {showAggregated ? 'Show Individual Surveys' : 'Show Aggregated Data'}
+                </button>
+                <Link
+                  href="/survey-management"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Back to Survey Management
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
 

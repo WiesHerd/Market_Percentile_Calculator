@@ -4,23 +4,27 @@ import { QuestionMarkCircleIcon, BookOpenIcon, CalculatorIcon, ChartBarIcon, Doc
 
 export default function HelpPage() {
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-[1920px] mx-auto px-8">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header Section */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="px-6 py-5 border-b border-gray-200">
-            <div className="flex items-center">
-              <QuestionMarkCircleIcon className="h-8 w-8 text-blue-600 mr-3" />
-              <h1 className="text-2xl font-semibold text-gray-900">Help & Documentation</h1>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mt-8 mb-6">
+          <div className="px-6 py-8">
+            <div className="flex items-start space-x-4">
+              <div className="bg-blue-50 rounded-lg p-2">
+                <QuestionMarkCircleIcon className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">Help & Documentation</h1>
+                <p className="mt-2 text-gray-600 max-w-2xl">
+                  Learn how to use the Market Intelligence Suite effectively
+                </p>
+              </div>
             </div>
-            <p className="mt-2 text-gray-600">
-              Learn how to use the Market Intelligence Suite effectively
-            </p>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="p-6">
             {/* Introduction */}
             <div className="mb-8">

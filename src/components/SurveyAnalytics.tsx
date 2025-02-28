@@ -12,6 +12,7 @@ import {
   standardSpecialties,
   StandardSpecialty
 } from '@/utils/specialtyMapping';
+import { PrintLayout } from './PrintLayout';
 
 interface SurveyMetric {
   p25: number;
@@ -25,6 +26,11 @@ interface SurveyData {
   tcc?: SurveyMetric;
   wrvu?: SurveyMetric;
   cf?: SurveyMetric;
+}
+
+interface CustomBlendSelection {
+  surveyId: string;
+  specialty: string;
 }
 
 interface MetricSection {
@@ -95,7 +101,9 @@ const formatVendorName = (vendor: string): string => {
     'SULLIVAN COTTER': 'SullivanCotter',
     'SULLIVAN-COTTER': 'SullivanCotter'
   };
-  return vendorMap[vendor.toUpperCase()] || vendor;
+  const formattedName = vendorMap[vendor.toUpperCase()] || vendor;
+  // Keep MGMA in uppercase, others in proper case
+  return formattedName;
 };
 
 const SurveyAnalytics: React.FC = () => {
@@ -104,6 +112,8 @@ const SurveyAnalytics: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<'select' | 'analyze' | 'review'>('select');
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isCustomBlend, setIsCustomBlend] = useState(false);
+  const [customBlendSelections, setCustomBlendSelections] = useState<CustomBlendSelection[]>([]);
 
   // Get all unique specialties
   const specialties = useMemo(() => {
@@ -148,68 +158,71 @@ const SurveyAnalytics: React.FC = () => {
 
   // Get survey data for selected specialty
   const specialtyData = useMemo(() => {
-    if (!selectedSpecialty) return null;
-
-    // Get all related specialties from the mapping
-    const mapping = specialtyMappings[selectedSpecialty];
-    const allSpecialties = new Set([selectedSpecialty, ...(mapping?.mappedSpecialties || [])]);
+    if (!selectedSpecialty && !isCustomBlend) return null;
+    if (isCustomBlend && customBlendSelections.length === 0) return null;
 
     const surveyValues: Record<string, SurveyData> = {};
 
-    // Collect data from each survey
-    surveyData.forEach(survey => {
-      // Find all matching rows for the selected specialty and its mapped variations
-      const matchingRows = survey.data.filter(row => 
-        allSpecialties.has(row.specialty)
-      );
-
-      if (matchingRows.length > 0) {
-        // Aggregate the data for this vendor
-        const aggregatedData: SurveyData = {
-          specialty: matchingRows[0].specialty,
-          tcc: {
-            p25: 0,
-            p50: 0,
-            p75: 0,
-            p90: 0
-          },
-          wrvu: {
-            p25: 0,
-            p50: 0,
-            p75: 0,
-            p90: 0
-          },
-          cf: {
-            p25: 0,
-            p50: 0,
-            p75: 0,
-            p90: 0
-          }
-        };
-
-        // Calculate averages for each metric and percentile
-        ['tcc', 'wrvu', 'cf'].forEach(metric => {
-          percentiles.forEach(percentile => {
-            const values = matchingRows
-              .map(row => {
-                const metricData = row[metric as keyof typeof row];
-                return metricData && typeof metricData === 'object' ? metricData[percentile] : undefined;
-              })
-              .filter((v): v is number => v !== undefined && !isNaN(v));
-            
-            if (values.length > 0) {
-              const metricKey = metric as keyof SurveyData;
-              if (aggregatedData[metricKey] && typeof aggregatedData[metricKey] === 'object') {
-                (aggregatedData[metricKey] as SurveyMetric)[percentile] = 
-                  values.reduce((a, b) => a + b, 0) / values.length;
-              }
+    if (isCustomBlend) {
+      // Process custom blend selections
+      customBlendSelections.forEach(selection => {
+        if (selection.surveyId && selection.specialty) {
+          const survey = surveyData.find((s: { vendor: string }) => s.vendor === selection.surveyId);
+          if (survey) {
+            const matchingRow = survey.data.find((row: { specialty: string }) => row.specialty === selection.specialty);
+            if (matchingRow) {
+              surveyValues[`${selection.surveyId}-${selection.specialty}`] = {
+                specialty: selection.specialty,
+                tcc: matchingRow.tcc,
+                wrvu: matchingRow.wrvu,
+                cf: matchingRow.cf
+              };
             }
-          });
-        });
+          }
+        }
+      });
+    } else if (selectedSpecialty) {
+      // Get all related specialties from the mapping
+      const mapping = specialtyMappings[selectedSpecialty];
+      const allSpecialties = new Set([selectedSpecialty, ...(mapping?.mappedSpecialties || [])]);
 
-        surveyValues[survey.vendor] = aggregatedData;
-      }
-    });
+      // Collect data from each survey
+      surveyData.forEach(survey => {
+        const matchingRows = survey.data.filter(row => 
+          allSpecialties.has(row.specialty)
+        );
+
+        if (matchingRows.length > 0) {
+          const aggregatedData: SurveyData = {
+            specialty: matchingRows[0].specialty,
+            tcc: { p25: 0, p50: 0, p75: 0, p90: 0 },
+            wrvu: { p25: 0, p50: 0, p75: 0, p90: 0 },
+            cf: { p25: 0, p50: 0, p75: 0, p90: 0 }
+          };
+
+          ['tcc', 'wrvu', 'cf'].forEach(metric => {
+            percentiles.forEach(percentile => {
+              const values = matchingRows
+                .map(row => {
+                  const metricData = row[metric as keyof typeof row];
+                  return metricData && typeof metricData === 'object' ? metricData[percentile] : undefined;
+                })
+                .filter((v): v is number => v !== undefined && !isNaN(v));
+              
+              if (values.length > 0) {
+                const metricKey = metric as keyof SurveyData;
+                if (aggregatedData[metricKey] && typeof aggregatedData[metricKey] === 'object') {
+                  (aggregatedData[metricKey] as SurveyMetric)[percentile] = 
+                    values.reduce((a, b) => a + b, 0) / values.length;
+                }
+              }
+            });
+          });
+
+          surveyValues[survey.vendor] = aggregatedData;
+        }
+      });
+    }
 
     // Calculate overall averages across surveys
     const averages: Record<'tcc' | 'wrvu' | 'cf', SurveyMetric> = {
@@ -237,11 +250,15 @@ const SurveyAnalytics: React.FC = () => {
     return {
       surveyValues,
       averages,
-      mapping: {
-        mappedSpecialties: Array.from(allSpecialties)
+      mapping: isCustomBlend ? {
+        mappedSpecialties: customBlendSelections
+          .filter(s => s.surveyId && s.specialty)
+          .map(s => s.specialty)
+      } : {
+        mappedSpecialties: Array.from(new Set([selectedSpecialty, ...(specialtyMappings[selectedSpecialty]?.mappedSpecialties || [])]))
       }
     };
-  }, [selectedSpecialty, surveyData, specialtyMappings]);
+  }, [selectedSpecialty, surveyData, specialtyMappings, isCustomBlend, customBlendSelections]);
 
   // Function to determine step status
   const getStepStatus = (step: 'select' | 'analyze' | 'review') => {
@@ -287,52 +304,38 @@ const SurveyAnalytics: React.FC = () => {
   const PrintView = () => {
     if (!selectedSpecialty || !specialtyData) return null;
     
+    const customBlendSubheader = isCustomBlend 
+      ? `Custom Blend Analysis: ${customBlendSelections
+          .filter(s => s.surveyId && s.specialty)
+          .map(s => `${formatVendorName(s.surveyId)} - ${s.specialty}`)
+          .join(', ')}`
+      : `Specialty Analysis: ${selectedSpecialty}`;
+
+    const printSections = metricSections.map(section => ({
+      title: section.title,
+      data: Object.entries(specialtyData.surveyValues).map(([vendor, data]) => ({
+        source: `${formatVendorName(vendor.split('-')[0])} - ${data.specialty}`,
+        values: {
+          p25: data[section.key]?.p25 !== undefined ? section.format(data[section.key]!.p25) : '—',
+          p50: data[section.key]?.p50 !== undefined ? section.format(data[section.key]!.p50) : '—',
+          p75: data[section.key]?.p75 !== undefined ? section.format(data[section.key]!.p75) : '—',
+          p90: data[section.key]?.p90 !== undefined ? section.format(data[section.key]!.p90) : '—'
+        }
+      })),
+      averages: {
+        p25: section.format(specialtyData.averages[section.key].p25),
+        p50: section.format(specialtyData.averages[section.key].p50),
+        p75: section.format(specialtyData.averages[section.key].p75),
+        p90: section.format(specialtyData.averages[section.key].p90)
+      }
+    }));
+
     return (
-      <div className="print-only" style={{ display: 'none' }}>
-        <div className="print-content">
-          {metricSections.map((section) => (
-            <div key={section.key} className="metric-table">
-              <h3>{section.title}</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th className="source-column">SOURCE</th>
-                    <th>25TH</th>
-                    <th>50TH</th>
-                    <th>75TH</th>
-                    <th>90TH</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(specialtyData.surveyValues).map(([vendor, data]) => (
-                    data[section.key] && (
-                      <tr key={vendor}>
-                        <td className="source-column">{formatVendorName(vendor)}</td>
-                        <td>{data[section.key]?.p25 !== undefined ? formatCurrency(data[section.key].p25) : '—'}</td>
-                        <td>{data[section.key]?.p50 !== undefined ? formatCurrency(data[section.key].p50) : '—'}</td>
-                        <td>{data[section.key]?.p75 !== undefined ? formatCurrency(data[section.key].p75) : '—'}</td>
-                        <td>{data[section.key]?.p90 !== undefined ? formatCurrency(data[section.key].p90) : '—'}</td>
-                      </tr>
-                    )
-                  ))}
-                  <tr className="average-row">
-                    <td className="source-column">Average</td>
-                    <td>{formatCurrency(specialtyData.averages[section.key].p25)}</td>
-                    <td>{formatCurrency(specialtyData.averages[section.key].p50)}</td>
-                    <td>{formatCurrency(specialtyData.averages[section.key].p75)}</td>
-                    <td>{formatCurrency(specialtyData.averages[section.key].p90)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          ))}
-          
-          <div className="print-footer">
-            <span>Generated on {new Date().toLocaleDateString()}</span>
-            <span>Market Intelligence Suite - Confidential</span>
-          </div>
-        </div>
-      </div>
+      <PrintLayout
+        title="Market Data Report"
+        subtitle={customBlendSubheader}
+        sections={printSections}
+      />
     );
   };
 
@@ -347,8 +350,9 @@ const SurveyAnalytics: React.FC = () => {
 
   return (
     <>
-      <div className="min-h-screen no-print">
-        <main className="py-8">
+      {/* Screen View */}
+      <div className="screen-only">
+        <main className="max-w-7xl mx-auto">
           <div className="space-y-6">
             {/* Search Bar */}
             <div className="relative search-bar">
@@ -368,6 +372,23 @@ const SurveyAnalytics: React.FC = () => {
               {/* Dropdown */}
               {isOpen && (
                 <div className="absolute z-10 mt-1 w-full overflow-auto rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
+                  <div className="px-4 py-2 text-sm text-gray-700 border-b border-gray-200">
+                    <button
+                      onClick={() => {
+                        setIsCustomBlend(!isCustomBlend);
+                        setIsOpen(false);
+                        setSearchQuery('');
+                        if (!isCustomBlend) {
+                          setSelectedSpecialty(null);
+                          setCustomBlendSelections([]);
+                        }
+                      }}
+                      className="w-full text-left hover:text-blue-600 flex items-center space-x-2"
+                    >
+                      <ArrowsRightLeftIcon className="h-4 w-4" />
+                      <span>{isCustomBlend ? 'Switch to Standard View' : 'Create Custom Blend'}</span>
+                    </button>
+                  </div>
                   {filteredSpecialties.length === 0 ? (
                     <div className="px-4 py-2 text-sm text-gray-500">
                       No specialties found
@@ -383,9 +404,11 @@ const SurveyAnalytics: React.FC = () => {
                               : 'text-gray-900 hover:bg-gray-50'
                           }`}
                           onClick={() => {
-                            setSelectedSpecialty(specialty);
-                            setIsOpen(false);
-                            setSearchQuery('');
+                            if (!isCustomBlend) {
+                              setSelectedSpecialty(specialty);
+                              setIsOpen(false);
+                              setSearchQuery('');
+                            }
                           }}
                         >
                           {specialty}
@@ -397,8 +420,119 @@ const SurveyAnalytics: React.FC = () => {
               )}
             </div>
 
+            {/* Custom Blend Interface */}
+            {isCustomBlend && (
+              <div className="bg-white rounded-lg border-2 border-blue-200 p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-gray-900">Custom Survey Blend</h3>
+                  <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setCustomBlendSelections([...customBlendSelections, { surveyId: '', specialty: '' }])}
+                      className="inline-flex items-center px-3 py-1.5 border border-blue-600 text-sm font-medium rounded-lg text-blue-600 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Add Survey Selection
+                    </button>
+                    <button
+                      onClick={() => {
+                        const validSelections = customBlendSelections.filter(s => s.surveyId && s.specialty);
+                        if (validSelections.length === 0) {
+                          alert('Please select at least one survey and specialty to blend');
+                          return;
+                        }
+                        setIsCustomBlend(true);
+                        setSelectedSpecialty('custom-blend');
+                        setCustomBlendSelections([...validSelections]);
+                        setIsOpen(false);
+                      }}
+                      disabled={!customBlendSelections.some(s => s.surveyId && s.specialty)}
+                      className={`inline-flex items-center px-4 py-1.5 border text-sm font-medium rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                        customBlendSelections.some(s => s.surveyId && s.specialty)
+                          ? 'border-blue-600 text-white bg-blue-600 hover:bg-blue-700'
+                          : 'border-gray-300 text-gray-400 bg-gray-50 cursor-not-allowed'
+                      }`}
+                    >
+                      <ChartBarIcon className="h-4 w-4 mr-2" />
+                      Blend Data
+                    </button>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  {customBlendSelections.map((selection, index) => (
+                    <div key={index} className="flex items-center space-x-3">
+                      <select
+                        value={selection.surveyId}
+                        onChange={(e) => {
+                          const newSelections = [...customBlendSelections];
+                          newSelections[index] = { ...selection, surveyId: e.target.value, specialty: '' };
+                          setCustomBlendSelections(newSelections);
+                        }}
+                        className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="">Select Survey...</option>
+                        {surveyData.map((survey) => (
+                          <option key={survey.vendor} value={survey.vendor}>
+                            {formatVendorName(survey.vendor)}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      <select
+                        value={selection.specialty}
+                        onChange={(e) => {
+                          const newSelections = [...customBlendSelections];
+                          newSelections[index] = { ...selection, specialty: e.target.value };
+                          setCustomBlendSelections(newSelections);
+                        }}
+                        className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
+                        disabled={!selection.surveyId}
+                      >
+                        <option value="">Select Specialty...</option>
+                        {selection.surveyId && surveyData
+                          .find(s => s.vendor === selection.surveyId)
+                          ?.data.map(row => row.specialty)
+                          .filter((specialty, i, arr) => arr.indexOf(specialty) === i)
+                          .sort()
+                          .map(specialty => (
+                            <option key={specialty} value={specialty}>
+                              {specialty}
+                            </option>
+                          ))}
+                      </select>
+                      
+                      <button
+                        onClick={() => {
+                          const newSelections = [...customBlendSelections];
+                          newSelections.splice(index, 1);
+                          setCustomBlendSelections(newSelections);
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-500 rounded-lg hover:bg-red-50"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {customBlendSelections.length > 0 && (
+                  <div className="text-sm text-gray-500 mt-2">
+                    {customBlendSelections.some(s => s.surveyId && s.specialty) ? (
+                      <p className="flex items-center text-blue-600">
+                        <CheckIcon className="h-4 w-4 mr-1" />
+                        Ready to blend {customBlendSelections.filter(s => s.surveyId && s.specialty).length} specialties
+                      </p>
+                    ) : (
+                      <p>Select at least one survey and specialty to create a blend</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Empty State */}
-            {!selectedSpecialty && (
+            {!selectedSpecialty && !isCustomBlend && (
               <div className="bg-white rounded-lg border-2 border-dashed border-gray-300 p-12">
                 <div className="text-center">
                   <DocumentChartBarIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -411,17 +545,17 @@ const SurveyAnalytics: React.FC = () => {
             )}
 
             {/* Selected Specialty Display */}
-            {selectedSpecialty && specialtyData && (
+            {!isCustomBlend && selectedSpecialty && specialtyData && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 specialty-selector">
                 <div className="p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center">
                     <div>
                       <h2 className="text-lg font-medium text-gray-900">
                         Selected: <span className="text-blue-600">{selectedSpecialty}</span>
                       </h2>
-                      {(specialtyData.mapping.mappedSpecialties || []).length > 0 && (
+                      {specialtyData.mapping.mappedSpecialties.length > 1 && (
                         <p className="mt-1 text-sm text-gray-500">
-                          Mapped variations: {Object.entries(specialtyData.surveyValues).map(([vendor, data]) => data.specialty).join(', ')}
+                          Mapped variations: {specialtyData.mapping.mappedSpecialties.filter(s => s !== selectedSpecialty).join(', ')}
                         </p>
                       )}
                     </div>
@@ -431,7 +565,7 @@ const SurveyAnalytics: React.FC = () => {
             )}
 
             {/* Metrics Cards */}
-            {selectedSpecialty && specialtyData && (
+            {((selectedSpecialty && !isCustomBlend) || (isCustomBlend && customBlendSelections.some(s => s.surveyId && s.specialty))) && specialtyData && (
               <div className="space-y-6 print-content">
                 {metricSections.map((section) => (
                   <div key={section.key} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden metric-section">
@@ -467,15 +601,12 @@ const SurveyAnalytics: React.FC = () => {
                             data[section.key] && (
                               <tr key={vendor} className="hover:bg-gray-50">
                                 <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  {formatVendorName(vendor)}
-                                  <span className="text-xs text-blue-600 ml-1">
-                                    ({data.specialty})
-                                  </span>
+                                  {`${formatVendorName(vendor.split('-')[0])} - ${data.specialty}`}
                                 </td>
-                                {percentiles.map((percentile) => (
-                                  <td key={percentile} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
-                                    {data[section.key]?.[percentile] ? 
-                                      section.format(data[section.key]![percentile]) : 
+                                {percentiles.map((p) => (
+                                  <td key={p} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                                    {data[section.key]?.[p] ? 
+                                      section.format(data[section.key]![p]) : 
                                       '—'}
                                   </td>
                                 ))}
@@ -499,91 +630,13 @@ const SurveyAnalytics: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                <div className="print-footer">
-                  Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
-                </div>
               </div>
             )}
           </div>
         </main>
       </div>
 
-      {/* Print view - only shown during print */}
-      <style jsx global>{`
-        @media print {
-          .no-print {
-            display: none !important;
-          }
-          .print-only {
-            display: block !important;
-          }
-          .print-content {
-            padding: 20px;
-            font-size: 11px;
-          }
-          .metric-table {
-            margin-bottom: 24px;
-            page-break-inside: avoid;
-          }
-          .metric-table:last-child {
-            margin-bottom: 0;
-          }
-          .metric-table h3 {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #111827;
-          }
-          .metric-table table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 4px;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-          }
-          .metric-table th,
-          .metric-table td {
-            border: 1px solid #e5e7eb;
-            padding: 8px;
-            text-align: right;
-          }
-          .metric-table th.source-column,
-          .metric-table td.source-column {
-            text-align: left;
-            width: 25%;
-          }
-          .metric-table th {
-            background-color: #f9fafb;
-            font-weight: 600;
-            font-size: 10px;
-            text-transform: uppercase;
-            color: #6b7280;
-          }
-          .metric-table td {
-            font-size: 11px;
-            color: #111827;
-          }
-          .average-row {
-            background-color: #eff6ff;
-            font-weight: 500;
-          }
-          .average-row td {
-            color: #1e40af;
-          }
-          .print-footer {
-            margin-top: 24px;
-            font-size: 9px;
-            color: #6b7280;
-            display: flex;
-            justify-content: space-between;
-            border-top: 1px solid #e5e7eb;
-            padding-top: 12px;
-          }
-          @page {
-            margin: 0.5in;
-          }
-        }
-      `}</style>
+      {/* Print View */}
       <PrintView />
     </>
   );

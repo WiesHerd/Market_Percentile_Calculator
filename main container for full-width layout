@@ -1,0 +1,5 @@
+[33mcommit 1581e0c5d364f169a558aa873b7d4a924441f274[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Thu Feb 27 17:12:58 2025 -0700
+
+    fix: prevent duplicate specialties in dropdown by using first specialty from mapped groups - Modified specialties useMemo hook, added logging, improved type safety

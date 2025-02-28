@@ -175,19 +175,27 @@ export default function UploadHistoryPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow">
-        {/* Header */}
-          <div className="px-6 py-5 border-b border-gray-200">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Upload History</h1>
-                <p className="mt-1 text-sm text-gray-500">
-                  View and manage your uploaded survey data
-                </p>
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mt-8 mb-6 overflow-hidden">
+          <div className="bg-blue-50 px-6 py-8">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start space-x-4">
+                <div className="p-3 bg-white rounded-xl shadow-sm">
+                  <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  </svg>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900">Upload History</h1>
+                  <p className="mt-2 text-gray-600 max-w-2xl">
+                    View and manage your uploaded survey data
+                  </p>
+                </div>
               </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <div className="flex items-center space-x-4">
                 <div className="relative">
                   <input
                     type="text"
@@ -197,19 +205,21 @@ export default function UploadHistoryPage() {
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-            </div>
-            <Link
+                </div>
+                <Link
                   href="/survey-management"
                   className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
-              Upload New Survey
-            </Link>
+                >
+                  <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
+                  Upload New Survey
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
-                  </div>
 
-          {/* Table */}
+        {/* Table Section */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead>

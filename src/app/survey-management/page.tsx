@@ -266,6 +266,15 @@ export default function SurveyManagementPage(): JSX.Element {
                 mappingsCount: Object.keys(mostRecentSurvey.specialtyMappings).length,
                 progress: progress
               });
+
+              // If there are specialty mappings, go to specialties screen
+              setActiveStep('specialties');
+            } else if (mostRecentSurvey.mappings && Object.keys(mostRecentSurvey.mappings).length > 0) {
+              // If columns are mapped but no specialty mappings, go to specialty mapping
+              setActiveStep('specialties');
+            } else {
+              // If no mappings at all, go to column mapping
+              setActiveStep('mapping');
             }
             
             // Set other survey data
@@ -277,14 +286,21 @@ export default function SurveyManagementPage(): JSX.Element {
             }
             
             setShowMappingInterface(true);
-            setActiveStep('mapping');
+          } else {
+            // No surveys uploaded, go to upload screen
+            setActiveStep('upload');
           }
           
           setUploadedSurveys(parsedSurveys);
+        } else {
+          // No surveys in localStorage, go to upload screen
+          setActiveStep('upload');
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
         toast.error('Error loading saved surveys');
+        // On error, default to upload screen
+        setActiveStep('upload');
       }
     };
 
@@ -965,6 +981,8 @@ export default function SurveyManagementPage(): JSX.Element {
       // Get current specialty progress
       const currentProgress = calculateSpecialtyProgress();
       
+      console.log('Current specialty mappings before save:', specialtyMappings);
+      
       // Create a copy of the current mappings to ensure we preserve all flags
       const updatedMappings = { ...specialtyMappings };
       
@@ -980,12 +998,19 @@ export default function SurveyManagementPage(): JSX.Element {
         }
       });
       
+      console.log('Updated mappings after processing:', updatedMappings);
+      
       // Update all surveys with the current specialty mappings
       const updatedSurveys = uploadedSurveys.map(survey => ({
         ...survey,
         specialtyMappings: updatedMappings,
         mappingProgress: currentProgress
       }));
+
+      console.log('Saving to localStorage:', {
+        mappings: updatedMappings,
+        surveys: updatedSurveys
+      });
 
       // Save to localStorage with progress information
       localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));

@@ -1,5 +1,5 @@
 // Types for specialty mapping system
-interface StandardSpecialty {
+export interface StandardSpecialty {
   name: string;
   variations: string[];
   category: SpecialtyCategory;
@@ -11,7 +11,7 @@ interface StandardSpecialty {
   requiresQualifier?: boolean;  // For specialties like "General" that need context
 }
 
-type SpecialtyCategory = 
+export type SpecialtyCategory = 
   | 'Medical'
   | 'Surgical'
   | 'Hospital-Based'
@@ -20,7 +20,7 @@ type SpecialtyCategory =
   | 'Other';
 
 // Core mapping of standard specialties
-const standardSpecialties: Record<string, StandardSpecialty> = {
+export const standardSpecialties: Record<string, StandardSpecialty> = {
   // Primary Care Specialties
   "Family Medicine": {
     name: "Family Medicine",
@@ -51,6 +51,25 @@ const standardSpecialties: Record<string, StandardSpecialty> = {
   },
 
   // Medical Specialties
+  "Hematology and Oncology": {
+    name: "Hematology and Oncology",
+    variations: [
+      "Hematology/Oncology",
+      "Hematology & Oncology",
+      "Hematology-Oncology",
+      "Medical Oncology and Hematology",
+      "Hematology-Medical Oncology"
+    ],
+    category: "Medical",
+    keywords: ["hematology", "oncology", "cancer", "blood"],
+    relatedSpecialties: [
+      "Medical Oncology",
+      "Hematology",
+      "Pediatric Hematology/Oncology"
+    ],
+    requiresQualifier: false
+  },
+
   "Allergy and Immunology": {
     name: "Allergy and Immunology",
     variations: [
