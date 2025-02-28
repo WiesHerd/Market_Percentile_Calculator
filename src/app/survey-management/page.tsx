@@ -1425,7 +1425,7 @@ export default function SurveyManagementPage(): JSX.Element {
     );
   };
 
-  const renderDataPreview = () => (
+  const renderDataPreview = (): JSX.Element => (
     <div className="space-y-6">
       {/* Upload Area */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -1489,50 +1489,42 @@ export default function SurveyManagementPage(): JSX.Element {
               </div>
             </div>
 
-            {/* File Format Info */}
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">File Format Requirements:</h4>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li className="flex items-center">
-                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
-                  Accepted formats: CSV (recommended), Excel (.xlsx, .xls)
-                </li>
-                <li className="flex items-center">
-                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
-                  Required columns: Specialty, TCC percentiles (25th, 50th, 75th, 90th)
-                </li>
-                <li className="flex items-center">
-                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
-                  Optional metrics: Work RVUs and Conversion Factors by percentile
-                </li>
-                <li className="flex items-center">
-                  <CheckCircleIcon className="w-4 h-4 mr-2 text-blue-500" />
-                  Clean data: No currency symbols, commas, or special formatting
-                </li>
-              </ul>
-            </div>
-
             {/* Enhanced Upload Area */}
             <div 
               className={`
                 relative group border-2 border-dashed rounded-xl p-12 transition-all duration-300 ease-in-out
-                ${selectedVendor ? 'border-blue-200 hover:border-blue-400 bg-gradient-to-b from-blue-50/50 to-white' : 'border-gray-200 bg-gray-50 cursor-not-allowed'}
+                ${selectedVendor 
+                  ? 'hover:border-blue-400 hover:bg-blue-50/50' 
+                  : 'border-gray-200'
+                }
               `}
               onDragOver={(e) => {
                 e.preventDefault();
-                if (selectedVendor) e.dataTransfer.dropEffect = 'copy';
+                if (selectedVendor) {
+                  e.currentTarget.classList.add('border-blue-500', 'bg-blue-50');
+                  e.dataTransfer.dropEffect = 'copy';
+                }
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove('border-blue-500', 'bg-blue-50');
               }}
               onDrop={(e) => {
                 e.preventDefault();
+                e.currentTarget.classList.remove('border-blue-500', 'bg-blue-50');
                 if (!selectedVendor) return;
                 const file = e.dataTransfer?.files[0];
                 if (file) handleFileUpload(file);
               }}
             >
-              <div className="absolute inset-0 bg-grid-gray-100 opacity-[0.2] transition-opacity group-hover:opacity-[0.1]" />
-              
               <div className="relative flex flex-col items-center">
-                <div className={`mb-4 p-3 rounded-full ${selectedVendor ? 'bg-blue-100 text-blue-600 group-hover:scale-110' : 'bg-gray-100 text-gray-400'} transition-all duration-300`}>
+                <div className={`
+                  mb-4 p-3 rounded-full transition-all duration-300
+                  ${selectedVendor 
+                    ? 'bg-blue-100 text-blue-600 group-hover:scale-110 group-hover:bg-blue-200' 
+                    : 'bg-gray-100 text-gray-400'
+                  }
+                `}>
                   <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                   </svg>
@@ -1540,20 +1532,22 @@ export default function SurveyManagementPage(): JSX.Element {
 
                 <div className="text-center mb-4">
                   <h3 className={`text-lg font-medium mb-1 ${selectedVendor ? 'text-gray-900' : 'text-gray-400'}`}>
-                    {selectedVendor ? 'Drop your file here or click to browse' : 'Please select a vendor first'}
+                    {selectedVendor ? 'Drop files here or click to browse' : 'Please select a vendor first'}
                   </h3>
                   <p className={`text-sm ${selectedVendor ? 'text-gray-500' : 'text-gray-400'}`}>
-                    Supported formats: <span className={selectedVendor ? 'text-blue-600 font-medium' : 'text-gray-400'}>.xlsx, .xls, .csv</span>
+                    Drag and drop your file or click to browse • Supported formats: <span className={selectedVendor ? 'text-blue-600 font-medium' : 'text-gray-400'}>.xlsx, .xls, .csv</span>
                   </p>
                 </div>
 
-                <label className={`
-                  relative inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm transition-all duration-300
-                  ${selectedVendor 
-                    ? 'border-transparent text-white bg-blue-600 hover:bg-blue-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer'
-                    : 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed'
-                  }
-                `}>
+                <label
+                  className={`
+                    relative inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm transition-all duration-300
+                    ${selectedVendor 
+                      ? 'border-transparent text-white bg-blue-600 hover:bg-blue-700 hover:shadow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer'
+                      : 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed'
+                    }
+                  `}
+                >
                   <svg className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>

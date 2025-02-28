@@ -165,30 +165,31 @@ interface SpecialtyDefinition {
   parentSpecialty?: string;
 }
 
-// Define specialty mappings
+// Enhanced normalization for specialty names
+const normalizeSpecialtyName = (name: string): string => {
+  return name
+    .toLowerCase()
+    // Replace special chars and conjunctions with space
+    .replace(/[\/\-&,()]/g, ' ')
+    .replace(/\band\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    // Remove common words that don't affect meaning
+    .replace(/\b(the|of|in|with|without)\b/g, '')
+    .trim();
+};
+
+// Define specialty mappings with enhanced synonyms
 const specialtyDefinitions: Record<string, SpecialtyDefinition> = {
-  'Dermatology': {
-    name: 'Dermatology',
-    synonyms: [
-      'Dermatologist',
-      'Dermatological Medicine',
-      'Skin Care',
-      'Clinical Dermatology'
-    ],
-    relatedSpecialties: [
-      'Pediatric Dermatology',
-      'Dermatologic Surgery',
-      'Mohs Surgery'
-    ],
-    category: 'Medical'
-  },
   'Allergy and Immunology': {
     name: 'Allergy and Immunology',
     synonyms: [
       'Allergy/Immunology',
       'Allergy & Immunology',
       'Allergist/Immunologist',
-      'Clinical Immunology'
+      'Clinical Immunology',
+      'Allergy Immunology',
+      'Allergist and Immunologist',
+      'Allergy and Clinical Immunology'
     ],
     relatedSpecialties: [
       'Pediatric Allergy',
@@ -213,14 +214,6 @@ const specialtyDefinitions: Record<string, SpecialtyDefinition> = {
   }
 };
 
-// Normalize specialty names for comparison
-const normalizeSpecialtyName = (name: string): string => {
-  return name.toLowerCase()
-    .replace(/[\/\-&,()]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
 // Get synonyms for a specialty
 const getSpecialtySynonyms = (specialty: string): string[] => {
   const normalized = normalizeSpecialtyName(specialty);
@@ -234,21 +227,33 @@ const getSpecialtySynonyms = (specialty: string): string[] => {
   return definition ? [definition.name, ...definition.synonyms] : [specialty];
 };
 
-// Check if two specialties are variations of each other
+// Enhanced specialty variation check
 const areSpecialtyVariations = (specialty1: string, specialty2: string): boolean => {
   const norm1 = normalizeSpecialtyName(specialty1);
   const norm2 = normalizeSpecialtyName(specialty2);
   
-  // Check direct match
+  // Check direct match after normalization
   if (norm1 === norm2) return true;
   
   // Check against specialty definitions
   for (const def of Object.values(specialtyDefinitions)) {
     const allVariations = [def.name, ...def.synonyms].map(normalizeSpecialtyName);
-    if (allVariations.includes(norm1) && allVariations.includes(norm2)) {
-      return true;
-    }
+    
+    // Check if both specialties map to the same normalized form
+    const matches1 = allVariations.some(v => v === norm1);
+    const matches2 = allVariations.some(v => v === norm2);
+    
+    if (matches1 && matches2) return true;
   }
+  
+  // Additional fuzzy matching for edge cases
+  const words1 = new Set(norm1.split(' '));
+  const words2 = new Set(norm2.split(' '));
+  const intersection = new Set([...words1].filter(x => words2.has(x)));
+  const union = new Set([...words1, ...words2]);
+  
+  // If all words match (regardless of order), consider it a match
+  if (intersection.size === union.size) return true;
   
   return false;
 };

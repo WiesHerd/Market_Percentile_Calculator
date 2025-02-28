@@ -198,6 +198,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const [showAddMore, setShowAddMore] = useState(false);
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [openSearchDropdowns, setOpenSearchDropdowns] = useState<Set<string>>(new Set());
+  const [localSearchQueries, setLocalSearchQueries] = useState<Map<string, string>>(new Map());
 
   // Format vendor name consistently
   const formatVendorName = (vendor: string): string => {
@@ -415,69 +417,55 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       )
     );
 
-    // Group specialties by name (ignoring vendor)
-    const specialtiesByName = new Map<string, SpecialtyData[]>();
+    // Group specialties by normalized name and synonyms
+    const specialtiesByNormalizedName = new Map<string, SpecialtyData[]>();
     
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
       specialties.forEach(specialty => {
         const key = `${specialty.specialty}:${specialty.vendor}`;
         // Skip if already mapped
         if (!mappedSpecialtySet.has(key)) {
-          const existing = specialtiesByName.get(specialty.specialty) || [];
-          specialtiesByName.set(specialty.specialty, [...existing, specialty]);
+          // Find if this specialty matches any existing group
+          let foundGroup = false;
+          for (const [groupKey, existingSpecialties] of specialtiesByNormalizedName.entries()) {
+            // Check if this specialty is a variation of any specialty in the group
+            if (existingSpecialties.some(existing => 
+              areSpecialtiesSynonyms(existing.specialty, specialty.specialty)
+            )) {
+              specialtiesByNormalizedName.set(groupKey, [...existingSpecialties, specialty]);
+              foundGroup = true;
+              break;
+            }
+          }
+          
+          // If no matching group found, create a new one
+          if (!foundGroup) {
+            specialtiesByNormalizedName.set(key, [specialty]);
+          }
         }
       });
     });
 
-    // Create mappings for each unique specialty
-    const allMappings = Array.from(specialtiesByName.entries())
-      .map(([specialtyName, instances]) => {
+    // Create mappings for each unique specialty group
+    const allMappings = Array.from(specialtiesByNormalizedName.values())
+      .map(instances => {
         // Take the first instance as source
         const sourceSpecialty = instances[0];
         
-        // Find matches from other vendors
-        const matches = instances.slice(1).map(match => {
-          const similarity = calculateStringSimilarity(
-            sourceSpecialty.specialty,
-            match.specialty
-          );
-
-          let reason = '';
-          let confidence = similarity;
-
-          // Exact match
-          if (similarity === 1) {
-            reason = 'Exact match';
-            confidence = 1;
-          }
-          // Check for synonyms
-          else if (areSpecialtiesSynonyms(sourceSpecialty.specialty, match.specialty)) {
-            reason = 'Known synonym';
-            confidence = 0.95;
-          }
-          // High similarity
-          else if (similarity >= 0.8) {
-            reason = 'Very similar name';
-          }
-          // Moderate similarity
-          else if (similarity >= 0.6) {
-            reason = 'Similar name';
-          }
-
-          return {
-            specialty: match,
-            confidence,
-            reason,
-            status: undefined as 'approved' | 'rejected' | undefined
-          };
-        });
+        // Find matches from other vendors in the same group
+        const matches = instances.slice(1).map(match => ({
+          specialty: match,
+          confidence: 0.95, // High confidence since they're in the same group
+          reason: 'Known synonym',
+          status: undefined as 'approved' | 'rejected' | undefined
+        }));
 
         // Also look for potential matches in other specialties
         Object.entries(specialtiesByVendor).forEach(([vendor, vendorSpecialties]) => {
           if (vendor !== sourceSpecialty.vendor) {
             vendorSpecialties
               .filter(s => 
-                s.specialty !== specialtyName && 
+                !instances.some(grouped => grouped.specialty === s.specialty) && 
                 !mappedSpecialtySet.has(`${s.specialty}:${s.vendor}`)
               )
               .forEach(targetSpecialty => {
@@ -1367,9 +1355,20 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                   <input
                                     type="text"
                                     placeholder="Search to add more specialties..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    onFocus={() => setShowAddMore(true)}
+                                    value={localSearchQueries.get(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`) || ''}
+                                    onChange={(e) => {
+                                      setLocalSearchQueries(prev => new Map(prev).set(
+                                        `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`,
+                                        e.target.value
+                                      ));
+                                    }}
+                                    onFocus={() => {
+                                      setOpenSearchDropdowns(prev => {
+                                        const next = new Set(prev);
+                                        next.add(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                        return next;
+                                      });
+                                    }}
                                     className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md
                                       focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                   />
@@ -1378,7 +1377,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                   />
                                 </div>
                                 <button
-                                  onClick={() => setShowAddMore(true)}
+                                  onClick={() => {
+                                    setOpenSearchDropdowns(prev => {
+                                      const next = new Set(prev);
+                                      next.add(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                      return next;
+                                    });
+                                  }}
                                   className="inline-flex items-center px-3 py-2 text-sm font-medium rounded-md
                                     text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200"
                                 >
@@ -1388,11 +1393,15 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               </div>
 
                               {/* Dropdown for search results */}
-                              {showAddMore && (
+                              {openSearchDropdowns.has(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`) && (
                                 <div className="absolute z-50 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200">
                                   <div className="max-h-60 overflow-y-auto py-1">
                                     {/* Combine all specialties into a single list */}
                                     {(() => {
+                                      const localSearchQuery = localSearchQueries.get(
+                                        `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                      ) || '';
+                                      
                                       // Collect all available specialties across vendors
                                       const availableSpecialties = Object.entries(specialtiesByVendor)
                                         .filter(([vendor]) => vendor !== mapping.sourceSpecialty.vendor) // Exclude source vendor
@@ -1410,11 +1419,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                               !mapping.matches.some(m => 
                                                 m.specialty.specialty === s.specialty && m.specialty.vendor === s.vendor
                                               ) &&
-                                              s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                                              s.specialty.toLowerCase().includes(localSearchQuery.toLowerCase())
                                             )
                                             .map(s => ({ ...s, vendor }))
                                         )
-                                        .sort((a, b) => a.specialty.localeCompare(b.specialty)); // Sort alphabetically
+                                        .sort((a, b) => a.specialty.localeCompare(b.specialty));
 
                                       if (availableSpecialties.length === 0) {
                                         return (
@@ -1445,8 +1454,17 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                                 : m
                                             ));
                                             
-                                            setShowAddMore(false);
-                                            setSearchQuery('');
+                                            // Clear local search state
+                                            setOpenSearchDropdowns(prev => {
+                                              const next = new Set(prev);
+                                              next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                              return next;
+                                            });
+                                            setLocalSearchQueries(prev => {
+                                              const next = new Map(prev);
+                                              next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                              return next;
+                                            });
                                             
                                             toast.success('Added new specialty to mapping');
                                           }}
@@ -1468,8 +1486,16 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                   <div className="border-t px-3 py-2 bg-gray-50">
                                     <button
                                       onClick={() => {
-                                        setShowAddMore(false);
-                                        setSearchQuery('');
+                                        setOpenSearchDropdowns(prev => {
+                                          const next = new Set(prev);
+                                          next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                          return next;
+                                        });
+                                        setLocalSearchQueries(prev => {
+                                          const next = new Map(prev);
+                                          next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                          return next;
+                                        });
                                       }}
                                       className="text-xs text-gray-500 hover:text-gray-700"
                                     >
