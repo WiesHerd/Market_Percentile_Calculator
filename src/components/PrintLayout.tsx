@@ -1,87 +1,79 @@
 import { PrintLayoutProps } from '@/types/survey';
-import { cn } from '@/lib/utils';
 
 export function PrintLayout({ title, subtitle, sections }: PrintLayoutProps) {
   return (
-    <div className="hidden print:block print:m-0 print:p-0 print:bg-white">
-      <div className="max-w-full mx-auto">
-        {/* Header */}
-        <header className="text-center mb-6 pb-3 border-b-2 border-primary">
-          <h1 className="text-2xl font-semibold text-primary m-0 mb-2">{title}</h1>
-          <p className="text-base text-gray-600 m-0">{subtitle}</p>
-        </header>
+    <div className="hidden print:block">
+      <div className="max-w-4xl mx-auto">
+        <div>
+          <h2 className="text-base mb-1">Market Report</h2>
+          <p className="text-sm mb-4">Specialty Analysis: {subtitle}</p>
 
-        {/* Sections */}
-        {sections.map((section, index) => (
-          <section 
-            key={index} 
-            className={cn(
-              "mb-6 break-inside-avoid",
-              index === sections.length - 1 && "mb-0"
-            )}
-          >
-            <h2 className="text-sm font-semibold text-primary mb-2 uppercase tracking-wider pl-2 border-l-3 border-primary">
-              {section.title}
-            </h2>
-            
-            <div className="overflow-hidden border border-gray-200 rounded-sm">
-              <table className="w-full border-collapse text-xs">
+          {sections.map((section, index) => (
+            <div key={index} className="mb-6">
+              <h3 className="text-sm font-medium mb-2">{section.title}</h3>
+              <table className="w-full border-t border-b border-gray-300">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="w-[28%] p-2 font-semibold text-left text-gray-600 border border-gray-200">
-                      SOURCE
-                    </th>
-                    {['25TH', '50TH', '75TH', '90TH'].map((header) => (
-                      <th 
-                        key={header}
-                        className="p-2 font-semibold text-right text-gray-600 border border-gray-200"
-                      >
-                        {header}
-                      </th>
-                    ))}
+                  <tr>
+                    <th scope="col" className="text-left py-2 pr-4 text-sm">SOURCE</th>
+                    <th scope="col" className="text-right py-2 px-4 text-sm">25TH</th>
+                    <th scope="col" className="text-right py-2 px-4 text-sm">50TH</th>
+                    <th scope="col" className="text-right py-2 px-4 text-sm">75TH</th>
+                    <th scope="col" className="text-right py-2 px-4 text-sm">90TH</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="border-t border-gray-300">
                   {section.data.map((row, rowIndex) => (
-                    <tr key={rowIndex}>
-                      <td className="p-2 border border-gray-200 text-left">
-                        {row.source}
-                      </td>
-                      <td className="p-2 border border-gray-200 text-right">{row.values.p25}</td>
-                      <td className="p-2 border border-gray-200 text-right">{row.values.p50}</td>
-                      <td className="p-2 border border-gray-200 text-right">{row.values.p75}</td>
-                      <td className="p-2 border border-gray-200 text-right">{row.values.p90}</td>
+                    <tr key={rowIndex} className="border-b border-gray-200">
+                      <td className="py-2 pr-4">{row.source}</td>
+                      <td className="text-right py-2 px-4">{row.values.p25}</td>
+                      <td className="text-right py-2 px-4">{row.values.p50}</td>
+                      <td className="text-right py-2 px-4">{row.values.p75}</td>
+                      <td className="text-right py-2 px-4">{row.values.p90}</td>
                     </tr>
                   ))}
-                  <tr className="bg-blue-50">
-                    <td className="p-2 border border-gray-200 text-left font-semibold text-primary">
-                      Average
-                    </td>
-                    <td className="p-2 border border-gray-200 text-right font-semibold text-primary">
-                      {section.averages.p25}
-                    </td>
-                    <td className="p-2 border border-gray-200 text-right font-semibold text-primary">
-                      {section.averages.p50}
-                    </td>
-                    <td className="p-2 border border-gray-200 text-right font-semibold text-primary">
-                      {section.averages.p75}
-                    </td>
-                    <td className="p-2 border border-gray-200 text-right font-semibold text-primary">
-                      {section.averages.p90}
-                    </td>
+                  <tr>
+                    <td className="py-2 pr-4 font-medium">Average</td>
+                    <td className="text-right py-2 px-4 font-medium">{section.averages.p25}</td>
+                    <td className="text-right py-2 px-4 font-medium">{section.averages.p50}</td>
+                    <td className="text-right py-2 px-4 font-medium">{section.averages.p75}</td>
+                    <td className="text-right py-2 px-4 font-medium">{section.averages.p90}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-          </section>
-        ))}
-
-        {/* Footer */}
-        <footer className="mt-4 pt-2 border-t border-gray-200 text-[0.65rem] text-gray-500 flex justify-between">
-          <span>Generated on {new Date().toLocaleDateString()}</span>
-          <span>Market Intelligence Suite - Confidential</span>
-        </footer>
+          ))}
+        </div>
       </div>
+
+      <style jsx global>{`
+        @media print {
+          @page {
+            margin: 0.5in;
+          }
+
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          td, th {
+            padding: 8px;
+          }
+
+          /* Print-specific styles */
+          @media print {
+            .screen-only {
+              display: none !important;
+            }
+          }
+        }
+      `}</style>
     </div>
   );
 } 

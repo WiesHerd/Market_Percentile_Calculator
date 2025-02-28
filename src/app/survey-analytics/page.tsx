@@ -1,11 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { SurveyProvider } from '@/context/SurveyContext';
 import { default as SurveyAnalytics } from '@/components/SurveyAnalytics';
 import { ChartBarIcon, PrinterIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 
 export default function SurveyAnalyticsPage() {
+  const analyticsRef = useRef<{ handlePrint: () => void; handleExcelExport: () => void; } | null>(null);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -26,18 +28,14 @@ export default function SurveyAnalyticsPage() {
               </div>
               <div className="flex items-center space-x-4">
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => analyticsRef.current?.handlePrint()}
                   className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <PrinterIcon className="h-4 w-4 mr-2" />
                   Print
                 </button>
                 <button
-                  onClick={() => {
-                    // Export functionality will be handled by the SurveyAnalytics component
-                    const exportEvent = new CustomEvent('exportToExcel');
-                    window.dispatchEvent(exportEvent);
-                  }}
+                  onClick={() => analyticsRef.current?.handleExcelExport()}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <ArrowDownTrayIcon className="h-4 w-4 mr-2" />
@@ -52,7 +50,7 @@ export default function SurveyAnalyticsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
           <div className="p-6">
             <SurveyProvider>
-              <SurveyAnalytics />
+              <SurveyAnalytics ref={analyticsRef} />
             </SurveyProvider>
           </div>
         </div>
