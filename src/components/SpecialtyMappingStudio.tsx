@@ -394,11 +394,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className={`font-medium truncate ${isSelected ? 'text-indigo-900' : 'text-gray-900'}`}>
               {specialty.specialty}
             </div>
-            {specialty.metrics?.tcc && (
-              <div className="mt-0.5 text-xs text-gray-500">
-                TCC: ${(specialty.metrics.tcc.p50 / 1000).toFixed(0)}k
-              </div>
-            )}
           </div>
           {isSelected && (
             <CheckCircleIcon className="h-5 w-5 text-indigo-500 flex-shrink-0 ml-2" />
@@ -967,11 +962,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                             <div className="text-sm font-medium text-gray-900">
                               {specialty.specialty}
                             </div>
-                            {specialty.metrics?.tcc && (
-                              <div className="mt-0.5 text-xs text-gray-500">
-                                TCC: {formatCurrency(specialty.metrics.tcc.p50)}
-                              </div>
-                            )}
                           </div>
                           <button
                             onClick={() => {
@@ -1065,11 +1055,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                   <div className="font-medium truncate">
                                     {specialty.specialty}
                                   </div>
-                                  {specialty.metrics?.tcc && (
-                                    <div className="mt-1 text-xs text-gray-500">
-                                      TCC: {formatCurrency(specialty.metrics.tcc.p50)}
-                                    </div>
-                                  )}
                                 </div>
                                 {selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`) && (
                                   <CheckCircleIcon className="h-5 w-5 text-blue-500 flex-shrink-0 ml-2" />
@@ -1216,11 +1201,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               <div className="text-sm font-medium text-gray-900">
                                 {mapping.sourceSpecialty.specialty}
                               </div>
-                              {mapping.sourceSpecialty.metrics?.tcc && (
-                                <div className="mt-1 text-xs text-gray-500">
-                                  TCC: {formatCurrency(mapping.sourceSpecialty.metrics.tcc.p50)}
-                                </div>
-                              )}
                             </div>
                           </div>
                         </td>
@@ -1282,11 +1262,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                       </span>
                                     )}
                                   </div>
-                                  {match.specialty.metrics?.tcc && (
-                                    <div className="mt-1.5 text-xs text-gray-500">
-                                      TCC: {formatCurrency(match.specialty.metrics.tcc.p50)}
-                                    </div>
-                                  )}
                                   <div className="mt-1.5 text-xs text-gray-500 flex items-center">
                                     <InformationCircleIcon className="h-4 w-4 mr-1 text-gray-400" />
                                     {match.reason}
