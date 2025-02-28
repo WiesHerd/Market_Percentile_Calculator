@@ -395,167 +395,327 @@
           "requireExplicitConfirmation": true,
           "scopeOfChanges": "strict",
           "requireChangeValidation": true,
-          "validateAgainstUserIntent": true
+          "validateAgainstUserIntent": true,
+          "preserveExistingFunctionality": {
+            "enabled": true,
+            "rules": [
+              "Never remove existing functionality without explicit user confirmation",
+              "Preserve all existing links, buttons, and interactive elements",
+              "Maintain all helper functions and utility methods",
+              "Keep existing event handlers and callbacks",
+              "Preserve existing state management logic"
+            ],
+            "criticalPaths": [
+              "Format guides and templates",
+              "Navigation links",
+              "Action buttons",
+              "Error handling",
+              "Data processing functions"
+            ]
+          }
         },
         "changeManagement": {
           "requireMinimalChanges": true,
           "preserveExistingStyles": true,
           "preserveUserCustomizations": true,
-          "requireChangeDocumentation": true
+          "requireChangeDocumentation": true,
+          "preserveExistingFeatures": {
+            "enabled": true,
+            "rules": [
+              "Document any removed functionality",
+              "Require explicit confirmation for feature removal",
+              "Maintain backwards compatibility",
+              "Preserve existing user flows"
+            ]
+          },
+          "featureValidation": {
+            "beforeChange": {
+              "required": true,
+              "steps": [
+                "List all existing features in the target component",
+                "Document critical user flows",
+                "Identify dependent components",
+                "Map all interactive elements"
+              ]
+            },
+            "afterChange": {
+              "required": true,
+              "steps": [
+                "Verify all previously existing features still work",
+                "Confirm all links and buttons are preserved",
+                "Check all user flows remain intact",
+                "Validate all interactive elements are functional"
+              ]
+            }
+          }
         },
         "codeModification": {
           "requireExplicitScope": true,
           "validateBeforeAfter": true,
           "preserveFormattingAndStyle": true,
-          "requireAtomicChanges": true
+          "requireAtomicChanges": true,
+          "featurePreservation": {
+            "enabled": true,
+            "requirements": [
+              "Map all existing features before modification",
+              "Track all interactive elements",
+              "Document component dependencies",
+              "Preserve all helper functions",
+              "Maintain existing event handlers"
+            ],
+            "criticalFeatures": {
+              "links": {
+                "preserve": true,
+                "validateAfterChange": true
+              },
+              "buttons": {
+                "preserve": true,
+                "validateAfterChange": true
+              },
+              "forms": {
+                "preserve": true,
+                "validateAfterChange": true
+              },
+              "eventHandlers": {
+                "preserve": true,
+                "validateAfterChange": true
+              }
+            }
+          }
         },
         "userInteraction": {
           "requireConfirmationForMajorChanges": true,
           "explainChangesBeforeApplying": true,
-          "allowUserToRevertChanges": true
-        }
-      }
-    },
-    "analytics": {
-      "requireEventTracking": true,
-      "requireErrorTracking": true,
-      "requirePerformanceTracking": true,
-      "requireUserTracking": true,
-      "requirePrivacyCompliance": true,
-      "maxEventProperties": 20,
-      "requireSampling": true
-    },
-    "shell": {
-      "powershell": {
-        "commandChaining": {
-          "allowedOperators": [";", "|", "`"],
-          "disallowedOperators": ["&&", "||"],
-          "explanation": "PowerShell uses different command chaining operators than bash/shell. Use ; for sequential execution, | for piping, and ` for line continuation"
+          "allowUserToRevertChanges": true,
+          "featureModification": {
+            "requireExplicitApproval": true,
+            "preservationChecklist": [
+              "Document existing functionality",
+              "List all user interaction points",
+              "Map component dependencies",
+              "Track state management",
+              "Identify critical paths"
+            ],
+            "validationSteps": [
+              "Verify all existing features",
+              "Test all user interactions",
+              "Confirm state management",
+              "Check component integration",
+              "Validate critical paths"
+            ]
+          }
         },
-        "bestPractices": {
-          "separateCommands": "Run git and other shell commands separately rather than chaining when using PowerShell",
-          "errorHandling": "Always check $LASTEXITCODE for command success in PowerShell scripts",
-          "escaping": "Use backtick (`) for escaping special characters in PowerShell"
+        "componentUpdates": {
+          "preserveExistingBehavior": true,
+          "requireFeatureValidation": true,
+          "enforceBackwardsCompatibility": true,
+          "documentationRequirements": {
+            "beforeUpdate": [
+              "List all existing features",
+              "Document component interfaces",
+              "Map dependencies",
+              "Record user interactions"
+            ],
+            "duringUpdate": [
+              "Track modified features",
+              "Log removed functionality",
+              "Document new additions"
+            ],
+            "afterUpdate": [
+              "Verify feature preservation",
+              "Test all interactions",
+              "Validate dependencies",
+              "Confirm backwards compatibility"
+            ]
+          },
+          "validationChecks": {
+            "features": {
+              "links": true,
+              "buttons": true,
+              "forms": true,
+              "eventHandlers": true,
+              "stateManagement": true
+            },
+            "userFlows": {
+              "navigation": true,
+              "interaction": true,
+              "dataEntry": true,
+              "errorHandling": true
+            }
+          }
         }
       },
-      "bash": {
-        "commandChaining": {
-          "allowedOperators": ["&&", "||", ";", "|"],
-          "explanation": "Bash/shell allows && for conditional execution and || for fallback execution"
+      "analytics": {
+        "requireEventTracking": true,
+        "requireErrorTracking": true,
+        "requirePerformanceTracking": true,
+        "requireUserTracking": true,
+        "requirePrivacyCompliance": true,
+        "maxEventProperties": 20,
+        "requireSampling": true
+      },
+      "shell": {
+        "powershell": {
+          "commandChaining": {
+            "allowedOperators": [";", "|", "`"],
+            "disallowedOperators": ["&&", "||"],
+            "explanation": "PowerShell uses different command chaining operators than bash/shell. Use ; for sequential execution, | for piping, and ` for line continuation"
+          },
+          "bestPractices": {
+            "separateCommands": "Run git and other shell commands separately rather than chaining when using PowerShell",
+            "errorHandling": "Always check $LASTEXITCODE for command success in PowerShell scripts",
+            "escaping": "Use backtick (`) for escaping special characters in PowerShell"
+          },
+          "consoleIssues": {
+            "psReadLineWorkaround": {
+              "description": "To avoid PSReadLine buffer issues in PowerShell, use these alternatives in order of preference:",
+              "options": [
+                {
+                  "priority": 1,
+                  "method": "Use Git Bash instead of PowerShell for git operations",
+                  "example": "# In Git Bash\ngit add .\ngit commit -m \"message\"\ngit push"
+                },
+                {
+                  "priority": 2,
+                  "method": "Split long commands into separate lines",
+                  "example": "git add src/components/file.tsx\ngit commit -m \"feat: add new feature\"\ngit push"
+                },
+                {
+                  "priority": 3,
+                  "method": "Use shorter commit messages and amend if needed",
+                  "example": "git commit -m \"feat: initial commit\"\ngit commit --amend -m \"feat: add new feature with detailed description\""
+                }
+              ],
+              "commitMessageHandling": {
+                "longMessages": "For long commit messages, use a temporary file or Git Bash to avoid PowerShell console buffer issues",
+                "multilineMessages": "For multiline commit messages, use git commit without -m flag to open editor"
+              }
+            },
+            "preventiveChecks": {
+              "beforeCommand": "Check if running in PowerShell and adjust command format accordingly",
+              "afterError": "If PSReadLine error occurs, fall back to Git Bash or alternative method"
+            }
+          }
+        },
+        "bash": {
+          "commandChaining": {
+            "allowedOperators": ["&&", "||", ";", "|"],
+            "explanation": "Bash/shell allows && for conditional execution and || for fallback execution"
+          }
+        },
+        "crossPlatform": {
+          "requirePlatformCheck": true,
+          "platformSpecificCommands": {
+            "windows": "Use Git Bash syntax when process.platform === 'win32' for git operations",
+            "unix": "Use Bash syntax when process.platform !== 'win32'"
+          }
         }
       },
-      "crossPlatform": {
-        "requirePlatformCheck": true,
-        "platformSpecificCommands": {
-          "windows": "Use PowerShell syntax when process.platform === 'win32'",
-          "unix": "Use Bash syntax when process.platform !== 'win32'"
+      "nextjs": {
+        "appRouter": {
+          "enforceServerComponents": true,
+          "minimizeClientComponents": true,
+          "requireSuspenseBoundaries": true,
+          "requireErrorBoundaries": true,
+          "requireMetadata": true,
+          "requireLayoutStructure": true
+        },
+        "components": {
+          "location": "src/components",
+          "structure": {
+            "ui": ["Button", "Modal", "Card"],
+            "forms": ["TextField", "Select"],
+            "layout": ["Navbar", "Footer"]
+          },
+          "naming": {
+            "pattern": "kebab-case",
+            "extension": ".tsx",
+            "privatePrefix": "_"
+          },
+          "organization": {
+            "byType": ["ui", "forms", "layout"],
+            "byFeature": true,
+            "privateComponents": "_components"
+          }
+        },
+        "routing": {
+          "enforceAppRouter": true,
+          "requireMetadata": true,
+          "requireErrorHandling": true,
+          "requireLoading": true,
+          "requireNotFound": true
+        },
+        "dataFetching": {
+          "preferServerComponents": true,
+          "cacheStrategy": "force-cache",
+          "revalidationStrategy": "time-based",
+          "requireErrorHandling": true
         }
-      }
-    },
-    "nextjs": {
-      "appRouter": {
-        "enforceServerComponents": true,
-        "minimizeClientComponents": true,
-        "requireSuspenseBoundaries": true,
-        "requireErrorBoundaries": true,
-        "requireMetadata": true,
-        "requireLayoutStructure": true
       },
-      "components": {
-        "location": "src/components",
-        "structure": {
-          "ui": ["Button", "Modal", "Card"],
-          "forms": ["TextField", "Select"],
-          "layout": ["Navbar", "Footer"]
+      "styling": {
+        "framework": "tailwind",
+        "ui": {
+          "library": "shadcn",
+          "customization": true,
+          "themeConsistency": true
         },
-        "naming": {
-          "pattern": "kebab-case",
-          "extension": ".tsx",
-          "privatePrefix": "_"
+        "responsive": {
+          "mobileFist": true,
+          "breakpoints": ["sm", "md", "lg", "xl", "2xl"],
+          "containerQueries": true
         },
-        "organization": {
-          "byType": ["ui", "forms", "layout"],
+        "animation": {
+          "library": "framer-motion",
+          "performance": {
+            "willChange": true,
+            "gpuAcceleration": true
+          }
+        }
+      },
+      "projectStructure": {
+        "sourceDirectory": "src",
+        "enforceModularity": true,
+        "componentOrganization": {
+          "byType": true,
           "byFeature": true,
-          "privateComponents": "_components"
+          "sharedComponents": "src/components",
+          "pageComponents": "src/app/_components"
+        },
+        "directoryNaming": {
+          "pattern": "kebab-case",
+          "enforceConsistency": true
         }
-      },
-      "routing": {
-        "enforceAppRouter": true,
-        "requireMetadata": true,
-        "requireErrorHandling": true,
-        "requireLoading": true,
-        "requireNotFound": true
-      },
-      "dataFetching": {
-        "preferServerComponents": true,
-        "cacheStrategy": "force-cache",
-        "revalidationStrategy": "time-based",
-        "requireErrorHandling": true
       }
     },
-    "styling": {
-      "framework": "tailwind",
-      "ui": {
-        "library": "shadcn",
-        "customization": true,
-        "themeConsistency": true
+    "overrides": {
+      "files": ["*.test.{ts,tsx}", "*.spec.{ts,tsx}"],
+      "rules": {
+        "typescript": {
+          "noUnusedLocals": false,
+          "noUnusedParameters": false
+        },
+        "maxFileLength": 800,
+        "maxFunctionLength": 100
       },
-      "responsive": {
-        "mobileFist": true,
-        "breakpoints": ["sm", "md", "lg", "xl", "2xl"],
-        "containerQueries": true
-      },
-      "animation": {
-        "library": "framer-motion",
+      "files:survey-management": {
+        "maxFileLength": 1000,
+        "maxComplexity": 15,
         "performance": {
-          "willChange": true,
-          "gpuAcceleration": true
+          "maxInlineSize": 150
         }
       }
     },
-    "projectStructure": {
-      "sourceDirectory": "src",
-      "enforceModularity": true,
-      "componentOrganization": {
-        "byType": true,
-        "byFeature": true,
-        "sharedComponents": "src/components",
-        "pageComponents": "src/app/_components"
-      },
-      "directoryNaming": {
-        "pattern": "kebab-case",
-        "enforceConsistency": true
-      }
-    }
-  },
-  "overrides": {
-    "files": ["*.test.{ts,tsx}", "*.spec.{ts,tsx}"],
-    "rules": {
-      "typescript": {
-        "noUnusedLocals": false,
-        "noUnusedParameters": false
-      },
-      "maxFileLength": 800,
-      "maxFunctionLength": 100
-    },
-    "files:survey-management": {
-      "maxFileLength": 1000,
-      "maxComplexity": 15,
-      "performance": {
-        "maxInlineSize": 150
-      }
-    }
-  },
-  "ignoreFiles": [
-    "node_modules/**",
-    ".next/**",
-    "out/**",
-    "build/**",
-    "coverage/**",
-    "*.generated.*",
-    "public/data/**",
-    "**/vendor/**",
-    "**/*.min.*",
-    "**/dist/**"
-  ]
+    "ignoreFiles": [
+      "node_modules/**",
+      ".next/**",
+      "out/**",
+      "build/**",
+      "coverage/**",
+      "*.generated.*",
+      "public/data/**",
+      "**/vendor/**",
+      "**/*.min.*",
+      "**/dist/**"
+    ]
+  }
 } 
