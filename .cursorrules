@@ -716,6 +716,77 @@
       "**/vendor/**",
       "**/*.min.*",
       "**/dist/**"
-    ]
+    ],
+    "uiChecklist": {
+      "modalDesign": {
+        "viewport": {
+          "rules": [
+            "Check modal maximum height against viewport height",
+            "Ensure content scrolls properly within viewport",
+            "Test modal on different screen sizes",
+            "Verify no content is cut off at any breakpoint"
+          ],
+          "measurements": {
+            "maxHeight": "90vh",
+            "padding": "p-6",
+            "spacing": "space-y-4"
+          }
+        },
+        "scrolling": {
+          "rules": [
+            "Implement proper overflow handling",
+            "Test scrolling on all modal sections",
+            "Ensure fixed elements stay in place",
+            "Verify scroll shadows and indicators"
+          ],
+          "components": {
+            "content": "overflow-y-auto",
+            "fixedElements": "sticky top-0 z-10"
+          }
+        },
+        "layout": {
+          "rules": [
+            "Check flex layout behavior",
+            "Verify spacing between elements",
+            "Test content wrapping",
+            "Ensure responsive design"
+          ],
+          "structure": {
+            "header": "shrink-0",
+            "content": "flex-1 min-h-0",
+            "footer": "shrink-0"
+          }
+        }
+      },
+      "preImplementationChecks": {
+        "steps": [
+          "Review current implementation and identify potential issues",
+          "Plan all necessary changes before making any modifications",
+          "Consider edge cases and different screen sizes",
+          "Test proposed changes mentally before implementation",
+          "Verify changes won't affect other components",
+          "Check for potential accessibility issues",
+          "Consider mobile responsiveness"
+        ],
+        "validation": {
+          "required": true,
+          "frequency": "beforeEachChange"
+        }
+      },
+      "postImplementationChecks": {
+        "steps": [
+          "Verify changes solve the original problem",
+          "Test on different viewport sizes",
+          "Check for new issues introduced",
+          "Validate accessibility",
+          "Ensure performance isn't impacted",
+          "Test edge cases"
+        ],
+        "validation": {
+          "required": true,
+          "frequency": "afterEachChange"
+        }
+      }
+    }
   }
 } 
