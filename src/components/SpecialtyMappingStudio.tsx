@@ -1141,10 +1141,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               {/* Status and Actions Group */}
               <div className="ml-4 flex items-center gap-2">
               <span className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border shadow-sm
-                  ${allSpecialties.length === 0 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}
+                  ${Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) 
+                    ? 'bg-green-50 text-green-700 border-green-200' 
+                    : 'bg-yellow-50 text-yellow-700 border-yellow-200'}
                 transition-colors duration-150 ease-in-out`}
               >
-                  {allSpecialties.length === 0 ? (
+                  {Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) ? (
                   <>
                     <CheckCircleIcon className="h-4 w-4 mr-1.5" />
                     100% Complete
