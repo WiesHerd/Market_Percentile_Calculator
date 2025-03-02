@@ -124,46 +124,87 @@ const SurveyAnalytics = forwardRef<SurveyAnalyticsHandle>((_, ref) => {
     handleExcelExport
   }));
 
-  // Get all unique specialties
+  // Add debug effect
+  useEffect(() => {
+    // Log current mappings state
+    console.log('Current specialty mappings:', {
+      fromContext: specialtyMappings,
+      fromLocalStorage: JSON.parse(localStorage.getItem('specialty-mappings-v1') || '{}'),
+      surveySpecialties: surveyData?.flatMap(survey => survey.data?.map(row => row.specialty) || []) || []
+    });
+    
+    // Clear localStorage if needed (uncomment to clear)
+    // localStorage.removeItem('specialty-mappings-v1');
+  }, [specialtyMappings, surveyData]);
+
+  // Modify specialties useMemo for better debugging
   const specialties = useMemo(() => {
-    // Create a set to store unique primary specialties
-    const primarySpecialties = new Set<string>();
+    const rootSpecialties = new Set<string>();
+    const debugInfo = {
+      allMappedSpecialties: new Set<string>(),
+      sourceSpecialties: new Set<string>(),
+      standaloneSpecialties: new Set<string>(),
+      surveySpecialties: new Set<string>()
+    };
 
     try {
-      // Load mapped groups from localStorage
-      const savedMappings = localStorage.getItem('specialty-mappings');
-      if (savedMappings) {
-        const mappedGroups = JSON.parse(savedMappings);
-        
-        // For each mapped group, add only the first specialty as the primary one
-        mappedGroups.forEach((group: { specialties: Array<{ specialty: string }> }) => {
-          if (group.specialties && group.specialties.length > 0) {
-            primarySpecialties.add(group.specialties[0].specialty);
-          }
-        });
-      }
+      // Log raw data first
+      console.log('Raw Data:', {
+        mappings: specialtyMappings,
+        surveyData: surveyData
+      });
 
-      // Add any standalone specialties from survey data that aren't mapped
-      if (surveyData && typeof surveyData === 'object') {
-        Object.entries(surveyData).forEach(([_, sectionData]) => {
-          if (sectionData && Array.isArray(sectionData)) {
-            sectionData.forEach(row => {
-              if (row && typeof row === 'object' && 'specialty' in row && typeof row.specialty === 'string') {
-                if (!primarySpecialties.has(row.specialty)) {
-                  primarySpecialties.add(row.specialty);
-                }
+      // First, collect all specialties from survey data
+      if (surveyData && Array.isArray(surveyData)) {
+        surveyData.forEach(survey => {
+          if (survey.data && Array.isArray(survey.data)) {
+            survey.data.forEach(row => {
+              if (row && typeof row.specialty === 'string') {
+                debugInfo.surveySpecialties.add(row.specialty);
               }
             });
           }
         });
       }
+
+      // Then process mappings
+      Object.entries(specialtyMappings).forEach(([sourceSpecialty, mapping]) => {
+        // Add source specialty to root specialties
+        rootSpecialties.add(sourceSpecialty);
+        debugInfo.sourceSpecialties.add(sourceSpecialty);
+
+        // Add mapped specialties to allMappedSpecialties
+        if (mapping && Array.isArray(mapping.mappedSpecialties)) {
+          mapping.mappedSpecialties.forEach(specialty => {
+            debugInfo.allMappedSpecialties.add(specialty);
+          });
+        }
+      });
+
+      // Add standalone specialties (those in survey data that aren't mapped)
+      debugInfo.surveySpecialties.forEach(specialty => {
+        if (!debugInfo.allMappedSpecialties.has(specialty) && !debugInfo.sourceSpecialties.has(specialty)) {
+          debugInfo.standaloneSpecialties.add(specialty);
+          rootSpecialties.add(specialty);
+        }
+      });
+
+      // Log detailed analysis
+      console.log('Specialty Analysis:', {
+        totalMappings: Object.keys(specialtyMappings).length,
+        mappedSpecialties: Array.from(debugInfo.allMappedSpecialties),
+        sourceSpecialties: Array.from(debugInfo.sourceSpecialties),
+        standaloneSpecialties: Array.from(debugInfo.standaloneSpecialties),
+        surveySpecialties: Array.from(debugInfo.surveySpecialties),
+        rootSpecialties: Array.from(rootSpecialties)
+      });
+
     } catch (error) {
       console.error('Error processing specialties:', error);
     }
 
-    // Convert set to sorted array
-    return Array.from(primarySpecialties).sort();
-  }, [surveyData]);
+    return Array.from(rootSpecialties).sort();
+  }, [surveyData, specialtyMappings]);
 
   // Get survey data for selected specialty
   const specialtyData = useMemo(() => {
