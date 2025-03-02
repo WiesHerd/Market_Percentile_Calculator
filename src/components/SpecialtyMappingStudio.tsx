@@ -203,7 +203,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   initialMappings,
 }) => {
   // State
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
   const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>(() => {
     try {
@@ -324,7 +323,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Filter specialties based on search
   const filteredSpecialties = useMemo(() => {
     const result: Record<string, SpecialtyData[]> = {};
-    const searchTerm = searchQuery.toLowerCase();
+    const searchTerm = specialtySearch.toLowerCase();
 
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
       result[vendor] = specialties.filter(item =>
@@ -333,7 +332,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     });
 
     return result;
-  }, [specialtiesByVendor, searchQuery]);
+  }, [specialtiesByVendor, specialtySearch]);
 
   // New function to find potential matches for a specialty
   const findPotentialMatches = (specialty: SpecialtyData): AutoMapSuggestion => {
@@ -654,9 +653,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Filter mappings based on search
   const filteredMappings = useMemo(() => {
     return allAutoMappings.filter(mapping =>
-      mapping.sourceSpecialty.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+      mapping.sourceSpecialty.specialty.toLowerCase().includes(specialtySearch.toLowerCase())
     );
-  }, [allAutoMappings, searchQuery]);
+  }, [allAutoMappings, specialtySearch]);
 
   // Update handleSpecialtySelect to properly load synonyms
   const handleSpecialtySelect = (specialty: string): void => {
@@ -1173,27 +1172,6 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         </div>
       </div>
 
-      {/* Simplified Search Bar */}
-      <div className="border-b border-gray-200 py-3 px-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="relative">
-            <MagnifyingGlassIcon 
-              className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400"
-            />
-            <input
-              id="specialty-search"
-              type="text"
-              placeholder="Search specialties across all vendors..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg 
-                focus:ring-2 focus:ring-blue-500 focus:border-blue-300
-                shadow-sm text-base placeholder-gray-400 bg-white"
-            />
-          </div>
-        </div>
-      </div>
-
       {/* Clear Confirmation Dialog */}
       <Dialog open={showClearConfirmation} onOpenChange={setShowClearConfirmation}>
         <DialogContent className="sm:max-w-[425px] bg-white border border-gray-200">
@@ -1393,8 +1371,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <input
                     type="text"
                       placeholder="Search mapped or unmapped specialties..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={specialtySearch}
+                    onChange={(e) => setSpecialtySearch(e.target.value)}
                       className="w-96 pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
@@ -1433,9 +1411,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               <div className="divide-y divide-gray-200">
                 {mappedGroups
                   .filter(group =>
-                    searchQuery ? 
+                    specialtySearch ? 
                       group.specialties.some(s => 
-                        s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+                        s.specialty.toLowerCase().includes(specialtySearch.toLowerCase())
                       ) : true
                   )
                   .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -1515,7 +1493,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </div>
                     <div className="space-y-2">
                       {specialties
-                        .filter(s => searchQuery ? s.specialty.toLowerCase().includes(searchQuery.toLowerCase()) : true)
+                        .filter(s => specialtySearch ? s.specialty.toLowerCase().includes(specialtySearch.toLowerCase()) : true)
                         .map(specialty => (
                         <div
                           key={`${specialty.vendor}:${specialty.specialty}`}
@@ -1570,8 +1548,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <input
                     type="text"
                     placeholder="Search specialties across vendors to map together..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={specialtySearch}
+                    onChange={(e) => setSpecialtySearch(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
@@ -1734,8 +1712,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <input
                     type="text"
                     placeholder="Search for specialties to find potential matches..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={specialtySearch}
+                    onChange={(e) => setSpecialtySearch(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
@@ -1753,9 +1731,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     <span className="text-sm font-medium text-gray-900">
                       Showing {filteredMappings.length} potential matches
                     </span>
-                    {searchQuery && (
+                    {specialtySearch && (
                       <span className="text-sm text-gray-500">
-                        for "{searchQuery}"
+                        for "{specialtySearch}"
                       </span>
                     )}
                   </div>
@@ -2076,7 +2054,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             </div>
             <h3 className="mt-2 text-sm font-medium text-gray-900">No specialties found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchQuery
+              {specialtySearch
                 ? "Try adjusting your search terms"
                 : "Start by searching for specialties above"}
             </p>
