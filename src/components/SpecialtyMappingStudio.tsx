@@ -1775,7 +1775,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                   className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-sm transition-colors duration-150 ease-in-out border border-green-500"
                                 >
                                   <CheckIcon className="h-4 w-4 mr-2" />
-                                  Accept All Matches ({mapping.matches.filter(m => !m.status).length})
+                                  Accept All Matches ({mapping.matches.filter(m => !m.status || m.status === 'approved').length})
                                 </button>
                               </div>
                             )}
@@ -1913,12 +1913,15 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                                 specialty.specialty
                                               ),
                                               reason: 'Manually added',
-                                              status: 'approved' as const
+                                              status: undefined as 'approved' | 'rejected' | undefined
                                             };
                                             
                                             setAllAutoMappings(prev => prev.map(m => 
                                               m.sourceSpecialty.specialty === mapping.sourceSpecialty.specialty
-                                                ? { ...m, matches: [...m.matches, newMatch] }
+                                                ? { 
+                                                    ...m, 
+                                                    matches: [...m.matches, newMatch].sort((a, b) => b.confidence - a.confidence)
+                                                  }
                                                 : m
                                             ));
                                             
