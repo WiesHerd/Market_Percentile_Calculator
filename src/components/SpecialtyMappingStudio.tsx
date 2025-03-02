@@ -193,7 +193,8 @@ interface AvailableSpecialty extends SpecialtyData {
   vendor: string;
 }
 
-const STORAGE_KEY = 'specialty-mappings';
+// Update the storage key to be more specific
+const STORAGE_KEY = 'specialty-mappings-v1';
 
 const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   surveys,
@@ -205,20 +206,17 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
   const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>(() => {
-    // Load initial state from localStorage
-    const savedMappings = localStorage.getItem(STORAGE_KEY);
-    if (savedMappings) {
-      try {
+    try {
+      const savedMappings = localStorage.getItem(STORAGE_KEY);
+      if (savedMappings) {
         const parsed = JSON.parse(savedMappings);
-        // Convert date strings back to Date objects
         return parsed.map((group: any) => ({
           ...group,
           createdAt: new Date(group.createdAt)
         }));
-      } catch (error) {
-        console.error('Error loading saved mappings:', error);
-        return [];
       }
+    } catch (error) {
+      console.error('Error loading saved mappings:', error);
     }
     return [];
   });
@@ -470,9 +468,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // New function to generate all possible mappings
   const generateAllMappings = useCallback(() => {
-    // First, collect all mapped specialties
+    // First, collect all mapped specialties from current state
+    const currentMappedGroups = mappedGroups;
+    const currentSpecialtiesByVendor = specialtiesByVendor;
+    
     const mappedSpecialtySet = new Set(
-      mappedGroups.flatMap(group => 
+      currentMappedGroups.flatMap(group => 
         group.specialties.map(s => `${s.specialty}:${s.vendor}`)
       )
     );
@@ -480,7 +481,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     // Group specialties by normalized name and synonyms
     const specialtiesByNormalizedName = new Map<string, SpecialtyData[]>();
     
-    Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
+    Object.entries(currentSpecialtiesByVendor).forEach(([vendor, specialties]) => {
       specialties.forEach(specialty => {
         const key = `${specialty.specialty}:${specialty.vendor}`;
         // Skip if already mapped
@@ -514,14 +515,14 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         
         // Find matches from other vendors in the same group
         const matches = instances.slice(1).map(match => ({
-            specialty: match,
+          specialty: match,
           confidence: 0.95, // High confidence since they're in the same group
           reason: 'Known synonym',
-            status: undefined as 'approved' | 'rejected' | undefined
+          status: undefined as 'approved' | 'rejected' | undefined
         }));
 
         // Also look for potential matches in other specialties
-        Object.entries(specialtiesByVendor).forEach(([vendor, vendorSpecialties]) => {
+        Object.entries(currentSpecialtiesByVendor).forEach(([vendor, vendorSpecialties]) => {
           if (vendor !== sourceSpecialty.vendor) {
             vendorSpecialties
               .filter(s => 
@@ -571,12 +572,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     );
 
     setAllAutoMappings(allMappings);
-  }, [specialtiesByVendor, mappedGroups]);
+  }, [mappedGroups, specialtiesByVendor]); // Include dependencies but use closure to prevent infinite loop
 
-  // Call on mount
+  // Initialize auto mappings on mount
   useEffect(() => {
     generateAllMappings();
-  }, [generateAllMappings]);
+  }, []); // Only run on mount
 
   // Function to approve/reject a mapping
   const updateMappingStatus = (
@@ -630,6 +631,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           createdAt: new Date()
         };
         
+        // Update mappedGroups (this will trigger the save effect)
         setMappedGroups(prev => [...prev, newGroup]);
         onMappingChange(
           mapping.sourceSpecialty.specialty, 
@@ -947,6 +949,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     setMappedGroups(prev => [...prev, newGroup]);
     setSelectedSpecialties(new Set());
     
+    // Only notify of mapping change when creating a new mapping
     const sourceSpecialty = selectedItems[0].specialty;
     const mappedSpecialties = selectedItems.slice(1).map(item => item.specialty);
     onMappingChange(sourceSpecialty, mappedSpecialties);
@@ -1010,6 +1013,66 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       // Show success message
       toast.success(`Deleted specialty: ${specialty.name}`);
     }
+  };
+
+  // Add a new effect to save mappings whenever they change
+  useEffect(() => {
+    try {
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedGroups));
+    } catch (error) {
+      console.error('Error saving mappings:', error);
+    }
+  }, [mappedGroups]);
+
+  // Separate effect for onSave callback
+  useEffect(() => {
+    if (onSave) {
+      const simpleMappings: Record<string, string[]> = {};
+      mappedGroups.forEach(group => {
+        const sourceSpecialty = group.specialties[0];
+        if (sourceSpecialty) {
+          simpleMappings[sourceSpecialty.specialty] = group.specialties
+            .slice(1)
+            .map(s => s.specialty);
+        }
+      });
+      onSave(simpleMappings);
+    }
+  }, [mappedGroups, onSave]);
+
+  // Add new function to create individual single mappings
+  const createIndividualSingleMappings = (): void => {
+    if (selectedSpecialties.size < 1) {
+      toast.error('Please select at least 1 specialty');
+      return;
+    }
+
+    const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(key => {
+      const [vendor, specialty] = key.split(':');
+      return {
+        specialty,
+        vendor,
+        metrics: specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.metrics
+      };
+    });
+
+    // Create individual single mappings for each specialty
+    selectedItems.forEach(item => {
+      const newGroup: MappedGroup = {
+        id: Math.random().toString(36).substr(2, 9),
+        specialties: [item],
+        createdAt: new Date(),
+        isSingleSource: true
+      };
+      
+      setMappedGroups(prev => [...prev, newGroup]);
+      // Notify of mapping change for each individual mapping
+      onMappingChange(item.specialty, []);
+    });
+
+    setSelectedSpecialties(new Set());
+    toast.success(`Created ${selectedItems.length} single source mappings`);
   };
 
   return (
@@ -1373,6 +1436,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                         s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
                       ) : true
                   )
+                  .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
                   .map((group) => (
                     <div key={group.id} className="p-6 hover:bg-gray-50">
                     <div className="flex items-start justify-between">
@@ -1586,20 +1650,34 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </div>
                   </div>
                   <div className="p-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                    <button
-                      onClick={createManualMapping}
-                      disabled={selectedSpecialties.size < 1}
-                      className="w-full px-4 py-2 text-sm font-medium rounded-md
-                        text-white bg-blue-600 hover:bg-blue-700
-                        disabled:opacity-50 disabled:cursor-not-allowed
-                        transition-colors duration-150 ease-in-out shadow-sm"
-                    >
-                      {selectedSpecialties.size === 0 
-                        ? 'Select specialties to map'
-                        : selectedSpecialties.size === 1
-                        ? 'Create Single Source Mapping'
-                        : `Create Mapping (${selectedSpecialties.size} selected)`}
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        onClick={createManualMapping}
+                        disabled={selectedSpecialties.size < 1}
+                        className="w-full px-4 py-2 text-sm font-medium rounded-md
+                          text-white bg-blue-600 hover:bg-blue-700
+                          disabled:opacity-50 disabled:cursor-not-allowed
+                          transition-colors duration-150 ease-in-out shadow-sm"
+                      >
+                        {selectedSpecialties.size === 0 
+                          ? 'Select specialties'
+                          : selectedSpecialties.size === 1
+                          ? 'Create Single Source'
+                          : `Create Group (${selectedSpecialties.size})`}
+                      </button>
+                      
+                      {selectedSpecialties.size > 0 && (
+                        <button
+                          onClick={createIndividualSingleMappings}
+                          className="w-full px-4 py-2 text-sm font-medium rounded-md
+                            text-blue-700 bg-blue-50 hover:bg-blue-100
+                            border border-blue-200
+                            transition-colors duration-150 ease-in-out shadow-sm"
+                        >
+                          Create {selectedSpecialties.size} Individual {selectedSpecialties.size === 1 ? 'Source' : 'Sources'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
                     <div className="space-y-2">
