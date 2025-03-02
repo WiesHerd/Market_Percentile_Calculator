@@ -480,7 +480,7 @@ const SurveyAnalytics = forwardRef<SurveyAnalyticsHandle>((_, ref) => {
                       .filter(([_, data]) => data[section.key])
                       .map(([vendor, data]) => `
                         <tr>
-                          <td>${formatVendorName(vendor.split('-')[0])} - ${data.specialty}</td>
+                          <td>${data.specialty} (${formatVendorName(vendor.split('-')[0])})</td>
                           ${percentiles.map(p => `
                             <td>${data[section.key]?.[p] 
                               ? section.format(data[section.key]![p]) 
@@ -780,7 +780,7 @@ const SurveyAnalytics = forwardRef<SurveyAnalyticsHandle>((_, ref) => {
                           data[section.key] && (
                             <tr key={vendor} className="hover:bg-gray-50">
                               <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
-                                {`${formatVendorName(vendor.split('-')[0])} - ${data.specialty}`}
+                                {`${data.specialty} (${formatVendorName(vendor.split('-')[0])})`}
                               </td>
                               {percentiles.map((p) => (
                                 <td key={p} className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
