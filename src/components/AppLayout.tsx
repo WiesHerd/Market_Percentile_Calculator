@@ -165,8 +165,19 @@ export function AppLayout({ children }: AppLayoutProps) {
                   </div>
                   {!isCollapsed && (
                     <div className="ml-3">
-                      <p className="text-lg font-semibold text-gray-900 tracking-wide">Market Intelligence</p>
-                      <p className="text-xs font-medium bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">Analytics Suite</p>
+                      <style jsx global>{`
+                        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500&display=swap');
+                      `}</style>
+                      <div className="flex flex-col">
+                        <div className="flex flex-col">
+                          <p className="font-['Space_Grotesk'] text-[20px] font-semibold leading-tight tracking-tight text-gray-900">Market</p>
+                          <p className="font-['Space_Grotesk'] text-[20px] font-semibold leading-tight tracking-tight text-gray-900">Intelligence</p>
+                        </div>
+                        <div className="mt-1.5 flex flex-col">
+                          <div className="h-[2px] w-14 bg-gradient-to-r from-blue-600 to-blue-500"></div>
+                          <p className="mt-1 text-[10px] font-['Inter'] font-medium tracking-[0.15em] text-blue-600">ANALYTICS SUITE</p>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -316,8 +327,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <div className="flex items-center justify-between">
                 {!isCollapsed && (
                   <div>
-                    <p className="text-lg font-semibold text-gray-900">Market Intelligence</p>
-                    <p className="text-xs font-medium bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">Analytics Suite v1.0.0</p>
+                    <p className="text-[11px] font-medium text-gray-500 tracking-wider">v1.0.0</p>
                   </div>
                 )}
                 <button

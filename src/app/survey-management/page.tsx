@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon, UserGroupIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import Select, { MultiValue, StylesConfig } from 'react-select';
@@ -1107,7 +1107,7 @@ export default function SurveyManagementPage(): JSX.Element {
             className="cursor-pointer"
           >
             <div className="w-12 h-12 rounded-xl shadow-sm flex items-center justify-center bg-[#4361ee] transition-all duration-300">
-              <DocumentChartBarIcon className="w-5 h-5 text-white" />
+              <UserGroupIcon className="w-5 h-5 text-white" />
             </div>
           </div>
           <span className="mt-3 text-sm font-medium text-gray-900">Map Specialties</span>
