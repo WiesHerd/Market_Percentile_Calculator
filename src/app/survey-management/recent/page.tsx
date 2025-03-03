@@ -9,15 +9,18 @@ import {
   ChevronUpIcon,
   ChevronDownIcon,
   MagnifyingGlassIcon,
+  ArrowsRightLeftIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
 
 interface SurveyUpload {
   id: string;
   vendor: string;
   uploadTime: string;
-  specialties: number;
-  mappedFields: number;
-  dataPoints: number;
+  fileName: string;
+  fileSize: number;
+  uploadStatus: 'success' | 'failed';
 }
 
 interface SurveyMappings {
@@ -42,6 +45,10 @@ interface SurveyMappings {
   };
 }
 
+interface SurveyRow {
+  [key: string]: string | number;
+}
+
 export default function UploadHistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof SurveyUpload>('uploadTime');
@@ -54,39 +61,18 @@ export default function UploadHistoryPage() {
       if (storedSurveys) {
         const parsedSurveys = JSON.parse(storedSurveys);
         return parsedSurveys.map((survey: any) => {
-          const specialties = new Set(
-            survey.data.map((row: any) => String(row[survey.mappings.specialty] || '')).filter(Boolean)
-          );
-          
           // Ensure we have a valid date string
           const uploadTime = survey.uploadTime 
             ? new Date(survey.uploadTime).toISOString()
-            : new Date().toISOString(); // Fallback to current time if no upload time
-          
-          // Count data points only for rows with valid metric values
-          const dataPoints = survey.data.reduce((count: number, row: any) => {
-            // Check if the row has any valid metric values
-            const hasValidTCC = Object.values(survey.mappings.tcc as Record<string, string>).some(
-              (field) => field && row[field] && !isNaN(parseFloat(row[field]))
-            );
-            const hasValidWRVU = Object.values(survey.mappings.wrvu as Record<string, string>).some(
-              (field) => field && row[field] && !isNaN(parseFloat(row[field]))
-            );
-            const hasValidCF = Object.values(survey.mappings.cf as Record<string, string>).some(
-              (field) => field && row[field] && !isNaN(parseFloat(row[field]))
-            );
-            
-            // Only count the row if it has at least one valid metric
-            return count + (hasValidTCC || hasValidWRVU || hasValidCF ? 1 : 0);
-          }, 0);
+            : new Date().toISOString();
           
           return {
-          id: survey.id,
-          vendor: survey.vendor,
+            id: survey.id,
+            vendor: survey.vendor,
             uploadTime,
-            specialties: specialties.size,
-            mappedFields: Object.keys(survey.mappings).length,
-            dataPoints,
+            fileName: `${survey.vendor}_${survey.year || 'survey'}.csv`,
+            fileSize: new Blob([JSON.stringify(survey.data)]).size,
+            uploadStatus: 'success' // All existing records were successful uploads
           };
         });
       }
@@ -153,6 +139,59 @@ export default function UploadHistoryPage() {
     }
   };
 
+  const handleExport = (surveyId: string) => {
+    try {
+      const storedSurveys = localStorage.getItem('uploadedSurveys');
+      if (!storedSurveys) return;
+
+      const surveys = JSON.parse(storedSurveys);
+      const survey = surveys.find((s: any) => s.id === surveyId);
+      if (!survey) return;
+
+      // Create CSV content
+      const headers = [
+        'Specialty',
+        'TCC P25', 'TCC P50', 'TCC P75', 'TCC P90',
+        'WRVU P25', 'WRVU P50', 'WRVU P75', 'WRVU P90',
+        'CF P25', 'CF P50', 'CF P75', 'CF P90'
+      ];
+
+      const rows = survey.data.map((row: SurveyRow) => [
+        row[survey.mappings.specialty],
+        row[survey.mappings.tcc.p25],
+        row[survey.mappings.tcc.p50],
+        row[survey.mappings.tcc.p75],
+        row[survey.mappings.tcc.p90],
+        row[survey.mappings.wrvu.p25],
+        row[survey.mappings.wrvu.p50],
+        row[survey.mappings.wrvu.p75],
+        row[survey.mappings.wrvu.p90],
+        row[survey.mappings.cf.p25],
+        row[survey.mappings.cf.p50],
+        row[survey.mappings.cf.p75],
+        row[survey.mappings.cf.p90]
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.join(','))
+      ].join('\n');
+
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${formatVendorName(survey.vendor)}_${survey.year || 'export'}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error exporting survey:', error);
+      toast.error('Failed to export survey');
+    }
+  };
+
   let surveys = loadSurveys();
 
   // Apply search filter
@@ -191,7 +230,7 @@ export default function UploadHistoryPage() {
                 <div>
                   <h1 className="text-2xl font-semibold text-gray-900">Upload History</h1>
                   <p className="mt-2 text-gray-600 max-w-2xl">
-                    View and manage your uploaded survey data
+                    View and manage your uploaded survey files
                   </p>
                 </div>
               </div>
@@ -245,6 +284,25 @@ export default function UploadHistoryPage() {
                   </th>
                   <th scope="col" className="px-6 py-4 text-left">
                     <button
+                      onClick={() => handleSort('fileName')}
+                      className="group inline-flex items-center space-x-2 text-sm font-semibold text-gray-900 hover:text-blue-600"
+                    >
+                      <span>File Name</span>
+                      <span className="flex-none rounded text-gray-400 group-hover:text-blue-600">
+                        {sortField === 'fileName' ? (
+                          sortDirection === 'desc' ? (
+                            <ChevronDownIcon className="h-5 w-5" />
+                          ) : (
+                            <ChevronUpIcon className="h-5 w-5" />
+                          )
+                        ) : (
+                          <ChevronUpIcon className="h-5 w-5 invisible group-hover:visible" />
+                        )}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" className="px-6 py-4 text-left">
+                    <button
                       onClick={() => handleSort('uploadTime')}
                       className="group inline-flex items-center space-x-2 text-sm font-semibold text-gray-900 hover:text-blue-600"
                     >
@@ -264,50 +322,12 @@ export default function UploadHistoryPage() {
                   </th>
                   <th scope="col" className="px-6 py-4 text-left">
                     <button
-                      onClick={() => handleSort('specialties')}
+                      onClick={() => handleSort('fileSize')}
                       className="group inline-flex items-center space-x-2 text-sm font-semibold text-gray-900 hover:text-blue-600"
                     >
-                      <span>Specialties</span>
+                      <span>File Size</span>
                       <span className="flex-none rounded text-gray-400 group-hover:text-blue-600">
-                        {sortField === 'specialties' ? (
-                          sortDirection === 'desc' ? (
-                            <ChevronDownIcon className="h-5 w-5" />
-                          ) : (
-                            <ChevronUpIcon className="h-5 w-5" />
-                          )
-                        ) : (
-                          <ChevronUpIcon className="h-5 w-5 invisible group-hover:visible" />
-                        )}
-                      </span>
-                    </button>
-                  </th>
-                  <th scope="col" className="px-6 py-4 text-left">
-                    <button
-                      onClick={() => handleSort('mappedFields')}
-                      className="group inline-flex items-center space-x-2 text-sm font-semibold text-gray-900 hover:text-blue-600"
-                    >
-                      <span>Mapped Fields</span>
-                      <span className="flex-none rounded text-gray-400 group-hover:text-blue-600">
-                        {sortField === 'mappedFields' ? (
-                          sortDirection === 'desc' ? (
-                            <ChevronDownIcon className="h-5 w-5" />
-                          ) : (
-                            <ChevronUpIcon className="h-5 w-5" />
-                          )
-                        ) : (
-                          <ChevronUpIcon className="h-5 w-5 invisible group-hover:visible" />
-                        )}
-                      </span>
-                    </button>
-                  </th>
-                  <th scope="col" className="px-6 py-4 text-left">
-                    <button
-                      onClick={() => handleSort('dataPoints')}
-                      className="group inline-flex items-center space-x-2 text-sm font-semibold text-gray-900 hover:text-blue-600"
-                    >
-                      <span>Data Points</span>
-                      <span className="flex-none rounded text-gray-400 group-hover:text-blue-600">
-                        {sortField === 'dataPoints' ? (
+                        {sortField === 'fileSize' ? (
                           sortDirection === 'desc' ? (
                             <ChevronDownIcon className="h-5 w-5" />
                           ) : (
@@ -339,30 +359,38 @@ export default function UploadHistoryPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{survey.fileName}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
                         {formatDate(survey.uploadTime)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{survey.specialties}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{survey.mappedFields}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{survey.dataPoints}</div>
+                      <div className="text-sm text-gray-900">
+                        {(survey.fileSize / 1024).toFixed(1)} KB
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-3">
                         <Link
                           href={`/survey-management/view-surveys?surveyId=${survey.id}`}
                           className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                          title="View Survey"
                         >
                           <EyeIcon className="h-5 w-5" />
                         </Link>
                         <button
+                          onClick={() => handleExport(survey.id)}
+                          className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                          title="Export Survey"
+                        >
+                          <ArrowDownTrayIcon className="h-5 w-5" />
+                        </button>
+                        <button
                           onClick={() => handleDelete(survey.id)}
                           className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                          title="Delete Survey"
                         >
                           <TrashIcon className="h-5 w-5" />
                         </button>
@@ -372,7 +400,7 @@ export default function UploadHistoryPage() {
                 ))}
                 {surveys.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12">
+                    <td colSpan={5} className="px-6 py-12">
                       <div className="text-center">
                         <ArrowUpTrayIcon className="mx-auto h-12 w-12 text-gray-400" />
                         <h3 className="mt-2 text-sm font-medium text-gray-900">No uploads found</h3>
@@ -382,17 +410,17 @@ export default function UploadHistoryPage() {
                             : 'Get started by uploading your first survey'}
                         </p>
                         {!searchTerm && (
-              <div className="mt-6">
-                <Link
+                          <div className="mt-6">
+                            <Link
                               href="/survey-management"
                               className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
+                            >
+                              <ArrowUpTrayIcon className="h-4 w-4 mr-2" />
                               Upload New Survey
-                </Link>
-              </div>
+                            </Link>
+                          </div>
                         )}
-            </div>
+                      </div>
                     </td>
                   </tr>
                 )}

@@ -7,6 +7,7 @@ import {
   SpecialtyValidationRules
 } from '@/types/specialty';
 import { predefinedSpecialties } from '@/data/predefinedSpecialties';
+import { specialtyDefinitions } from './specialtyMapping';
 
 const STORAGE_KEYS = {
   SPECIALTIES: 'specialty-management-specialties',
@@ -28,7 +29,7 @@ const DEFAULT_CONFIG: SpecialtyManagerConfig = {
 const DEFAULT_VALIDATION_RULES: SpecialtyValidationRules = {
   minLength: 2,
   maxLength: 100,
-  allowedCharacters: /^[a-zA-Z0-9\s\-\/&]+$/,
+  allowedCharacters: /^[a-zA-Z0-9\s\-\/&()]+$/,
   disallowedPrefixes: ['the', 'a', 'an'],
   requireCategory: false
 };
@@ -106,6 +107,9 @@ class SpecialtyManager {
           timestamp: new Date(op.timestamp)
         }));
       }
+
+      // Import predefined synonyms
+      this.importPredefinedSynonyms();
 
       // Save initial state
       this.saveToStorage();
@@ -238,6 +242,43 @@ class SpecialtyManager {
     this.saveToStorage();
   }
 
+  private importPredefinedSynonyms(): void {
+    // Import predefined specialties from specialtyDefinitions
+    Object.entries(specialtyDefinitions).forEach(([name, definition]) => {
+      // Find or create the specialty
+      let specialty = Array.from(this.specialties.values()).find(s => s.name === name);
+      
+      if (!specialty) {
+        // Create new specialty if it doesn't exist
+        const id = this.generateId();
+        specialty = {
+          id,
+          name,
+          category: definition.category,
+          synonyms: {
+            predefined: [],
+            custom: []
+          },
+          metadata: {
+            lastModified: new Date(),
+            source: 'predefined'
+          }
+        };
+        this.specialties.set(id, specialty);
+      }
+
+      // Add predefined synonyms if they don't exist
+      definition.synonyms?.forEach(synonym => {
+        if (!specialty!.synonyms.predefined.includes(synonym)) {
+          specialty!.synonyms.predefined.push(synonym);
+        }
+      });
+    });
+
+    // Save changes
+    this.saveToStorage();
+  }
+
   // Public Methods
 
   public addSpecialty(name: string, category?: string): Specialty | null {
@@ -316,14 +357,10 @@ class SpecialtyManager {
       return false;
     }
 
-    // Only allow removal from custom synonyms
-    const index = specialty.synonyms.custom.indexOf(synonym);
-    if (index === -1) {
-      console.error('Synonym not found or is predefined');
-      return false;
-    }
-
-    specialty.synonyms.custom.splice(index, 1);
+    // Remove from both predefined and custom synonyms
+    specialty.synonyms.predefined = specialty.synonyms.predefined.filter(s => s !== synonym);
+    specialty.synonyms.custom = specialty.synonyms.custom.filter(s => s !== synonym);
+    
     specialty.metadata.lastModified = new Date();
 
     this.recordOperation({
@@ -458,28 +495,6 @@ class SpecialtyManager {
     
     // Remove the specialty
     specialties.splice(index, 1);
-    
-    // Save the updated specialties
-    localStorage.setItem('specialties', JSON.stringify(specialties));
-    
-    return true;
-  }
-
-  /**
-   * Remove a synonym from a specialty
-   * @param specialtyId The ID of the specialty
-   * @param synonym The synonym to remove
-   * @returns true if removed, false if not found
-   */
-  removeSynonym(specialtyId: string, synonym: string): boolean {
-    const specialties = this.getAllSpecialties();
-    const specialty = specialties.find(s => s.id === specialtyId);
-    
-    if (!specialty) return false;
-    
-    // Remove from both predefined and custom synonyms
-    specialty.synonyms.predefined = specialty.synonyms.predefined.filter(s => s !== synonym);
-    specialty.synonyms.custom = specialty.synonyms.custom.filter(s => s !== synonym);
     
     // Save the updated specialties
     localStorage.setItem('specialties', JSON.stringify(specialties));

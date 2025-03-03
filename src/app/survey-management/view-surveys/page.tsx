@@ -271,10 +271,6 @@ export default function ViewSurveysPage() {
                   <select
                     value={selectedSurvey?.id || ''}
                     onChange={(e) => {
-                      if (e.target.value === "manual-upload") {
-                        window.location.href = "/market-data";
-                        return;
-                      }
                       const survey = surveys.find(s => s.id === e.target.value);
                       setSelectedSurvey(survey || null);
                     }}
@@ -285,7 +281,6 @@ export default function ViewSurveysPage() {
                         {formatVendorName(survey.vendor)}
                       </option>
                     ))}
-                    <option value="manual-upload">Manual Upload</option>
                   </select>
                 )}
                 <button

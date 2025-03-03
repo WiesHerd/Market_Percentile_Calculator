@@ -255,6 +255,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     custom: []
   });
   const [showUnmapped, setShowUnmapped] = useState(false);
+  // Add new state for pending synonym
+  const [pendingSynonym, setPendingSynonym] = useState<string>("");
 
   // Load all specialties and their synonyms on mount
   useEffect(() => {
@@ -726,44 +728,74 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update handleAddSynonym with better validation and error handling
   const handleAddSynonym = (): void => {
     if (!selectedSpecialtyForSynonyms) {
-      toast.error("Please select a specialty first");
+      toast("Please select a specialty first");
       return;
     }
 
-    const synonym = newSynonym.trim();
+    // Use pendingSynonym if available, otherwise use newSynonym
+    const synonym = (pendingSynonym || newSynonym).trim();
     if (!synonym) {
-      toast.error("Please enter a synonym");
-      return;
-    }
-
-    // Check for duplicate synonyms
-    if (currentSynonyms.predefined.includes(synonym) || currentSynonyms.custom.includes(synonym)) {
-      toast.error("This synonym already exists for this specialty");
+      toast("Please enter a synonym");
       return;
     }
 
     // Find the specialty object
     const specialtyObj = allSpecialties.find(s => s.name === selectedSpecialtyForSynonyms);
     if (!specialtyObj) {
-      toast.error("Selected specialty not found");
+      toast("Selected specialty not found");
       return;
     }
 
-    // Add to specialty manager first
+    // Add to specialty manager
     const success = specialtyManager.addSynonym(specialtyObj.id, synonym);
+    
     if (success) {
       // Update local state
       setCurrentSynonyms(prev => ({
         ...prev,
         custom: [...prev.custom, synonym]
       }));
+      // Clear both inputs
       setNewSynonym('');
-      toast.success(`Added synonym: ${synonym}`);
+      setPendingSynonym('');
+      toast(`Added synonym: ${synonym}`);
       
       // Refresh stats
       getSpecialtyStats();
     } else {
-      toast.error("Failed to add synonym. Please try again.");
+      // Check if it's already a synonym for this specialty
+      const existingSynonyms = [
+        ...specialtyObj.synonyms.predefined,
+        ...specialtyObj.synonyms.custom
+      ];
+      
+      if (existingSynonyms.includes(synonym)) {
+        toast(`"${synonym}" is already a synonym for "${specialtyObj.name}"`);
+        return;
+      }
+
+      // Check if it's used by another specialty
+      const otherSpecialty = allSpecialties.find(s => 
+        s.id !== specialtyObj.id && (
+          s.name === synonym ||
+          s.synonyms.predefined.includes(synonym) ||
+          s.synonyms.custom.includes(synonym)
+        )
+      );
+
+      if (otherSpecialty) {
+        const isPredefined = otherSpecialty.synonyms.predefined.includes(synonym);
+        toast(
+          `"${synonym}" is already ${
+            otherSpecialty.name === synonym 
+              ? "a specialty name" 
+              : `a ${isPredefined ? 'predefined' : 'custom'} synonym for "${otherSpecialty.name}"`
+          }`
+        );
+        return;
+      }
+
+      toast("Failed to add synonym. Please try again.");
     }
   };
 
@@ -818,8 +850,17 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       );
       getSpecialtyStats();
       setShowSynonymModal(false);
-      toast.success('Synonyms updated successfully');
     }
+  };
+
+  const handleAddToSynonyms = (specialtyName: string): void => {
+    setShowSynonymModal(true);
+    setPendingSynonym(specialtyName);
+    setSelectedSpecialtyForSynonyms("");
+    setCurrentSynonyms({
+      predefined: [],
+      custom: []
+    });
   };
 
   // Add this new function to get specialty stats
@@ -1111,6 +1152,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     toast.success(`Created ${selectedItems.length} single source mappings`);
   };
 
+  const handleSynonymModalClose = () => {
+    setShowSynonymModal(false);
+    setPendingSynonym("");
+  };
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
@@ -1243,142 +1289,197 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       </Dialog>
 
       {/* Synonym Management Modal */}
-      <Dialog open={showSynonymModal} onOpenChange={setShowSynonymModal}>
-        <DialogContent className="sm:max-w-[900px] p-0 gap-0 overflow-hidden">
-          {/* Enhanced Header */}
-          <div className="px-6 py-4 bg-white border-b border-gray-200">
-            <DialogTitle className="text-xl font-semibold text-gray-900">Manage Specialty Synonyms</DialogTitle>
-            <DialogDescription className="mt-1 text-sm text-gray-600">
-              Add, edit, or remove synonyms for specialties. Synonyms help improve matching accuracy.
+      <Dialog open={showSynonymModal} onOpenChange={setShowSynonymModal} modal={false}>
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] p-0 gap-0 overflow-hidden bg-white border border-gray-200 shadow-xl fixed cursor-auto">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-gray-200 cursor-move select-none">
+            <DialogTitle className="text-lg font-semibold text-gray-900">Manage Specialty Synonyms</DialogTitle>
+            <DialogDescription className="mt-0.5 text-sm text-gray-500">
+              {pendingSynonym 
+                ? `Select a specialty to add "${pendingSynonym}" as a synonym`
+                : "Add, edit, or remove synonyms for specialties."}
             </DialogDescription>
-                  </div>
+          </div>
 
-          <div className="grid grid-cols-2 divide-x divide-gray-200 bg-white">
-            {/* Left Column - Specialty List */}
-            <div className="p-6 bg-gray-50">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Search Specialties</Label>
-                  <div className="relative mt-1.5">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                    <Input
-                      placeholder="Search specialties..."
-                      value={specialtySearch}
-                      onChange={(e) => setSpecialtySearch(e.target.value)}
-                      className="pl-9 bg-white border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="overflow-y-auto max-h-[460px] -mx-2 px-2">
-                  <div className="space-y-2">
-                    {getFilteredSpecialties().map((specialty) => (
-                      <button
-                        key={specialty.id}
-                        onClick={() => handleSpecialtySelect(specialty.name)}
-                        className={cn(
-                          "w-full text-left px-4 py-3 rounded-lg transition-all",
-                          selectedSpecialtyForSynonyms === specialty.name
-                            ? "bg-blue-50 border-2 border-blue-500 shadow-sm ring-2 ring-blue-200"
-                            : "bg-white border border-gray-200 hover:border-gray-300"
-                        )}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className={cn(
-                            "font-medium",
-                            selectedSpecialtyForSynonyms === specialty.name
-                              ? "text-blue-700"
-                              : "text-gray-900"
-                          )}>{specialty.name}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="flex gap-1">
-                              {specialty.stats.predefinedCount > 0 && (
-                                <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                                  {specialty.stats.predefinedCount} predefined
-                                </span>
-                              )}
-                              {specialty.stats.customCount > 0 && (
-                                <span className="inline-flex items-center px-2 py-1 text-xs font-medium rounded-full bg-purple-50 text-purple-700 border border-purple-100">
-                                  {specialty.stats.customCount} custom
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+          <div className="flex divide-x divide-gray-200">
+            {/* Left side - Specialty List */}
+            <div className="w-1/2">
+              <div className="p-4">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                  <Input
+                    placeholder="Search specialties..."
+                    value={specialtySearch}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    className="pl-9"
+                  />
                 </div>
               </div>
+
+              <ScrollArea className="h-[400px]">
+                <div className="p-2 space-y-1">
+                  {getFilteredSpecialties().map((specialty) => (
+                    <button
+                      key={specialty.id}
+                      onClick={() => handleSpecialtySelect(specialty.name)}
+                      className={cn(
+                        "w-full text-left px-3 py-2 rounded-md transition-all text-sm",
+                        selectedSpecialtyForSynonyms === specialty.name
+                          ? "bg-blue-50 text-blue-700"
+                          : "hover:bg-gray-50"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium truncate">{specialty.name}</span>
+                        {(specialty.stats.predefinedCount > 0 || specialty.stats.customCount > 0) && (
+                          <div className="flex gap-1 flex-shrink-0">
+                            {specialty.stats.predefinedCount > 0 && (
+                              <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                                {specialty.stats.predefinedCount}
+                              </Badge>
+                            )}
+                            {specialty.stats.customCount > 0 && (
+                              <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
+                                {specialty.stats.customCount}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
 
-            {/* Right Column - Synonym Management */}
-            <div className="p-6 bg-white">
-              <div className="space-y-6">
+            {/* Right side - Synonym Management */}
+            <div className="w-1/2 flex flex-col">
+              <div className="p-4 space-y-4">
                 {/* Add New Synonym */}
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">Add New Synonym</Label>
-                  <div className="flex gap-2 mt-1.5">
-                    <Input
-                      placeholder="Enter new synonym..."
-                      value={newSynonym}
-                      onChange={(e) => setNewSynonym(e.target.value)}
-                      className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                    />
-                    <Button
-                      onClick={handleAddSynonym}
-                      disabled={!newSynonym.trim() || !selectedSpecialtyForSynonyms}
-                      className="px-4 bg-blue-600 hover:bg-blue-700 text-white"
-                    >
-                      Add
-                    </Button>
-                  </div>
+                <div className="space-y-2">
+                  {pendingSynonym ? (
+                    <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                      <span className="text-sm text-blue-700">Ready to add: <strong>{pendingSynonym}</strong></span>
+                      <button
+                        onClick={() => setPendingSynonym("")}
+                        className="p-1 hover:bg-blue-100 rounded"
+                      >
+                        <XMarkIcon className="h-4 w-4 text-blue-700" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Enter new synonym..."
+                        value={newSynonym}
+                        onChange={(e) => setNewSynonym(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        onClick={handleAddSynonym}
+                        disabled={!newSynonym.trim() || !selectedSpecialtyForSynonyms}
+                        size="sm"
+                        className="bg-blue-600 text-white hover:bg-blue-700"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Synonyms Section */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-gray-900">Synonyms</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedSpecialtyForSynonyms && currentSynonyms && [...currentSynonyms.predefined, ...currentSynonyms.custom].map((synonym, index) => {
-                      const isCustom = currentSynonyms.custom.includes(synonym);
-                      return (
-                        <div
-                          key={`${synonym}-${index}`}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm ${
-                            isCustom 
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                              : 'bg-blue-50 text-blue-700 border border-blue-200'
-                          }`}
-                        >
-                          <span>{synonym}</span>
-                          <button
-                            onClick={() => handleRemoveSynonym(synonym)}
-                            className={`hover:bg-opacity-80 rounded-full p-0.5 ${
-                              isCustom ? 'hover:bg-purple-100' : 'hover:bg-blue-100'
-                            }`}
-                          >
-                            <XMarkIcon className={`h-3.5 w-3.5 ${isCustom ? 'text-purple-500' : 'text-blue-500'}`} />
-                          </button>
-                        </div>
-                      );
-                    })}
+                {/* Synonyms List */}
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-1">
+                    {selectedSpecialtyForSynonyms && currentSynonyms && (
+                      <>
+                        {currentSynonyms.predefined.length > 0 && (
+                          <div className="mb-2">
+                            <h4 className="text-xs font-medium text-gray-500 mb-1">Predefined</h4>
+                            <div className="flex flex-wrap gap-1.5">
+                              {currentSynonyms.predefined.map((synonym, index) => (
+                                <Badge
+                                  key={`predefined-${index}`}
+                                  variant="secondary"
+                                  className="bg-blue-50 text-blue-700 border border-blue-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
+                                >
+                                  {synonym}
+                                  <button
+                                    onClick={() => handleRemoveSynonym(synonym)}
+                                    className="hover:bg-blue-100 rounded p-0.5"
+                                  >
+                                    <XMarkIcon className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {currentSynonyms.custom.length > 0 && (
+                          <div>
+                            <h4 className="text-xs font-medium text-gray-500 mb-1">Custom</h4>
+                            <div className="flex flex-wrap gap-1.5">
+                              {currentSynonyms.custom.map((synonym, index) => (
+                                <Badge
+                                  key={`custom-${index}`}
+                                  variant="secondary"
+                                  className="bg-purple-50 text-purple-700 border border-purple-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
+                                >
+                                  {synonym}
+                                  <button
+                                    onClick={() => handleRemoveSynonym(synonym)}
+                                    className="hover:bg-purple-100 rounded p-0.5"
+                                  >
+                                    <XMarkIcon className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                </div>
+                </ScrollArea>
               </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setShowSynonymModal(false)}>
-              Close
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleSynonymModalClose}
+              className="border-gray-300 text-gray-700 hover:bg-gray-50"
+            >
+              Cancel
             </Button>
-            <Button onClick={handleSaveSynonyms} className="bg-blue-600 hover:bg-blue-700 text-white">
-              Save Changes
-            </Button>
+            {pendingSynonym ? (
+              <Button 
+                size="sm" 
+                onClick={() => {
+                  if (selectedSpecialtyForSynonyms && pendingSynonym) {
+                    handleAddSynonym();
+                    setPendingSynonym("");
+                  }
+                }}
+                disabled={!selectedSpecialtyForSynonyms}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Add to Selected Specialty
+              </Button>
+            ) : (
+              <Button 
+                size="sm" 
+                onClick={handleSaveSynonyms}
+                className="bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Save Changes
+              </Button>
+            )}
           </div>
         </DialogContent>
-        </Dialog>
+      </Dialog>
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto p-6 space-y-6">

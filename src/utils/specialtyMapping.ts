@@ -144,6 +144,31 @@ export const standardSpecialties: Record<string, StandardSpecialty> = {
     parentSpecialty: "Surgery",
     relatedSpecialties: ["Adult Cardiac Surgery", "Congenital Cardiac Surgery"],
     requiresQualifier: false
+  },
+
+  "Orthopedics": {
+    name: "Orthopedics",
+    variations: [
+      "Orthopedic Surgery",
+      "Surgery (Orthopedics)",
+      "Surgery (Orthopedic)",
+      "Orthopedic",
+      "Orthopaedics",
+      "Orthopaedic Surgery",
+      "Surgery (Orthopaedics)",
+      "Surgery (Orthopaedic)",
+      "Orthopaedic"
+    ],
+    category: "Surgical",
+    keywords: ["orthopedic", "orthopaedic", "surgery", "bone", "joint"],
+    parentSpecialty: "Surgery",
+    relatedSpecialties: [
+      "Sports Medicine",
+      "Joint Replacement",
+      "Spine Surgery",
+      "Hand Surgery"
+    ],
+    requiresQualifier: false
   }
 };
 
@@ -165,17 +190,23 @@ interface SpecialtyDefinition {
   parentSpecialty?: string;
 }
 
-// Enhanced normalization for specialty names
+// Normalize specialty name for comparison
 const normalizeSpecialtyName = (name: string): string => {
   return name
     .toLowerCase()
-    // Replace special chars and conjunctions with space
-    .replace(/[\/\-&,()]/g, ' ')
-    .replace(/\band\b/g, ' ')
-    .replace(/\s+/g, ' ')
-    // Remove common words that don't affect meaning
-    .replace(/\b(the|of|in|with|without)\b/g, '')
-    .trim();
+    // Handle parenthetical variations - convert both "X (Y)" and "Y (X)" patterns
+    .replace(/\s*\((.*?)\)\s*/g, ' $1 ') // Convert "X (Y)" to "X Y"
+    .replace(/^(.*?)\s*\((.*?)\)$/, '$2 $1') // Also try "Y X" for "Y (X)" pattern
+    // Handle common word order variations
+    .replace(/^surgery[,\s]+(.*)/i, '$1 surgery') // Move "Surgery" to end if it's at start
+    .replace(/^(.*?)[,\s]+surgery$/i, 'surgery $1') // Move "Surgery" to start if it's at end
+    // Handle spelling variations
+    .replace(/orthopedic/g, 'orthopedic') // Standardize orthopedic spelling
+    .replace(/orthopaedic/g, 'orthopedic') // Convert British spelling
+    // Clean up the result
+    .replace(/[,\-\/]/g, ' ') // Replace commas, hyphens, and slashes with spaces
+    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+    .trim(); // Remove leading/trailing spaces
 };
 
 // Define specialty mappings with enhanced synonyms
@@ -211,6 +242,39 @@ const specialtyDefinitions: Record<string, SpecialtyDefinition> = {
       'Electrophysiology'
     ],
     category: 'Medical'
+  },
+  'Orthopedics': {
+    name: 'Orthopedics',
+    synonyms: [
+      'Bone & Joint',
+      'Orthopedist',
+      'Orthopaedics',
+      'Musculoskeletal Medicine'
+    ],
+    relatedSpecialties: [
+      'Orthopedic Surgery',
+      'Sports Medicine',
+      'Joint Replacement',
+      'Spine Surgery'
+    ],
+    category: 'Medical'
+  },
+  'Orthopedic Surgery': {
+    name: 'Orthopedic Surgery',
+    synonyms: [
+      'Surgery (Orthopedics)',
+      'Surgery (Orthopedic)',
+      'Orthopaedic Surgery',
+      'Surgery (Orthopaedics)',
+      'Surgery (Orthopaedic)'
+    ],
+    relatedSpecialties: [
+      'Orthopedics',
+      'Sports Medicine',
+      'Joint Replacement',
+      'Spine Surgery'
+    ],
+    category: 'Surgical'
   }
 };
 
@@ -235,27 +299,31 @@ const areSpecialtyVariations = (specialty1: string, specialty2: string): boolean
   // Check direct match after normalization
   if (norm1 === norm2) return true;
   
-  // Check against specialty definitions
-  for (const def of Object.values(specialtyDefinitions)) {
-    const allVariations = [def.name, ...def.synonyms].map(normalizeSpecialtyName);
-    
-    // Check if both specialties map to the same normalized form
-    const matches1 = allVariations.some(v => v === norm1);
-    const matches2 = allVariations.some(v => v === norm2);
-    
-    if (matches1 && matches2) return true;
-  }
-  
-  // Additional fuzzy matching for edge cases
-  const words1 = new Set(norm1.split(' '));
-  const words2 = new Set(norm2.split(' '));
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
-  const union = new Set([...words1, ...words2]);
-  
-  // If all words match (regardless of order), consider it a match
-  if (intersection.size === union.size) return true;
-  
-  return false;
+  // Create variations of both specialties
+  const createVariations = (name: string): string[] => {
+    const words = name.split(' ');
+    const variations = [
+      name,
+      // Try different word orders
+      words.reverse().join(' '),
+      // Handle "Surgery" variations
+      name.replace(/^surgery\s+/i, '') + ' surgery',
+      'surgery ' + name.replace(/\s+surgery$/i, ''),
+      // Handle parenthetical variations
+      `${words[0]} (${words.slice(1).join(' ')})`,
+      `${words.slice(1).join(' ')} (${words[0]})`,
+      // Handle common specialty patterns
+      name.replace(/^(.*?)\s+surgery$/i, 'surgery ($1)'),
+      name.replace(/^surgery\s+(.*?)$/i, '$1 (surgery)')
+    ];
+    return [...new Set(variations.map(v => normalizeSpecialtyName(v)))];
+  };
+
+  const variations1 = createVariations(norm1);
+  const variations2 = createVariations(norm2);
+
+  // Check if any variations match
+  return variations1.some(v1 => variations2.includes(v1));
 };
 
 // Check if two specialties are synonyms

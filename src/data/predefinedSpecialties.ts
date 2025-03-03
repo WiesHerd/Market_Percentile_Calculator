@@ -278,10 +278,29 @@ export const predefinedSpecialties: Specialty[] = [
     category: "Medical",
     synonyms: {
       predefined: [
-        "Orthopedic Surgery",
         "Bone & Joint",
-        "Sports Medicine",
         "Orthopedist",
+        "Orthopaedics",
+        "Musculoskeletal Medicine"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "orthopedic-surgery",
+    name: "Orthopedic Surgery",
+    category: "Surgical",
+    synonyms: {
+      predefined: [
+        "Surgery (Orthopedics)",
+        "Surgery (Orthopedic)",
+        "Orthopaedic Surgery",
+        "Surgery (Orthopaedics)",
+        "Surgery (Orthopaedic)"
       ],
       custom: [],
     },

@@ -82,7 +82,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     { 
       name: 'Survey Management',
-      href: './survey-management',
+      href: '#',
       icon: FolderIcon,
       subItems: [
         { 

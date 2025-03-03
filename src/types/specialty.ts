@@ -23,11 +23,15 @@ export interface SpecialtyGroup {
   metadata: SpecialtyMetadata;
 }
 
-export type SynonymValidationResult = {
+export interface SynonymValidationResult {
   isValid: boolean;
   message?: string;
-  suggestions?: string[];
-};
+  details?: {
+    type: 'duplicate_specialty' | 'duplicate_synonym';
+    specialtyName: string;
+    synonymType?: 'predefined' | 'custom';
+  };
+}
 
 export interface SpecialtyManagerConfig {
   version: string;
