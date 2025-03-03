@@ -13,7 +13,8 @@ import {
   normalizeSpecialtyName,
   areSpecialtyVariations,
   findStandardSpecialty,
-  specialtyDefinitions
+  specialtyDefinitions,
+  calculateSpecialtySimilarity
 } from '@/utils/specialtyMapping';
 import {
   getAllSynonyms,
@@ -203,6 +204,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   initialMappings,
 }) => {
   // State
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
   const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>(() => {
     try {
@@ -323,7 +325,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Filter specialties based on search
   const filteredSpecialties = useMemo(() => {
     const result: Record<string, SpecialtyData[]> = {};
-    const searchTerm = specialtySearch.toLowerCase();
+    const searchTerm = searchQuery.toLowerCase();
 
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
       result[vendor] = specialties.filter(item =>
@@ -332,7 +334,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     });
 
     return result;
-  }, [specialtiesByVendor, specialtySearch]);
+  }, [specialtiesByVendor, searchQuery]);
 
   // New function to find potential matches for a specialty
   const findPotentialMatches = (specialty: SpecialtyData): AutoMapSuggestion => {
@@ -345,32 +347,31 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
       if (vendor !== specialty.vendor) {
         specialties.forEach(targetSpecialty => {
-          // Calculate similarity
-          const similarity = calculateStringSimilarity(
-            specialty.specialty,
-            targetSpecialty.specialty
-          );
-
           let reason = '';
-          let confidence = similarity;
+          let confidence = 0;
 
-          // Exact match
-          if (similarity === 1) {
+          // First check for exact matches and variations
+          if (normalizeSpecialtyName(specialty.specialty) === normalizeSpecialtyName(targetSpecialty.specialty)) {
             reason = 'Exact match';
             confidence = 1;
-          }
-          // Check for synonyms
-          else if (areSpecialtiesSynonyms(specialty.specialty, targetSpecialty.specialty)) {
+          } else if (areSpecialtyVariations(specialty.specialty, targetSpecialty.specialty)) {
+            reason = 'Specialty variation';
+            confidence = 0.95;
+          } else if (areSpecialtiesSynonyms(specialty.specialty, targetSpecialty.specialty)) {
             reason = 'Known synonym';
             confidence = 0.95;
-          }
-          // High similarity
-          else if (similarity >= 0.8) {
-            reason = 'Very similar name';
-          }
-          // Moderate similarity
-          else if (similarity >= 0.6) {
-            reason = 'Similar name';
+          } else {
+            // Fall back to string similarity only if no specialty-based match
+            const similarity = calculateStringSimilarity(
+              normalizeSpecialtyName(specialty.specialty),
+              normalizeSpecialtyName(targetSpecialty.specialty)
+            );
+            confidence = similarity;
+            if (similarity >= 0.8) {
+              reason = 'Very similar name';
+            } else if (similarity >= 0.6) {
+              reason = 'Similar name';
+            }
           }
 
           if (confidence >= 0.6) {
@@ -471,15 +472,27 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     const currentMappedGroups = mappedGroups;
     const currentSpecialtiesByVendor = specialtiesByVendor;
     
+    // Create a set of all specialties that are already mapped or have approved matches
     const mappedSpecialtySet = new Set(
       currentMappedGroups.flatMap(group => 
         group.specialties.map(s => `${s.specialty}:${s.vendor}`)
       )
     );
 
+    // Also add specialties that have approved matches in allAutoMappings
+    allAutoMappings.forEach(mapping => {
+      if (mapping.matches.some(m => m.status === 'approved')) {
+        mappedSpecialtySet.add(`${mapping.sourceSpecialty.specialty}:${mapping.sourceSpecialty.vendor}`);
+      }
+    });
+
+    // Keep track of specialties that are included in matches
+    const includedInMatches = new Set<string>();
+
     // Group specialties by normalized name and synonyms
     const specialtiesByNormalizedName = new Map<string, SpecialtyData[]>();
     
+    // First pass: collect all specialties into groups
     Object.entries(currentSpecialtiesByVendor).forEach(([vendor, specialties]) => {
       specialties.forEach(specialty => {
         const key = `${specialty.specialty}:${specialty.vendor}`;
@@ -511,42 +524,66 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       .map(instances => {
         // Take the first instance as source
         const sourceSpecialty = instances[0];
+        const sourceKey = `${sourceSpecialty.specialty}:${sourceSpecialty.vendor}`;
         
+        // Skip if this specialty is already included in matches
+        if (includedInMatches.has(sourceKey)) {
+          return null;
+        }
+
         // Find matches from other vendors in the same group
-        const matches = instances.slice(1).map(match => ({
-          specialty: match,
-          confidence: 0.95, // High confidence since they're in the same group
-          reason: 'Known synonym',
-          status: undefined as 'approved' | 'rejected' | undefined
-        }));
+        const matches = instances.slice(1).map(match => {
+          const matchKey = `${match.specialty}:${match.vendor}`;
+          includedInMatches.add(matchKey);
+          return {
+            specialty: match,
+            confidence: 0.95, // High confidence since they're in the same group
+            reason: 'Known synonym',
+            status: undefined as 'approved' | 'rejected' | undefined
+          };
+        });
 
         // Also look for potential matches in other specialties
         Object.entries(currentSpecialtiesByVendor).forEach(([vendor, vendorSpecialties]) => {
           if (vendor !== sourceSpecialty.vendor) {
             vendorSpecialties
-              .filter(s => 
-                !instances.some(grouped => grouped.specialty === s.specialty) && 
-                !mappedSpecialtySet.has(`${s.specialty}:${s.vendor}`)
-              )
+              .filter(s => {
+                const targetKey = `${s.specialty}:${s.vendor}`;
+                return !instances.some(grouped => grouped.specialty === s.specialty) && 
+                       !mappedSpecialtySet.has(targetKey) &&
+                       !includedInMatches.has(targetKey);
+              })
               .forEach(targetSpecialty => {
-                const similarity = calculateStringSimilarity(
-                  sourceSpecialty.specialty,
-                  targetSpecialty.specialty
-                );
+                let reason = '';
+                let confidence = 0;
 
-                if (similarity >= 0.6) {
-                  let reason = '';
-                  let confidence = similarity;
-
-                  if (areSpecialtiesSynonyms(sourceSpecialty.specialty, targetSpecialty.specialty)) {
-                    reason = 'Known synonym';
-                    confidence = 0.95;
-                  } else if (similarity >= 0.8) {
+                // First check for exact matches and variations
+                if (normalizeSpecialtyName(sourceSpecialty.specialty) === normalizeSpecialtyName(targetSpecialty.specialty)) {
+                  reason = 'Exact match';
+                  confidence = 1;
+                } else if (areSpecialtyVariations(sourceSpecialty.specialty, targetSpecialty.specialty)) {
+                  reason = 'Specialty variation';
+                  confidence = 0.95;
+                } else if (areSpecialtiesSynonyms(sourceSpecialty.specialty, targetSpecialty.specialty)) {
+                  reason = 'Known synonym';
+                  confidence = 0.95;
+                } else {
+                  // Fall back to string similarity
+                  const similarity = calculateStringSimilarity(
+                    normalizeSpecialtyName(sourceSpecialty.specialty),
+                    normalizeSpecialtyName(targetSpecialty.specialty)
+                  );
+                  confidence = similarity;
+                  if (similarity >= 0.8) {
                     reason = 'Very similar name';
-                  } else {
+                  } else if (similarity >= 0.6) {
                     reason = 'Similar name';
                   }
+                }
 
+                if (confidence >= 0.6) {
+                  const matchKey = `${targetSpecialty.specialty}:${targetSpecialty.vendor}`;
+                  includedInMatches.add(matchKey);
                   matches.push({
                     specialty: targetSpecialty,
                     confidence,
@@ -558,12 +595,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           }
         });
 
-        return {
+        return matches.length > 0 ? {
           sourceSpecialty,
           matches: matches.sort((a, b) => b.confidence - a.confidence)
-        };
+        } : null;
       })
-      .filter(item => item.matches.length > 0);
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     // Sort by source specialty name
     allMappings.sort((a, b) => 
@@ -571,7 +608,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     );
 
     setAllAutoMappings(allMappings);
-  }, [mappedGroups, specialtiesByVendor]); // Include dependencies but use closure to prevent infinite loop
+  }, [mappedGroups, specialtiesByVendor, allAutoMappings]); // Include allAutoMappings in dependencies
 
   // Initialize auto mappings on mount
   useEffect(() => {
@@ -653,9 +690,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Filter mappings based on search
   const filteredMappings = useMemo(() => {
     return allAutoMappings.filter(mapping =>
-      mapping.sourceSpecialty.specialty.toLowerCase().includes(specialtySearch.toLowerCase())
+      mapping.sourceSpecialty.specialty.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [allAutoMappings, specialtySearch]);
+  }, [allAutoMappings, searchQuery]);
 
   // Update handleSpecialtySelect to properly load synonyms
   const handleSpecialtySelect = (specialty: string): void => {
@@ -1371,8 +1408,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <input
                     type="text"
                       placeholder="Search mapped or unmapped specialties..."
-                    value={specialtySearch}
-                    onChange={(e) => setSpecialtySearch(e.target.value)}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-96 pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
@@ -1411,9 +1448,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               <div className="divide-y divide-gray-200">
                 {mappedGroups
                   .filter(group =>
-                    specialtySearch ? 
+                    searchQuery ? 
                       group.specialties.some(s => 
-                        s.specialty.toLowerCase().includes(specialtySearch.toLowerCase())
+                        s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
                       ) : true
                   )
                   .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -1493,7 +1530,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </div>
                     <div className="space-y-2">
                       {specialties
-                        .filter(s => specialtySearch ? s.specialty.toLowerCase().includes(specialtySearch.toLowerCase()) : true)
+                        .filter(s => searchQuery ? s.specialty.toLowerCase().includes(searchQuery.toLowerCase()) : true)
                         .map(specialty => (
                         <div
                           key={`${specialty.vendor}:${specialty.specialty}`}
@@ -1524,8 +1561,14 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                         </div>
                       ))}
                       {specialties.length === 0 && (
-                        <div className="text-sm text-gray-500 text-center py-4">
-                          No unmapped specialties
+                        <div className="flex items-center justify-center p-8 bg-white rounded-lg border border-gray-200">
+                          <div className="text-center">
+                            <InformationCircleIcon className="mx-auto h-10 w-10 text-gray-400" />
+                            <h3 className="mt-2 text-sm font-medium text-gray-900">No unmapped specialties</h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              All specialties in this vendor have been mapped
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1548,8 +1591,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <input
                     type="text"
                     placeholder="Search specialties across vendors to map together..."
-                    value={specialtySearch}
-                    onChange={(e) => setSpecialtySearch(e.target.value)}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
@@ -1630,32 +1673,45 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </div>
                   </div>
                   <div className="p-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                    <div className="space-y-2">
-                      <button
-                        onClick={createManualMapping}
-                        disabled={selectedSpecialties.size < 1}
-                        className="w-full px-4 py-2 text-sm font-medium rounded-md
-                          text-white bg-blue-600 hover:bg-blue-700
-                          disabled:opacity-50 disabled:cursor-not-allowed
-                          transition-colors duration-150 ease-in-out shadow-sm"
-                      >
-                        {selectedSpecialties.size === 0 
-                          ? 'Select specialties'
-                          : selectedSpecialties.size === 1
-                          ? 'Create Single Source'
-                          : `Create Group (${selectedSpecialties.size})`}
-                      </button>
-                      
-                      {selectedSpecialties.size > 0 && (
+                    <div className="relative">
+                      {selectedSpecialties.size === 0 ? (
                         <button
-                          onClick={createIndividualSingleMappings}
+                          disabled
                           className="w-full px-4 py-2 text-sm font-medium rounded-md
-                            text-blue-700 bg-blue-50 hover:bg-blue-100
-                            border border-blue-200
+                            text-white bg-blue-600 opacity-50 cursor-not-allowed
                             transition-colors duration-150 ease-in-out shadow-sm"
                         >
-                          Create {selectedSpecialties.size} Individual {selectedSpecialties.size === 1 ? 'Source' : 'Sources'}
+                          Select specialties
                         </button>
+                      ) : (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={createManualMapping}
+                            className="flex-1 px-4 py-2 text-sm font-medium rounded-l-md
+                              text-white bg-blue-600 hover:bg-blue-700
+                              transition-colors duration-150 ease-in-out shadow-sm"
+                          >
+                            {selectedSpecialties.size === 1
+                              ? 'Create Single Source'
+                              : `Create Group (${selectedSpecialties.size})`}
+                          </button>
+                          {selectedSpecialties.size > 1 && (
+                            <button
+                              onClick={createIndividualSingleMappings}
+                              className="px-3 py-2 text-sm font-medium rounded-r-md
+                                text-white bg-blue-600 hover:bg-blue-700 border-l border-blue-500
+                                transition-colors duration-150 ease-in-out shadow-sm
+                                group relative"
+                              title="Create individual single sources"
+                            >
+                              <ArrowsRightLeftIcon className="h-4 w-4" />
+                              <span className="absolute right-0 top-full mt-2 w-48 p-2 bg-gray-900 text-white text-xs rounded shadow-lg
+                                opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                Create individual single sources
+                              </span>
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1712,8 +1768,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <input
                     type="text"
                     placeholder="Search for specialties to find potential matches..."
-                    value={specialtySearch}
-                    onChange={(e) => setSpecialtySearch(e.target.value)}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
@@ -1731,9 +1787,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     <span className="text-sm font-medium text-gray-900">
                       Showing {filteredMappings.length} potential matches
                     </span>
-                    {specialtySearch && (
+                    {searchQuery && (
                       <span className="text-sm text-gray-500">
-                        for "{specialtySearch}"
+                        for "{searchQuery}"
                       </span>
                     )}
                   </div>
@@ -2054,7 +2110,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             </div>
             <h3 className="mt-2 text-sm font-medium text-gray-900">No specialties found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {specialtySearch
+              {searchQuery
                 ? "Try adjusting your search terms"
                 : "Start by searching for specialties above"}
             </p>
