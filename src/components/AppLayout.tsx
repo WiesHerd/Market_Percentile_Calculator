@@ -72,12 +72,12 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigationItems: NavigationItem[] = [
     { 
       name: 'Dashboard', 
-      href: '/dashboard',
+      href: '/',
       icon: HomeIcon 
     },
     {
       name: 'Percentile Calculator',
-      href: '/',
+      href: '/percentile-calculator',
       icon: CalculatorIcon
     },
     { 
@@ -151,32 +151,28 @@ export function AppLayout({ children }: AppLayoutProps) {
             {/* Logo */}
             <div className={`p-4 ${isCollapsed ? 'px-3' : ''}`}>
               <Link href="/" className={`block ${isCollapsed ? 'mx-auto w-10' : ''}`}>
-                <div className="flex items-center">
-                  <div className="relative w-10 h-10 rounded-xl bg-gradient-to-tl from-blue-700 via-blue-600 to-blue-500 flex items-center justify-center overflow-hidden group shadow-lg shadow-blue-500/20 ring-2 ring-blue-400/20 transition-transform duration-300 hover:scale-110">
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <div className="relative flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white transform transition-transform duration-300 group-hover:rotate-12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M3 13.5L7 9.5M7 9.5L11 13.5M7 9.5V20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M21 10.5L17 14.5M17 14.5L13 10.5M17 14.5V4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path className="opacity-50" d="M12 4L14 6L12 8L10 6L12 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path className="opacity-75" d="M12 16L14 18L12 20L10 18L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                <div className="flex items-center space-x-4">
+                  <div className="relative w-10 h-10 flex-shrink-0">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl shadow-lg transform transition-transform duration-200 hover:scale-105" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <ChartBarIcon className="w-6 h-6 text-white" />
                     </div>
                   </div>
                   {!isCollapsed && (
-                    <div className="ml-3">
-                      <style jsx global>{`
-                        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500&display=swap');
-                      `}</style>
-                      <div className="flex flex-col">
-                        <div className="flex flex-col">
-                          <p className="font-['Space_Grotesk'] text-[20px] font-semibold leading-tight tracking-tight text-gray-900">Market</p>
-                          <p className="font-['Space_Grotesk'] text-[20px] font-semibold leading-tight tracking-tight text-gray-900">Intelligence</p>
-                        </div>
-                        <div className="mt-1.5 flex flex-col">
-                          <div className="h-[2px] w-14 bg-gradient-to-r from-blue-600 to-blue-500"></div>
-                          <p className="mt-1 text-[10px] font-['Inter'] font-medium tracking-[0.15em] text-blue-600">ANALYTICS SUITE</p>
-                        </div>
+                    <div className="flex flex-col">
+                      <div className="flex items-baseline space-x-1">
+                        <span className="text-[22px] font-light tracking-tight text-gray-800">
+                          Market
+                        </span>
+                        <span className="text-[22px] font-medium tracking-tight bg-gradient-to-r from-blue-600 to-blue-500 bg-clip-text text-transparent">
+                          Intelligence
+                        </span>
+                      </div>
+                      <div className="flex flex-col -mt-1">
+                        <div className="h-[2px] w-16 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400 rounded-full mb-1" />
+                        <span className="text-[10px] tracking-[0.2em] text-gray-500 font-medium">
+                          ANALYTICS SUITE
+                        </span>
                       </div>
                     </div>
                   )}
