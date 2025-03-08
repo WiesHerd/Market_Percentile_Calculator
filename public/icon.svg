@@ -3,24 +3,67 @@
   <!-- Background with modern gradient -->
   <rect width="512" height="512" rx="128" fill="url(#gradient)" />
   
-  <!-- Icon paths with increased stroke width for better visibility at small sizes -->
-  <g transform="translate(128, 128) scale(1.6)">
-    <path d="M48 176L96 128M96 128L144 176M96 128V256" 
-          stroke="white" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M272 144L224 192M224 192L176 144M224 192V64" 
-          stroke="white" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-    <path opacity="0.5" d="M160 64L184 88L160 112L136 88L160 64" 
-          stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
-    <path opacity="0.75" d="M160 208L184 232L160 256L136 232L160 208" 
-          stroke="white" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Subtle Grid -->
+  <g transform="translate(128, 128) scale(1.2)" opacity="0.1">
+    <path d="M0 80H256" stroke="white" stroke-width="1"/>
+    <path d="M0 120H256" stroke="white" stroke-width="1"/>
+    <path d="M0 160H256" stroke="white" stroke-width="1"/>
+    <path d="M0 200H256" stroke="white" stroke-width="1"/>
+    <path d="M40 40V256" stroke="white" stroke-width="1"/>
+    <path d="M100 40V256" stroke="white" stroke-width="1"/>
+    <path d="M160 40V256" stroke="white" stroke-width="1"/>
+    <path d="M220 40V256" stroke="white" stroke-width="1"/>
+  </g>
+  
+  <!-- Chart Icon -->
+  <g transform="translate(128, 128) scale(1.2)">
+    <!-- Bar Chart -->
+    <rect x="30" y="160" width="48" height="96" rx="8" fill="white" opacity="0.9"/>
+    <rect x="98" y="120" width="48" height="136" rx="8" fill="white"/>
+    <rect x="166" y="80" width="48" height="176" rx="8" fill="white" opacity="0.9"/>
+    
+    <!-- Line Chart Shadow -->
+    <path d="M40 140L100 100L160 120L220 60" 
+          stroke="white" 
+          stroke-width="16" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          opacity="0.2"
+          filter="url(#shadow)"/>
+    
+    <!-- Line Chart Overlay -->
+    <path d="M40 140L100 100L160 120L220 60" 
+          stroke="white" 
+          stroke-width="12" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"
+          opacity="0.85"/>
+    
+    <!-- Data Points with Glow -->
+    <circle cx="40" cy="140" r="8" fill="white" filter="url(#glow)"/>
+    <circle cx="100" cy="100" r="8" fill="white" filter="url(#glow)"/>
+    <circle cx="160" cy="120" r="8" fill="white" filter="url(#glow)"/>
+    <circle cx="220" cy="60" r="8" fill="white" filter="url(#glow)"/>
   </g>
 
-  <!-- Gradient definition -->
+  <!-- Definitions -->
   <defs>
+    <!-- Main Gradient -->
     <linearGradient id="gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" style="stop-color:#1D4ED8"/>
-      <stop offset="50%" style="stop-color:#2563EB"/>
-      <stop offset="100%" style="stop-color:#3B82F6"/>
+      <stop offset="0%" style="stop-color:#2563EB"/>
+      <stop offset="50%" style="stop-color:#3B82F6"/>
+      <stop offset="100%" style="stop-color:#60A5FA"/>
     </linearGradient>
+    
+    <!-- Glow Effect -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    
+    <!-- Shadow Effect -->
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
   </defs>
 </svg> 

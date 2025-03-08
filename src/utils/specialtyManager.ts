@@ -34,12 +34,54 @@ const DEFAULT_VALIDATION_RULES: SpecialtyValidationRules = {
   requireCategory: false
 };
 
+interface SynonymValidationOptions {
+  allowDuplicates?: boolean;
+  caseSensitive?: boolean;
+  minLength?: number;
+  maxLength?: number;
+  allowSpecialChars?: boolean;
+  reservedWords?: string[];
+}
+
+interface NormalizedSynonym {
+  original: string;
+  normalized: string;
+  specialty: string;
+  type: 'predefined' | 'custom';
+}
+
+interface SynonymHistory {
+  id: string;
+  specialtyId: string;
+  synonym: string;
+  action: 'add' | 'remove';
+  timestamp: Date;
+  type: 'predefined' | 'custom';
+  user?: string;
+}
+
+interface SynonymConflict {
+  synonym: string;
+  existingSpecialty: string;
+  type: 'predefined' | 'custom';
+  suggestedAction: 'merge' | 'rename' | 'skip';
+}
+
 class SpecialtyManager {
   private specialties: Map<string, Specialty>;
   private groups: Map<string, SpecialtyGroup>;
   private config: SpecialtyManagerConfig;
   private operations: SpecialtyOperation[];
   private validationRules: SpecialtyValidationRules;
+  private synonymHistory: SynonymHistory[] = [];
+  private validationOptions: SynonymValidationOptions = {
+    allowDuplicates: false,
+    caseSensitive: false,
+    minLength: 2,
+    maxLength: 100,
+    allowSpecialChars: true,
+    reservedWords: ['unknown', 'other', 'misc', 'various']
+  };
 
   constructor() {
     this.specialties = new Map();
@@ -189,27 +231,62 @@ class SpecialtyManager {
     return { isValid: true };
   }
 
+  private normalizeSynonym(synonym: string): string {
+    return this.config.settings.caseSensitive 
+      ? synonym.trim()
+      : synonym.trim().toLowerCase();
+  }
+
   private validateSynonym(synonym: string, specialtyId?: string): SynonymValidationResult {
-    // First apply specialty name validation rules
-    const nameValidation = this.validateSpecialty(synonym);
-    if (!nameValidation.isValid) {
-      return nameValidation;
+    const options = this.validationOptions;
+    const normalized = this.normalizeSynonym(synonym);
+
+    // Length validation
+    if (normalized.length < options.minLength!) {
+      return { 
+        isValid: false, 
+        message: `Synonym must be at least ${options.minLength} characters long` 
+      };
     }
 
-    // Check for duplicates if enabled
-    if (this.config.settings.enableDuplicateCheck) {
-      const normalizedSynonym = this.normalizeName(synonym);
-      
-      // Check across all specialties
+    if (normalized.length > options.maxLength!) {
+      return { 
+        isValid: false, 
+        message: `Synonym cannot exceed ${options.maxLength} characters` 
+      };
+    }
+
+    // Reserved words check
+    if (options.reservedWords?.includes(normalized)) {
+      return { 
+        isValid: false, 
+        message: `"${synonym}" is a reserved word and cannot be used as a synonym` 
+      };
+    }
+
+    // Special characters validation
+    if (!options.allowSpecialChars && !/^[a-zA-Z0-9\s-]+$/.test(normalized)) {
+      return { 
+        isValid: false, 
+        message: 'Synonym can only contain letters, numbers, spaces, and hyphens' 
+      };
+    }
+
+    // Duplicate check
+    if (!options.allowDuplicates) {
       for (const [id, specialty] of this.specialties) {
-        if (specialtyId && id === specialtyId) continue; // Skip current specialty
+        if (specialtyId && id === specialtyId) continue;
 
         const allSynonyms = [
           ...specialty.synonyms.predefined,
           ...specialty.synonyms.custom
         ];
 
-        if (allSynonyms.some(s => this.normalizeName(s) === normalizedSynonym)) {
+        const hasDuplicate = allSynonyms.some(s => 
+          this.normalizeSynonym(s) === normalized
+        );
+
+        if (hasDuplicate) {
           return {
             isValid: false,
             message: `Synonym already exists for specialty "${specialty.name}"`
@@ -219,14 +296,6 @@ class SpecialtyManager {
     }
 
     return { isValid: true };
-  }
-
-  private normalizeName(name: string): string {
-    let normalized = name.trim();
-    if (!this.config.settings.caseSensitive) {
-      normalized = normalized.toLowerCase();
-    }
-    return normalized;
   }
 
   private generateId(): string {
@@ -316,24 +385,109 @@ class SpecialtyManager {
     return specialty;
   }
 
-  public addSynonym(specialtyId: string, synonym: string, isPredefined = false): boolean {
+  public addSynonym(
+    specialtyId: string, 
+    synonym: string, 
+    isPredefined = false
+  ): { success: boolean; message?: string; conflict?: SynonymConflict } {
+    const specialty = this.specialties.get(specialtyId);
+    if (!specialty) {
+      return { success: false, message: 'Specialty not found' };
+    }
+
+    const validation = this.validateSynonym(synonym, specialtyId);
+    if (!validation.isValid) {
+      return { success: false, message: validation.message };
+    }
+
+    const normalized = this.normalizeSynonym(synonym);
+    const target = isPredefined ? 'predefined' : 'custom';
+
+    // Check for conflicts
+    for (const [id, other] of this.specialties) {
+      if (id === specialtyId) continue;
+
+      const conflictingSynonym = [...other.synonyms.predefined, ...other.synonyms.custom]
+        .find(s => this.normalizeSynonym(s) === normalized);
+
+      if (conflictingSynonym) {
+        return {
+          success: false,
+          message: `Conflict detected with specialty "${other.name}"`,
+          conflict: {
+            synonym,
+            existingSpecialty: other.name,
+            type: other.synonyms.predefined.includes(conflictingSynonym) 
+              ? 'predefined' 
+              : 'custom',
+            suggestedAction: 'merge'
+          }
+        };
+      }
+    }
+
+    if (!specialty.synonyms[target].includes(synonym)) {
+      specialty.synonyms[target].push(synonym);
+      specialty.metadata.lastModified = new Date();
+
+      // Record history
+      this.synonymHistory.push({
+        id: this.generateId(),
+        specialtyId,
+        synonym,
+        action: 'add',
+        timestamp: new Date(),
+        type: target
+      });
+
+      this.recordOperation({
+        type: 'update',
+        timestamp: new Date(),
+        specialtyId,
+        changes: {
+          synonyms: specialty.synonyms
+        }
+      });
+
+      this.saveToStorage();
+      return { success: true };
+    }
+
+    return { 
+      success: false, 
+      message: `Synonym "${synonym}" already exists for this specialty` 
+    };
+  }
+
+  public removeSynonym(specialtyId: string, synonym: string): boolean {
     const specialty = this.specialties.get(specialtyId);
     if (!specialty) {
       console.error('Specialty not found');
       return false;
     }
 
-    const validation = this.validateSynonym(synonym, specialtyId);
-    if (!validation.isValid) {
-      console.error('Invalid synonym:', validation.message);
-      return false;
-    }
+    const wasPredefined = specialty.synonyms.predefined.includes(synonym);
+    const wasCustom = specialty.synonyms.custom.includes(synonym);
 
-    const target = isPredefined ? 'predefined' : 'custom';
-    if (!specialty.synonyms[target].includes(synonym)) {
-      specialty.synonyms[target].push(synonym);
+    // Remove from both predefined and custom synonyms
+    specialty.synonyms.predefined = specialty.synonyms.predefined
+      .filter(s => s !== synonym);
+    specialty.synonyms.custom = specialty.synonyms.custom
+      .filter(s => s !== synonym);
+    
+    if (wasPredefined || wasCustom) {
       specialty.metadata.lastModified = new Date();
-      
+
+      // Record history
+      this.synonymHistory.push({
+        id: this.generateId(),
+        specialtyId,
+        synonym,
+        action: 'remove',
+        timestamp: new Date(),
+        type: wasPredefined ? 'predefined' : 'custom'
+      });
+
       this.recordOperation({
         type: 'update',
         timestamp: new Date(),
@@ -350,32 +504,6 @@ class SpecialtyManager {
     return false;
   }
 
-  public removeSynonym(specialtyId: string, synonym: string): boolean {
-    const specialty = this.specialties.get(specialtyId);
-    if (!specialty) {
-      console.error('Specialty not found');
-      return false;
-    }
-
-    // Remove from both predefined and custom synonyms
-    specialty.synonyms.predefined = specialty.synonyms.predefined.filter(s => s !== synonym);
-    specialty.synonyms.custom = specialty.synonyms.custom.filter(s => s !== synonym);
-    
-    specialty.metadata.lastModified = new Date();
-
-    this.recordOperation({
-      type: 'update',
-      timestamp: new Date(),
-      specialtyId,
-      changes: {
-        synonyms: specialty.synonyms
-      }
-    });
-
-    this.saveToStorage();
-    return true;
-  }
-
   public getSpecialty(id: string): Specialty | undefined {
     return this.specialties.get(id);
   }
@@ -385,21 +513,21 @@ class SpecialtyManager {
   }
 
   public searchSpecialties(query: string): Specialty[] {
-    const normalizedQuery = this.normalizeName(query);
+    const normalizedQuery = this.normalizeSynonym(query);
     return Array.from(this.specialties.values()).filter(specialty => {
-      const normalizedName = this.normalizeName(specialty.name);
+      const normalizedName = this.normalizeSynonym(specialty.name);
       if (normalizedName.includes(normalizedQuery)) return true;
 
       // Search through synonyms
       return [...specialty.synonyms.predefined, ...specialty.synonyms.custom]
-        .some(synonym => this.normalizeName(synonym).includes(normalizedQuery));
+        .some(synonym => this.normalizeSynonym(synonym).includes(normalizedQuery));
     });
   }
 
   public getSynonymSuggestions(name: string): string[] {
     if (!this.config.settings.enableAutoSuggestions) return [];
 
-    const normalizedName = this.normalizeName(name);
+    const normalizedName = this.normalizeSynonym(name);
     const suggestions = new Set<string>();
 
     // Common variations
@@ -500,6 +628,79 @@ class SpecialtyManager {
     localStorage.setItem('specialties', JSON.stringify(specialties));
     
     return true;
+  }
+
+  public getSynonymHistory(
+    specialtyId?: string,
+    options?: { 
+      startDate?: Date; 
+      endDate?: Date; 
+      action?: 'add' | 'remove';
+      type?: 'predefined' | 'custom';
+    }
+  ): SynonymHistory[] {
+    let history = [...this.synonymHistory];
+
+    if (specialtyId) {
+      history = history.filter(h => h.specialtyId === specialtyId);
+    }
+
+    if (options?.startDate) {
+      history = history.filter(h => h.timestamp >= options.startDate!);
+    }
+
+    if (options?.endDate) {
+      history = history.filter(h => h.timestamp <= options.endDate!);
+    }
+
+    if (options?.action) {
+      history = history.filter(h => h.action === options.action);
+    }
+
+    if (options?.type) {
+      history = history.filter(h => h.type === options.type);
+    }
+
+    return history.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }
+
+  public getConflictingSynonyms(specialtyId: string): SynonymConflict[] {
+    const specialty = this.specialties.get(specialtyId);
+    if (!specialty) return [];
+
+    const conflicts: SynonymConflict[] = [];
+    const allSynonyms = [
+      ...specialty.synonyms.predefined,
+      ...specialty.synonyms.custom
+    ];
+
+    for (const [id, other] of this.specialties) {
+      if (id === specialtyId) continue;
+
+      const otherSynonyms = [
+        ...other.synonyms.predefined,
+        ...other.synonyms.custom
+      ];
+
+      for (const synonym of allSynonyms) {
+        const normalized = this.normalizeSynonym(synonym);
+        const conflictingSynonym = otherSynonyms
+          .find(s => this.normalizeSynonym(s) === normalized);
+
+        if (conflictingSynonym) {
+          conflicts.push({
+            synonym,
+            existingSpecialty: other.name,
+            type: other.synonyms.predefined.includes(conflictingSynonym) 
+              ? 'predefined' 
+              : 'custom',
+            suggestedAction: 'merge'
+          });
+        }
+      }
+    }
+
+    return conflicts;
   }
 }
 

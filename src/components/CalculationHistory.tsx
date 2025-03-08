@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { format } from 'date-fns';
-import { ExclamationTriangleIcon, InformationCircleIcon, PrinterIcon, TrashIcon, ClockIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon, InformationCircleIcon, PrinterIcon, TrashIcon, ClockIcon, ChevronDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { MarketData, MetricType } from '@/types/market-data';
 import { ComplianceCheck, FairMarketValue } from '@/types/logs';
 
@@ -43,43 +43,37 @@ interface Props {
 export function CalculationHistoryView({ history, onDelete, formatValue, getMetricLabel, marketData }: Props) {
   const [selectedReport, setSelectedReport] = useState<CalculationHistoryItem | null>(null);
   const [showComplianceDetails, setShowComplianceDetails] = useState<string | null>(null);
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
+  const [selectedFteRange, setSelectedFteRange] = useState<string>('all');
+
+  // Get unique specialties from history
+  const specialties = useMemo(() => {
+    const unique = new Set(history.map(item => item.specialty));
+    return Array.from(unique).sort();
+  }, [history]);
+
+  // Filter history based on selections
+  const filteredHistory = useMemo(() => {
+    return history.filter(item => {
+      const matchesSpecialty = selectedSpecialty === 'all' || item.specialty === selectedSpecialty;
+      const matchesFte = selectedFteRange === 'all' || 
+        (selectedFteRange === 'full' && item.fte === 1.0) ||
+        (selectedFteRange === 'part' && item.fte < 1.0);
+      return matchesSpecialty && matchesFte;
+    });
+  }, [history, selectedSpecialty, selectedFteRange]);
 
   const handlePrint = async (calculation: CalculationHistoryItem) => {
     try {
-      // Clear any existing print data first
       localStorage.removeItem('printReportData');
-
-      // Prepare the data
-      const printData = {
-        calculation,
-        marketData
-      };
-
-      // Log the data size
-      const dataSize = new Blob([JSON.stringify(printData)]).size;
-      console.log('Print data size:', dataSize, 'bytes');
-
-      // Store data in localStorage
-      try {
-        localStorage.setItem('printReportData', JSON.stringify(printData));
-        console.log('Data successfully stored in localStorage');
-
-        // Open the print report in a new window/tab AFTER data is stored
-        const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
-        console.log('Opening print window with path:', `${basePath}/print-report`);
-        const printWindow = window.open(`${basePath}/print-report`, '_blank');
-        
-        if (!printWindow) {
-          throw new Error('Pop-up window was blocked. Please allow pop-ups for this site.');
-        }
-
-        // Focus the new window
-        printWindow.focus();
-      } catch (storageError) {
-        console.error('Error storing data in localStorage:', storageError);
-        throw new Error('Failed to store print data. The data might be too large.');
+      const printData = { calculation, marketData };
+      localStorage.setItem('printReportData', JSON.stringify(printData));
+      const basePath = process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '';
+      const printWindow = window.open(`${basePath}/print-report`, '_blank');
+      if (!printWindow) {
+        throw new Error('Pop-up window was blocked. Please allow pop-ups for this site.');
       }
-
+      printWindow.focus();
     } catch (error) {
       console.error('Error preparing print report:', error);
       alert('There was an error preparing the print report: ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -110,339 +104,277 @@ export function CalculationHistoryView({ history, onDelete, formatValue, getMetr
   }
 
   return (
-    <div>
-      <div className="overflow-x-auto border border-gray-200 rounded-lg">
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="bg-white p-4 border border-gray-200 rounded-lg flex flex-wrap gap-4 items-center">
+        <div className="flex items-center space-x-2">
+          <label htmlFor="specialty" className="text-sm font-medium text-gray-700">
+            Specialty:
+          </label>
+          <select
+            id="specialty"
+            value={selectedSpecialty}
+            onChange={(e) => setSelectedSpecialty(e.target.value)}
+            className="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="all">All Specialties</option>
+            {specialties.map(specialty => (
+              <option key={specialty} value={specialty}>{specialty}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <label htmlFor="fte" className="text-sm font-medium text-gray-700">
+            FTE:
+          </label>
+          <select
+            id="fte"
+            value={selectedFteRange}
+            onChange={(e) => setSelectedFteRange(e.target.value)}
+            className="text-sm rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+          >
+            <option value="all">All FTE</option>
+            <option value="full">1.0 FTE</option>
+            <option value="part">Part-time</option>
+          </select>
+        </div>
+
+        {(selectedSpecialty !== 'all' || selectedFteRange !== 'all') && (
+          <button
+            onClick={() => {
+              setSelectedSpecialty('all');
+              setSelectedFteRange('all');
+            }}
+            className="text-xs text-gray-500 hover:text-gray-700 flex items-center space-x-1"
+          >
+            <XMarkIcon className="h-4 w-4" />
+            <span>Clear filters</span>
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto border border-gray-200 rounded-lg bg-white">
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
             <tr className="bg-gray-50">
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
                 Physician
               </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                 Specialty
               </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                 Metric
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                 Value
               </th>
-              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">
                 Percentile
               </th>
-              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Date
-              </th>
-              <th scope="col" className="relative px-4 py-3">
-                <span className="sr-only">Actions</span>
+              <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                Actions
               </th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {history.map((calc) => {
-              if (!calc || typeof calc !== 'object') return null;
-              
-              return (
-                <React.Fragment key={calc.id}>
-                  <tr
-                    className={`group hover:bg-gray-50 transition-colors ${showComplianceDetails === calc.id ? 'bg-gray-50' : ''}`}
-                    onClick={() => setShowComplianceDetails(showComplianceDetails === calc.id ? null : calc.id)}
-                  >
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="flex items-center">
-                        {calc.metric === 'total' ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowComplianceDetails(showComplianceDetails === calc.id ? null : calc.id);
-                            }}
-                            className={`mr-2 p-1 rounded-full transition-colors ${
-                              showComplianceDetails === calc.id 
-                                ? 'bg-blue-100 text-blue-600' 
-                                : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+            {filteredHistory.map((calc) => (
+              <React.Fragment key={calc.id}>
+                <tr className={`hover:bg-gray-50 transition-colors ${showComplianceDetails === calc.id ? 'bg-gray-50' : ''}`}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center">
+                      {calc.metric === 'total' && (
+                        <button
+                          onClick={() => setShowComplianceDetails(showComplianceDetails === calc.id ? null : calc.id)}
+                          className={`mr-2 p-1 rounded-full transition-colors ${
+                            showComplianceDetails === calc.id 
+                              ? 'bg-blue-100 text-blue-600' 
+                              : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                        >
+                          <ChevronDownIcon 
+                            className={`h-4 w-4 transition-transform duration-200 ${
+                              showComplianceDetails === calc.id ? 'transform rotate-180' : ''
                             }`}
-                            title={showComplianceDetails === calc.id ? "Hide details" : "Show details"}
-                          >
-                            <ChevronDownIcon 
-                              className={`h-4 w-4 transition-transform duration-200 ${
-                                showComplianceDetails === calc.id ? 'transform rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-                        ) : (
-                          <div className="w-6 mr-2" /> /* Placeholder to maintain alignment */
-                        )}
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {calc.physicianName || 'Unknown'}
-                          </div>
-                          {calc.notes && (
-                            <div className="text-xs text-gray-500 mt-0.5 italic">{calc.notes}</div>
-                          )}
+                          />
+                        </button>
+                      )}
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {calc.physicianName || 'Unknown'}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{calc.specialty || 'Unknown'}</div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">{getTableMetricLabel(calc.metric)}</div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <div className="text-sm space-y-1">
-                        <div>
-                          <span className="font-medium text-gray-900">
-                            {typeof calc.actualValue === 'number' && !isNaN(calc.actualValue) ? formatValue(calc.actualValue, calc.metric) : 'N/A'}
-                          </span>
-                          <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                            {typeof calc.fte === 'number' && !isNaN(calc.fte) ? `${calc.fte.toFixed(2)} FTE` : '1.00 FTE'}
-                          </span>
-                        </div>
-                        {(calc.metric === 'total' || calc.metric === 'wrvu') && calc.fte !== 1.0 && (
-                          <div className="flex items-center justify-end text-xs">
-                            <span className="text-gray-700 font-medium">
-                              {typeof calc.value === 'number' && !isNaN(calc.value) ? formatValue(calc.value, calc.metric) : 'N/A'}
-                            </span>
-                            <span className="ml-1 text-gray-500">normalized @ 1.0 FTE</span>
-                          </div>
+                        {calc.notes && (
+                          <div className="text-xs text-gray-500 mt-0.5 italic">{calc.notes}</div>
                         )}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right">
-                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {typeof calc.percentile === 'number' && !isNaN(calc.percentile) ? `${calc.percentile.toFixed(1)}th` : 'N/A'}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm text-gray-900">{calc.specialty || 'Unknown'}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm text-gray-900">{getTableMetricLabel(calc.metric)}</div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="text-sm space-y-1">
+                      <div className="flex items-center justify-end">
+                        <span className="font-medium text-gray-900">
+                          {typeof calc.actualValue === 'number' && !isNaN(calc.actualValue) 
+                            ? formatValue(calc.actualValue, calc.metric) 
+                            : 'N/A'
+                          }
+                        </span>
+                        <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          {typeof calc.fte === 'number' && !isNaN(calc.fte) ? `${calc.fte.toFixed(2)} FTE` : '1.00 FTE'}
+                        </span>
                       </div>
-                      {calc.complianceChecks && Array.isArray(calc.complianceChecks) && calc.complianceChecks.length > 0 && (
-                        <div className="inline-flex ml-2">
-                          {calc.complianceChecks.some(check => check?.type === 'flag') && (
-                            <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
-                          )}
-                          {calc.complianceChecks.some(check => check?.type === 'warning') && (
-                            <ExclamationTriangleIcon className="h-4 w-4 text-yellow-500" />
-                          )}
+                      {(calc.metric === 'total' || calc.metric === 'wrvu') && calc.fte !== 1.0 && (
+                        <div className="text-xs text-gray-500">
+                          {typeof calc.value === 'number' && !isNaN(calc.value) 
+                            ? `${formatValue(calc.value, calc.metric)} @ 1.0 FTE` 
+                            : 'N/A'
+                          }
                         </div>
                       )}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
-                        {format(new Date(calc.timestamp), 'MMM d, yyyy h:mm a')}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end space-x-2">
+                      <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                        {typeof calc.percentile === 'number' && !isNaN(calc.percentile) 
+                          ? `${calc.percentile.toFixed(1)}th` 
+                          : 'N/A'
+                        }
                       </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-2">
-                        {calc.metric === 'total' && Array.isArray(calc.tccComponents) && calc.tccComponents.length > 0 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowComplianceDetails(showComplianceDetails === calc.id ? null : calc.id);
-                            }}
-                            className={`text-sm flex items-center px-2 py-1 rounded transition-colors ${
-                              showComplianceDetails === calc.id
-                                ? 'bg-gray-100 text-gray-900'
-                                : 'text-gray-500 hover:text-gray-700 group-hover:bg-gray-50'
-                            }`}
-                          >
-                            <span className="mr-1">{showComplianceDetails === calc.id ? 'Hide' : 'View'} Details</span>
-                            <ChevronDownIcon 
-                              className={`h-3 w-3 transition-transform duration-200 ${
-                                showComplianceDetails === calc.id ? 'transform rotate-180' : ''
-                              }`}
-                            />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handlePrint(calc);
-                          }}
-                          className="text-gray-400 hover:text-blue-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-full p-1"
-                          title="Print report"
-                        >
-                          <PrinterIcon className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete(calc.id);
-                          }}
-                          className="text-gray-400 hover:text-red-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 rounded-full p-1"
-                          title="Delete calculation"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      {calc.complianceChecks?.some(check => check?.type === 'flag') && (
+                        <ExclamationTriangleIcon className="h-4 w-4 text-red-500" />
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => handlePrint(calc)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
+                        title="Print report"
+                      >
+                        <PrinterIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(calc.id)}
+                        className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded-full hover:bg-red-50"
+                        title="Delete calculation"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
 
-                  {/* TCC Components Breakdown */}
-                  {showComplianceDetails === calc.id && calc.metric === 'total' && Array.isArray(calc.tccComponents) && calc.tccComponents.length > 0 && (
-                    <tr className="animate-fadeIn">
-                      <td colSpan={7} className="px-4 py-3">
-                        {/* Compact Summary Header */}
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <h4 className="text-sm font-medium text-gray-900">Components</h4>
-                            <button
-                              type="button"
-                              className="text-gray-400 hover:text-gray-600"
-                              title="Components breakdown with FTE adjustments where applicable"
-                            >
-                              <InformationCircleIcon className="h-4 w-4" />
-                            </button>
-                          </div>
-                          {calc.fte !== 1.0 && (
-                            <div className="flex items-center text-sm">
-                              <span className="text-gray-700 font-medium">{calc.fte.toFixed(2)} FTE</span>
-                              <span className="mx-2 text-gray-400">→</span>
-                              <span className="text-gray-700 font-medium">1.0 FTE Normalized</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Compact Components Table */}
-                        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                          <table className="min-w-full divide-y divide-gray-200">
+                {/* Expanded Details Row */}
+                {showComplianceDetails === calc.id && calc.metric === 'total' && (
+                  <tr className="bg-gray-50">
+                    <td colSpan={6} className="px-4 py-4">
+                      {/* TCC Components */}
+                      {Array.isArray(calc.tccComponents) && calc.tccComponents.length > 0 && (
+                        <div className="space-y-4">
+                          <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg bg-white">
                             <thead>
-                              <tr>
-                                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Component</th>
-                                <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Value</th>
+                              <tr className="bg-gray-50">
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Component</th>
+                                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Value</th>
                                 {calc.fte !== 1.0 && (
-                                  <th scope="col" className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Normalized</th>
+                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">@ 1.0 FTE</th>
                                 )}
-                                <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-b">Notes</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200 text-sm">
+                            <tbody className="divide-y divide-gray-200">
                               {calc.tccComponents.map((component, index) => {
-                                if (!component || typeof component !== 'object') return null;
-                                
                                 const value = parseFloat(component.value?.replace(/[^0-9.]/g, '') || '0');
                                 const isBaseComponent = component.name.toLowerCase().includes('base');
-                                const isOverhead = component.name.toLowerCase().includes('overhead');
-                                const normalizedValue = component.normalize ? value / (calc.fte || 1) : value;
-                                
-                                // Calculate dollar value if it's a percentage
-                                const baseComponent = calc.tccComponents?.find(c => 
-                                  c.name.toLowerCase().includes('base')
-                                );
-                                const baseValue = baseComponent ? parseFloat(baseComponent.value?.replace(/[^0-9.]/g, '') || '0') : 0;
-                                const dollarValue = component.isPercentage ? (value / 100) * baseValue : value;
-                                const normalizedDollarValue = component.normalize ? dollarValue / (calc.fte || 1) : dollarValue;
+                                const normalizedValue = component.normalize ? value / calc.fte : value;
                                 
                                 return (
-                                  <tr 
-                                    key={component.id || index}
-                                    className={`hover:bg-gray-50 transition-colors ${isBaseComponent ? 'bg-blue-50/10 font-medium' : ''}`}
-                                  >
-                                    <td className="px-3 py-2 whitespace-nowrap">
-                                      <div className="flex items-center">
-                                        <span className="text-sm text-gray-900">
-                                          {component.name}
-                                        </span>
+                                  <tr key={component.id || index} className={isBaseComponent ? 'bg-blue-50/10' : ''}>
+                                    <td className="px-4 py-2">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-sm text-gray-900">{component.name}</span>
                                         {component.normalize && (
-                                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium bg-gray-100 text-gray-700">
+                                          <span className="px-1 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
                                             FTE
                                           </span>
                                         )}
                                       </div>
                                     </td>
-                                    <td className="px-3 py-2 whitespace-nowrap text-right">
-                                      <div className="flex flex-col items-end">
-                                        <div className="flex items-center space-x-2">
-                                          <span className="text-sm text-gray-900">
-                                            {component.isPercentage ? `${value}%` : formatValue(value, 'total')}
-                                          </span>
-                                          {component.isPercentage && (
-                                            <span className="text-sm text-gray-500">
-                                              ({formatValue(dollarValue, 'total')})
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
+                                    <td className="px-4 py-2 text-right">
+                                      <span className="text-sm text-gray-900">
+                                        {component.isPercentage ? `${value}%` : formatValue(value, 'total')}
+                                      </span>
                                     </td>
                                     {calc.fte !== 1.0 && (
-                                      <td className="px-3 py-2 whitespace-nowrap text-right">
+                                      <td className="px-4 py-2 text-right">
                                         {component.normalize ? (
-                                          <div className="flex flex-col items-end">
-                                            <span className="text-sm text-gray-700">
-                                              {component.isPercentage ? `${value}%` : formatValue(normalizedValue, 'total')}
-                                            </span>
-                                            {component.isPercentage && (
-                                              <span className="text-xs text-gray-500">
-                                                {formatValue(normalizedDollarValue, 'total')}
-                                              </span>
-                                            )}
-                                          </div>
+                                          <span className="text-sm text-gray-900">
+                                            {component.isPercentage ? `${value}%` : formatValue(normalizedValue, 'total')}
+                                          </span>
                                         ) : (
                                           <span className="text-sm text-gray-400">-</span>
                                         )}
                                       </td>
                                     )}
-                                    <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                      {isOverhead ? (
-                                        <span>Based on Base Pay</span>
-                                      ) : component.notes ? (
-                                        component.notes
-                                      ) : null}
-                                    </td>
                                   </tr>
                                 );
                               })}
                               {/* Total Row */}
-                              <tr className="border-t border-gray-200 font-medium">
-                                <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Total</td>
-                                <td className="px-3 py-2 whitespace-nowrap text-right text-sm text-gray-900">
-                                  {formatValue(calc.actualValue || 0, 'total')}
+                              <tr className="bg-gray-50 font-medium">
+                                <td className="px-4 py-2 text-sm text-gray-900">Total</td>
+                                <td className="px-4 py-2 text-right text-sm text-gray-900">
+                                  {formatValue(calc.actualValue, 'total')}
                                 </td>
                                 {calc.fte !== 1.0 && (
-                                  <td className="px-3 py-2 whitespace-nowrap text-right text-sm text-blue-600">
-                                    {formatValue(calc.value || 0, 'total')}
+                                  <td className="px-4 py-2 text-right text-sm text-blue-600">
+                                    {formatValue(calc.value, 'total')}
                                   </td>
                                 )}
-                                <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500">
-                                  {calc.fte !== 1.0 ? `Normalized from ${calc.fte.toFixed(2)} FTE` : ''}
-                                </td>
                               </tr>
                             </tbody>
                           </table>
-                        </div>
 
-                        {/* Compliance Warning - Only show if there are issues */}
-                        {Array.isArray(calc.complianceChecks) && calc.complianceChecks.length > 0 && (
-                          <div className="mt-3">
-                            {calc.complianceChecks.map((check) => {
-                              if (!check || typeof check !== 'object') return null;
-                              
-                              return (
+                          {/* Compliance Checks */}
+                          {calc.complianceChecks?.length > 0 && (
+                            <div className="space-y-2">
+                              {calc.complianceChecks.map((check) => (
                                 <div
                                   key={check.id}
-                                  className={`flex items-center px-3 py-2 rounded-md text-sm ${
+                                  className={`flex items-center px-3 py-2 rounded text-xs ${
                                     check.type === 'flag'
-                                      ? 'text-red-600'
+                                      ? 'bg-red-50 text-red-700'
                                       : check.type === 'warning'
-                                      ? 'text-yellow-600'
-                                      : 'text-blue-600'
+                                      ? 'bg-yellow-50 text-yellow-700'
+                                      : 'bg-blue-50 text-blue-700'
                                   }`}
                                 >
                                   {check.type === 'flag' ? (
-                                    <ExclamationTriangleIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <ExclamationTriangleIcon className="h-3 w-3 mr-1.5 flex-shrink-0" />
                                   ) : check.type === 'warning' ? (
-                                    <ExclamationTriangleIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <ExclamationTriangleIcon className="h-3 w-3 mr-1.5 flex-shrink-0" />
                                   ) : (
-                                    <InformationCircleIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+                                    <InformationCircleIcon className="h-3 w-3 mr-1.5 flex-shrink-0" />
                                   )}
                                   {check.message}
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
           </tbody>
         </table>
       </div>

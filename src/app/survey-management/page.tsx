@@ -1875,7 +1875,7 @@ export default function SurveyManagementPage(): JSX.Element {
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Save Mapping Template</h3>
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
             <label htmlFor="templateName" className="block text-sm font-medium text-gray-700">
               Template Name
@@ -1889,7 +1889,7 @@ export default function SurveyManagementPage(): JSX.Element {
               placeholder="Enter template name..."
             />
           </div>
-          <div className="flex justify-end space-x-3">
+          <div className="flex justify-end space-x-3 pt-4">
             <button
               onClick={() => setShowTemplateSaveModal(false)}
               className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"

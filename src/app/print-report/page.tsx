@@ -191,16 +191,21 @@ export default function PrintReport() {
         {/* Header */}
         <div className="mb-4 border-b border-gray-300 pb-2">
           <div className="flex justify-between items-center mb-2">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1 text-left">Provider Compensation Analysis</h1>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gray-900 mb-1">Provider Compensation Analysis</h1>
               <div className="flex items-center gap-2 text-base">
                 <span className="font-medium text-gray-800">{calculation.physicianName}</span>
                 <span className="text-gray-400">•</span>
                 <span className="text-gray-600">{calculation.specialty}</span>
               </div>
             </div>
-            <div className="flex items-center justify-center bg-blue-600 w-12 h-12 rounded-lg">
-              <span className="text-white font-bold text-xl">WH</span>
+            <div className="relative w-10 h-10 flex-shrink-0">
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-blue-400 rounded-xl shadow-lg" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
@@ -335,7 +340,7 @@ export default function PrintReport() {
         {/* Footer */}
         <div className="mt-2 pt-1 border-t border-gray-300">
           <div className="flex justify-between items-center text-xs text-gray-500">
-            <div className="font-medium">Provider Percentile Calculator</div>
+            <div className="font-medium">Market Intelligence • Provider Compensation Analysis</div>
             <div>Generated on {format(new Date(), 'MMMM d, yyyy h:mm a')}</div>
           </div>
         </div>
@@ -378,6 +383,8 @@ export default function PrintReport() {
             height: 100%;
             background: white;
             padding: 0;
+            position: relative;
+            z-index: 1;
           }
 
           .print-content {
@@ -385,10 +392,32 @@ export default function PrintReport() {
             flex-direction: column;
             height: 100%;
             justify-content: space-between;
+            position: relative;
+            z-index: 1;
           }
 
-          .screen-only {
+          /* Hide all navigation elements and buttons in print */
+          button, 
+          nav,
+          .screen-only,
+          [role="navigation"],
+          [role="button"] {
             display: none !important;
+          }
+
+          /* Ensure content is above any overlapping elements */
+          h1, .content-area {
+            position: relative;
+            z-index: 2;
+          }
+
+          /* Remove any unwanted borders in print */
+          .print-content > div:first-child {
+            border-left: none !important;
+          }
+
+          h1, span {
+            border: none !important;
           }
 
           * {
