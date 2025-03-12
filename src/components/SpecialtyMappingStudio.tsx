@@ -36,6 +36,7 @@ import { specialtyManager } from "@/utils/specialtyManager";
 import { Label } from "@/components/ui/label";
 import { Trash2 } from "lucide-react";
 import type { SpecialtyMetadata } from "@/types/specialty";
+import type { Specialty } from "@/types/specialty";
 
 interface SpecialtyMetrics {
   tcc?: {
@@ -181,13 +182,14 @@ type BaseSpecialty = {
   metadata: SpecialtyMetadata;
 };
 
-type SpecialtyWithStats = BaseSpecialty & {
+// Define the SpecialtyWithStats interface
+interface SpecialtyWithStats extends Specialty {
   stats: {
-    synonymCount: number;
     predefinedCount: number;
     customCount: number;
+    synonymCount: number;
   };
-};
+}
 
 interface CurrentSynonyms {
   predefined: string[];
@@ -202,7 +204,7 @@ interface AvailableSpecialty extends SpecialtyData {
 const STORAGE_KEY = 'specialty-mappings-v1';
 
 // Helper function to convert BaseSpecialty to SpecialtyWithStats
-function convertToSpecialtyWithStats(specialty: BaseSpecialty): SpecialtyWithStats {
+function convertToSpecialtyWithStats(specialty: Specialty): SpecialtyWithStats {
   return {
     ...specialty,
     stats: {
@@ -279,45 +281,19 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Load all specialties and their synonyms on mount
   useEffect(() => {
-    const loadedSpecialties = specialtyManager.getAllSpecialties().map(s => ({
-      ...s,
-      stats: {
-        synonymCount: s.synonyms.predefined.length + s.synonyms.custom.length,
-        predefinedCount: s.synonyms.predefined.length,
-        customCount: s.synonyms.custom.length
-      }
-    })) as SpecialtyWithStats[];
+    // Refresh predefined synonyms first
+    specialtyManager.refreshPredefinedSynonyms();
     
+    // Load all specialties with stats
+    const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
+    
+    // Update state with properly typed specialties
     setAllSpecialties(loadedSpecialties);
     setSearchResults(loadedSpecialties);
-
-    // Import initial mappings if provided
-    if (initialMappings) {
-      Object.entries(initialMappings).forEach(([specialty, synonyms]) => {
-        const existingSpecialty = loadedSpecialties.find(s => s.name === specialty);
-        if (!existingSpecialty) {
-          const newSpecialty = specialtyManager.addSpecialty(specialty);
-          if (newSpecialty) {
-            synonyms.forEach((synonym: string) => {
-              specialtyManager.addSynonym(newSpecialty.id, synonym);
-            });
-          }
-        }
-      });
-      // Refresh specialties after import
-      const updatedSpecialties = specialtyManager.getAllSpecialties().map(s => ({
-        ...s,
-        stats: {
-          synonymCount: s.synonyms.predefined.length + s.synonyms.custom.length,
-          predefinedCount: s.synonyms.predefined.length,
-          customCount: s.synonyms.custom.length
-        }
-      })) as SpecialtyWithStats[];
-      
-      setAllSpecialties(updatedSpecialties);
-      setSearchResults(updatedSpecialties);
-    }
-  }, [initialMappings]);
+    
+    // Initialize specialty stats
+    getSpecialtyStats();
+  }, []);
 
   // Organize specialties by vendor
   const specialtiesByVendor = useMemo(() => {
@@ -916,7 +892,17 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Update useEffect to load specialties
   useEffect(() => {
-    // Initialize specialties on mount
+    // Refresh predefined synonyms first
+    specialtyManager.refreshPredefinedSynonyms();
+    
+    // Load all specialties with stats
+    const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
+    
+    // Update state with properly typed specialties
+    setAllSpecialties(loadedSpecialties);
+    setSearchResults(loadedSpecialties);
+    
+    // Initialize specialty stats
     getSpecialtyStats();
   }, []);
 
@@ -959,19 +945,14 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const handleAddSpecialty = () => {
     if (!newSpecialtyName.trim()) return;
     
-    // Add the specialty to the specialty manager first
     const addedSpecialty = specialtyManager.addSpecialty(newSpecialtyName.trim());
     
     if (addedSpecialty) {
-      // Update the local state
-      setAllSpecialties(prev => [...prev, addedSpecialty]);
-      setSelectedSpecialty(addedSpecialty);
+      const specialtyWithStats = convertToSpecialtyWithStats(addedSpecialty);
+      setAllSpecialties(prev => [...prev, specialtyWithStats]);
+      setSelectedSpecialty(specialtyWithStats);
       setNewSpecialtyName("");
-      
-      // Show success message
       toast.success(`Added new specialty: ${addedSpecialty.name}`);
-      
-      // Refresh stats
       getSpecialtyStats();
     } else {
       toast.error("Failed to add specialty. It may already exist.");
@@ -995,10 +976,10 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update the loadSpecialties function to include stats
   const loadSpecialties = useCallback(() => {
     const loadedSpecialties = specialtyManager.getAllSpecialties()
-      .map(s => convertToSpecialtyWithStats(s as BaseSpecialty));
+      .map(convertToSpecialtyWithStats);
     setAllSpecialties(loadedSpecialties);
     setSearchResults(loadedSpecialties);
-  }, [convertToSpecialtyWithStats]);
+  }, []);
 
   // Update useEffect to call loadSpecialties
   useEffect(() => {
@@ -1007,15 +988,21 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   const handleSearch = (value: string) => {
     setSpecialtySearch(value);
-    // Reset selected specialty when search changes
     setSelectedSpecialty(null);
     setCurrentSynonyms({ predefined: [], custom: [] });
+    
+    // Filter and convert specialties
+    const filtered = specialtyManager.getAllSpecialties()
+      .filter(s => s.name.toLowerCase().includes(value.toLowerCase()))
+      .map(convertToSpecialtyWithStats);
+    setSearchResults(filtered);
   };
 
   // Update search results when modal opens
   useEffect(() => {
-    if (showSynonymModal) {
-      setSearchResults(allSpecialties);
+    if (showSynonymModal && allSpecialties.length > 0) {
+      const convertedSpecialties = allSpecialties.map(convertToSpecialtyWithStats);
+      setSearchResults(convertedSpecialties);
     }
   }, [showSynonymModal, allSpecialties]);
 
@@ -1189,7 +1176,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const handleAddNewSpecialty = (name: string) => {
     const newSpecialty = specialtyManager.addSpecialty(name);
     if (newSpecialty) {
-      const specialtyWithStats = convertToSpecialtyWithStats(newSpecialty as BaseSpecialty);
+      const specialtyWithStats = convertToSpecialtyWithStats(newSpecialty);
       setAllSpecialties(prev => [...prev, specialtyWithStats]);
       setSelectedSpecialty(specialtyWithStats);
       setNewSpecialtyName("");
@@ -2435,6 +2422,150 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               onClick={handleConfirmDelete}
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showHelpModal} onOpenChange={setShowHelpModal}>
+        <DialogContent className="sm:max-w-[800px] bg-white max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center">
+              <InformationCircleIcon className="h-5 w-5 mr-2 text-blue-500" />
+              How to Use Specialty Mapping Studio
+            </DialogTitle>
+            <DialogDescription>
+              A comprehensive guide to mapping medical specialties across different survey vendors
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 max-h-[calc(90vh-180px)] pr-6">
+            <div className="space-y-6">
+              {/* Auto-Mapping System */}
+              <div>
+                <h3 className="text-lg font-semibold text-blue-700 mb-2">Auto-Mapping System</h3>
+                <div className="space-y-4 text-gray-600">
+                  <p>The auto-mapping system uses a sophisticated algorithm to identify potential specialty matches across different vendors:</p>
+                  
+                  <div className="pl-4 space-y-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Match Detection</h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>Exact String Matches: Direct specialty name comparisons</li>
+                        <li>Synonym Matches: Using predefined and custom synonym database</li>
+                        <li>Pattern Recognition: Identifying common naming patterns</li>
+                        <li>String Similarity: Using fuzzy matching for close variations</li>
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-gray-900">Confidence Score Calculation</h4>
+                      <p>Confidence scores (0-1) are calculated based on multiple factors:</p>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li><span className="font-medium">1.0 (Exact Match)</span>: Perfect string match or known synonym match</li>
+                        <li><span className="font-medium">0.95 (High)</span>: Known variations or predefined specialty patterns</li>
+                        <li><span className="font-medium">0.8-0.94 (Strong)</span>: Strong similarity or partial pattern match</li>
+                        <li><span className="font-medium">0.6-0.79 (Moderate)</span>: Moderate similarity or potential match</li>
+                        <li><span className="font-medium">&lt;0.6 (Low)</span>: Not shown in suggestions</li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium text-gray-900">Match Types</h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li><span className="font-medium">Exact</span>: Direct name matches (e.g., "Cardiology" = "Cardiology")</li>
+                        <li><span className="font-medium">Synonym</span>: Matches through synonym database (e.g., "ENT" = "Otorhinolaryngology")</li>
+                        <li><span className="font-medium">Similar</span>: High string similarity matches (e.g., "Cardiac Surgery" ≈ "Cardiothoracic Surgery")</li>
+                        <li><span className="font-medium">Category</span>: Matches based on specialty categories and related fields</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Synonym Management System */}
+              <div>
+                <h3 className="text-lg font-semibold text-blue-700 mb-2">Synonym Management System</h3>
+                <div className="space-y-4 text-gray-600">
+                  <p>The synonym system helps maintain consistent specialty mapping through three types of synonyms:</p>
+                  
+                  <div className="pl-4 space-y-3">
+                    <div>
+                      <h4 className="font-medium text-gray-900">Predefined Synonyms</h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>System-provided standard specialty variations</li>
+                        <li>Based on industry-standard terminology</li>
+                        <li>Example: "Otorhinolaryngology" → ["ENT", "Ear Nose and Throat"]</li>
+                        <li>Cannot be deleted but can be temporarily disabled</li>
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-gray-900">Custom Synonyms</h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>User-defined specialty variations</li>
+                        <li>Organization-specific terminology</li>
+                        <li>Can be added, edited, or removed</li>
+                        <li>Syncs across all mapping sessions</li>
+                      </ul>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium text-gray-900">Learned Synonyms</h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>Automatically generated from approved mappings</li>
+                        <li>Based on historical mapping decisions</li>
+                        <li>Improves with continued use</li>
+                        <li>Can be promoted to custom synonyms</li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium text-gray-900">Synonym Rules</h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>Each specialty name can only be a synonym for one primary specialty</li>
+                        <li>Synonyms are bi-directional (A → B means B → A)</li>
+                        <li>Transitive relationships are automatically applied (if A → B and B → C, then A → C)</li>
+                        <li>Conflicts are prevented during synonym addition</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Best Practices */}
+              <div>
+                <h3 className="text-lg font-semibold text-blue-700 mb-2">Best Practices</h3>
+                <div className="space-y-2">
+                  <h4 className="font-medium text-gray-900">Auto-Mapping</h4>
+                  <ul className="list-disc pl-4 space-y-1 text-gray-600">
+                    <li>Review high-confidence matches (0.95+) first</li>
+                    <li>Use "Accept All" for groups of high-confidence matches</li>
+                    <li>Manually verify moderate confidence matches (0.6-0.79)</li>
+                    <li>Consider adding custom synonyms for recurring variations</li>
+                  </ul>
+
+                  <h4 className="font-medium text-gray-900 mt-3">Synonym Management</h4>
+                  <ul className="list-disc pl-4 space-y-1 text-gray-600">
+                    <li>Add custom synonyms for organization-specific terms</li>
+                    <li>Review and validate learned synonyms regularly</li>
+                    <li>Document synonym decisions for consistency</li>
+                    <li>Use the synonym search to check existing mappings</li>
+                  </ul>
+
+                  <h4 className="font-medium text-gray-900 mt-3">Manual Mapping</h4>
+                  <ul className="list-disc pl-4 space-y-1 text-gray-600">
+                    <li>Use for complex specialty relationships</li>
+                    <li>Create single-source mappings when needed</li>
+                    <li>Document mapping decisions in notes</li>
+                    <li>Review mappings periodically for accuracy</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0 mt-6">
+            <Button onClick={() => setShowHelpModal(false)}>
+              Got it, thanks!
             </Button>
           </DialogFooter>
         </DialogContent>

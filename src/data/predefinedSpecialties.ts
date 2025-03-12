@@ -472,4 +472,330 @@ export const predefinedSpecialties: Specialty[] = [
       source: "predefined",
     },
   },
+  {
+    id: "cardiothoracic-surgery",
+    name: "Cardiothoracic Surgery",
+    category: "Surgical",
+    synonyms: {
+      predefined: [
+        "Cardiovascular Surgery",
+        "Surgery (Cardiothoracic/Cardiovascular)",
+        "Surgery (Cardiothoracic)",
+        "Cardiothoracic/Cardiovascular Surgery",
+        "Cardiovascular/Thoracic Surgery",
+        "CT Surgery",
+        "Heart Surgery",
+        "Thoracic Surgery",
+        "Cardiac Surgery",
+        "Surgery - Cardiothoracic",
+        "Surgery - Cardiovascular"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "adolescent-medicine",
+    name: "Adolescent Medicine",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Teen Medicine",
+        "Youth Medicine",
+        "Adolescent Health",
+        "Teen Health"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "child-development",
+    name: "Child Development",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Developmental Pediatrics",
+        "Child Development Medicine",
+        "Developmental Medicine"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "critical-care",
+    name: "Critical Care/Intensivist",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Critical Care Medicine",
+        "Intensive Care",
+        "ICU",
+        "Critical Care Intensivist",
+        "Intensivist"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "genetics",
+    name: "Genetics",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Medical Genetics",
+        "Clinical Genetics",
+        "Genetic Medicine",
+        "Genomic Medicine"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "hospitalist",
+    name: "Hospitalist",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Hospital Medicine",
+        "Inpatient Medicine",
+        "Hospital Physician"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "neonatal-medicine",
+    name: "Neonatal Medicine",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Neonatal-Perinatal Medicine",
+        "Neonatology",
+        "Newborn Medicine",
+        "NICU"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "neurosurgery",
+    name: "Neurosurgery",
+    category: "Surgical",
+    synonyms: {
+      predefined: [
+        "Neurological Surgery",
+        "Brain Surgery",
+        "Spine Surgery",
+        "Surgery (Neurological)"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "plastic-surgery",
+    name: "Plastic and Reconstructive Surgery",
+    category: "Surgical",
+    synonyms: {
+      predefined: [
+        "Plastic Surgery",
+        "Reconstructive Surgery",
+        "Surgery (Plastic)",
+        "Surgery (Reconstructive)"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "sports-medicine",
+    name: "Sports Medicine",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Sports Health",
+        "Athletic Medicine",
+        "Sports Injury",
+        "Sports Medical Care"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "urgent-care",
+    name: "Urgent Care",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Immediate Care",
+        "Walk-in Care",
+        "Acute Care Medicine"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "pathology",
+    name: "Pathology",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Clinical Pathology",
+        "Anatomic Pathology",
+        "Laboratory Medicine"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "physical-medicine",
+    name: "Physical Medicine and Rehabilitation",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "PM&R",
+        "Physiatry",
+        "Rehabilitation Medicine",
+        "Physical Rehabilitation"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "child-abuse",
+    name: "Child Abuse",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Child Abuse Medicine",
+        "Child Maltreatment",
+        "Child Protection Medicine"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "bone-marrow-transplant",
+    name: "Bone Marrow Transplant",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "BMT",
+        "Stem Cell Transplant",
+        "Bone Marrow Transplantation",
+        "Cellular Therapy"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "developmental-behavioral",
+    name: "Developmental-Behavioral Medicine",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Developmental Medicine",
+        "Behavioral Medicine",
+        "Child Development and Behavior"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "child-psychiatry",
+    name: "Child and Adolescent Psychiatry",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "Pediatric Psychiatry",
+        "Child Psychiatry",
+        "Adolescent Psychiatry",
+        "Youth Mental Health"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  },
+  {
+    id: "gynecology",
+    name: "Gynecology",
+    category: "Medical",
+    synonyms: {
+      predefined: [
+        "GYN",
+        "Women's Health",
+        "Female Medicine",
+        "Gynecological Care"
+      ],
+      custom: [],
+    },
+    metadata: {
+      lastModified: new Date(),
+      source: "predefined",
+    },
+  }
 ]; 

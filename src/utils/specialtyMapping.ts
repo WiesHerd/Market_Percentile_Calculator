@@ -1,5 +1,5 @@
 // Types for specialty mapping system
-export interface StandardSpecialty {
+interface StandardSpecialty {
   name: string;
   variations: string[];
   category: SpecialtyCategory;
@@ -11,7 +11,7 @@ export interface StandardSpecialty {
   requiresQualifier?: boolean;  // For specialties like "General" that need context
 }
 
-export type SpecialtyCategory = 
+type SpecialtyCategory = 
   | 'Medical'
   | 'Surgical'
   | 'Hospital-Based'
@@ -20,7 +20,7 @@ export type SpecialtyCategory =
   | 'Other';
 
 // Core mapping of standard specialties
-export const standardSpecialties: Record<string, StandardSpecialty> = {
+const standardSpecialties: Record<string, StandardSpecialty> = {
   // Primary Care Specialties
   "Family Medicine": {
     name: "Family Medicine",
@@ -133,16 +133,23 @@ export const standardSpecialties: Record<string, StandardSpecialty> = {
   "Cardiothoracic Surgery": {
     name: "Cardiothoracic Surgery",
     variations: [
-      "Surgery (Cardiothoracic)",
       "Surgery (Cardiothoracic/Cardiovascular)",
+      "Surgery (Cardiothoracic)",
+      "Cardiothoracic/Cardiovascular Surgery",
+      "Cardiovascular Surgery",
+      "Cardiothoracic Surgery",
+      "Cardiovascular/Thoracic Surgery",
       "CT Surgery",
+      "Heart Surgery",
       "Thoracic Surgery",
-      "Cardiovascular Surgery"
+      "Cardiac Surgery",
+      "Surgery - Cardiothoracic",
+      "Surgery - Cardiovascular"
     ],
     category: "Surgical",
-    keywords: ["cardiothoracic", "cardiovascular", "thoracic", "surgery"],
+    keywords: ["cardiothoracic", "cardiovascular", "thoracic", "cardiac", "heart", "surgery"],
     parentSpecialty: "Surgery",
-    relatedSpecialties: ["Adult Cardiac Surgery", "Congenital Cardiac Surgery"],
+    relatedSpecialties: ["Adult Cardiac Surgery", "Congenital Cardiac Surgery", "Thoracic Surgery"],
     requiresQualifier: false
   },
 
@@ -275,6 +282,29 @@ const specialtyDefinitions: Record<string, SpecialtyDefinition> = {
       'Spine Surgery'
     ],
     category: 'Surgical'
+  },
+  'Cardiothoracic Surgery': {
+    name: 'Cardiothoracic Surgery',
+    synonyms: [
+      'Cardiovascular Surgery',
+      'Surgery (Cardiothoracic/Cardiovascular)',
+      'Surgery (Cardiothoracic)',
+      'Cardiothoracic/Cardiovascular Surgery',
+      'Cardiovascular/Thoracic Surgery',
+      'CT Surgery',
+      'Heart Surgery',
+      'Thoracic Surgery',
+      'Cardiac Surgery',
+      'Surgery - Cardiothoracic',
+      'Surgery - Cardiovascular'
+    ],
+    relatedSpecialties: [
+      'Cardiac Surgery',
+      'Thoracic Surgery',
+      'Adult Cardiac Surgery',
+      'Congenital Cardiac Surgery'
+    ],
+    category: 'Surgical'
   }
 };
 
@@ -314,7 +344,12 @@ const areSpecialtyVariations = (specialty1: string, specialty2: string): boolean
       `${words.slice(1).join(' ')} (${words[0]})`,
       // Handle common specialty patterns
       name.replace(/^(.*?)\s+surgery$/i, 'surgery ($1)'),
-      name.replace(/^surgery\s+(.*?)$/i, '$1 (surgery)')
+      name.replace(/^surgery\s+(.*?)$/i, '$1 (surgery)'),
+      // Handle cardiothoracic/cardiovascular variations
+      name.replace(/cardiothoracic/i, 'cardiovascular'),
+      name.replace(/cardiovascular/i, 'cardiothoracic'),
+      name.replace(/cardiac/i, 'cardiothoracic'),
+      name.replace(/thoracic/i, 'cardiothoracic')
     ];
     return [...new Set(variations.map(v => normalizeSpecialtyName(v)))];
   };
@@ -365,14 +400,17 @@ const calculateSpecialtySimilarity = (name1: string, name2: string): number => {
   return 0;
 };
 
-// Export types and functions
-export type { StandardSpecialty, SpecialtyCategory, SpecialtyDefinition };
+// Export all types, constants and functions in a single export statement
 export {
+  standardSpecialties,
+  specialtyDefinitions,
   normalizeSpecialtyName,
   getSpecialtySynonyms,
   areSpecialtyVariations,
   areSpecialtiesSynonyms,
   findStandardSpecialty,
   calculateSpecialtySimilarity,
-  specialtyDefinitions
+  type StandardSpecialty,
+  type SpecialtyCategory,
+  type SpecialtyDefinition
 }; 

@@ -67,6 +67,33 @@ interface SynonymConflict {
   suggestedAction: 'merge' | 'rename' | 'skip';
 }
 
+const isClient = typeof window !== 'undefined';
+
+const getFromStorage = (key: string): string | null => {
+  if (!isClient) {
+    console.log(`Local storage not available, returning default value for ${key}`);
+    return null;
+  }
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.error(`Error reading from localStorage:`, error);
+    return null;
+  }
+};
+
+const saveToStorage = (key: string, value: string): void => {
+  if (!isClient) {
+    console.log(`Local storage not available, skipping save for ${key}`);
+    return;
+  }
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    console.error(`Error saving to localStorage:`, error);
+  }
+};
+
 class SpecialtyManager {
   private specialties: Map<string, Specialty>;
   private groups: Map<string, SpecialtyGroup>;
@@ -95,62 +122,85 @@ class SpecialtyManager {
   private initialize(): void {
     try {
       // Load config
-      const savedConfig = localStorage.getItem(STORAGE_KEYS.CONFIG);
+      const savedConfig = getFromStorage(STORAGE_KEYS.CONFIG);
       if (savedConfig) {
         this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
       }
 
-      // Load specialties
-      const savedSpecialties = localStorage.getItem(STORAGE_KEYS.SPECIALTIES);
+      // Always start with predefined specialties
+      predefinedSpecialties.forEach(specialty => {
+        this.specialties.set(specialty.id, {
+          ...specialty,
+          metadata: {
+            ...specialty.metadata,
+            lastModified: new Date()
+          }
+        });
+      });
+
+      // Load saved specialties (will override predefined ones if customized)
+      const savedSpecialties = getFromStorage(STORAGE_KEYS.SPECIALTIES);
       if (savedSpecialties) {
-        const specialtiesArray: Specialty[] = JSON.parse(savedSpecialties);
-        specialtiesArray.forEach(specialty => {
-          this.specialties.set(specialty.id, {
-            ...specialty,
-            metadata: {
-              ...specialty.metadata,
-              lastModified: new Date(specialty.metadata.lastModified)
+        const specialtiesArray = JSON.parse(savedSpecialties);
+        if (Array.isArray(specialtiesArray)) {
+          specialtiesArray.forEach(specialty => {
+            // Merge with existing predefined specialty if it exists
+            const existing = this.specialties.get(specialty.id);
+            if (existing) {
+              this.specialties.set(specialty.id, {
+                ...specialty,
+                synonyms: {
+                  predefined: existing.synonyms.predefined, // Keep predefined synonyms
+                  custom: specialty.synonyms.custom || [] // Use saved custom synonyms
+                },
+                metadata: {
+                  ...specialty.metadata,
+                  lastModified: new Date(specialty.metadata.lastModified)
+                }
+              });
+            } else {
+              this.specialties.set(specialty.id, {
+                ...specialty,
+                metadata: {
+                  ...specialty.metadata,
+                  lastModified: new Date(specialty.metadata.lastModified)
+                }
+              });
             }
           });
-        });
-      } else {
-        // Initialize with predefined specialties if no saved data
-        predefinedSpecialties.forEach(specialty => {
-          this.specialties.set(specialty.id, {
-            ...specialty,
-            metadata: {
-              ...specialty.metadata,
-              lastModified: new Date()
-            }
-          });
-        });
+        }
       }
 
       // Load groups
-      const savedGroups = localStorage.getItem(STORAGE_KEYS.GROUPS);
+      const savedGroups = getFromStorage(STORAGE_KEYS.GROUPS);
       if (savedGroups) {
-        const groupsArray: SpecialtyGroup[] = JSON.parse(savedGroups);
-        groupsArray.forEach(group => {
-          this.groups.set(group.id, {
-            ...group,
-            metadata: {
-              ...group.metadata,
-              lastModified: new Date(group.metadata.lastModified)
-            }
+        const groupsArray = JSON.parse(savedGroups);
+        if (Array.isArray(groupsArray)) {
+          groupsArray.forEach(group => {
+            this.groups.set(group.id, {
+              ...group,
+              metadata: {
+                ...group.metadata,
+                lastModified: new Date(group.metadata.lastModified)
+              }
+            });
           });
-        });
+        }
       }
 
       // Load operations
-      const savedOperations = localStorage.getItem(STORAGE_KEYS.OPERATIONS);
+      const savedOperations = getFromStorage(STORAGE_KEYS.OPERATIONS);
       if (savedOperations) {
-        this.operations = JSON.parse(savedOperations).map((op: SpecialtyOperation) => ({
-          ...op,
-          timestamp: new Date(op.timestamp)
-        }));
+        const operations = JSON.parse(savedOperations);
+        if (Array.isArray(operations)) {
+          this.operations = operations.map((op: SpecialtyOperation) => ({
+            ...op,
+            timestamp: new Date(op.timestamp)
+          }));
+        }
       }
 
-      // Import predefined synonyms
+      // Import predefined synonyms from specialtyDefinitions
       this.importPredefinedSynonyms();
 
       // Save initial state
@@ -159,10 +209,7 @@ class SpecialtyManager {
       console.error('Error initializing specialty data:', error);
       // Initialize with defaults if load fails
       this.specialties = new Map();
-      this.groups = new Map();
-      this.operations = [];
-      this.config = DEFAULT_CONFIG;
-
+      
       // Add predefined specialties as fallback
       predefinedSpecialties.forEach(specialty => {
         this.specialties.set(specialty.id, {
@@ -178,16 +225,16 @@ class SpecialtyManager {
 
   private saveToStorage(): void {
     try {
-      localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(this.config));
-      localStorage.setItem(
+      saveToStorage(STORAGE_KEYS.CONFIG, JSON.stringify(this.config));
+      saveToStorage(
         STORAGE_KEYS.SPECIALTIES,
         JSON.stringify(Array.from(this.specialties.values()))
       );
-      localStorage.setItem(
+      saveToStorage(
         STORAGE_KEYS.GROUPS,
         JSON.stringify(Array.from(this.groups.values()))
       );
-      localStorage.setItem(
+      saveToStorage(
         STORAGE_KEYS.OPERATIONS,
         JSON.stringify(this.operations)
       );
@@ -343,6 +390,38 @@ class SpecialtyManager {
         }
       });
     });
+
+    // Save changes
+    this.saveToStorage();
+  }
+
+  public refreshPredefinedSynonyms(): void {
+    // Re-import all predefined specialties
+    predefinedSpecialties.forEach(specialty => {
+      const existing = this.specialties.get(specialty.id);
+      if (existing) {
+        // Update predefined synonyms while preserving custom ones
+        this.specialties.set(specialty.id, {
+          ...existing,
+          synonyms: {
+            predefined: specialty.synonyms.predefined,
+            custom: existing.synonyms.custom
+          }
+        });
+      } else {
+        // Add new predefined specialty
+        this.specialties.set(specialty.id, {
+          ...specialty,
+          metadata: {
+            ...specialty.metadata,
+            lastModified: new Date()
+          }
+        });
+      }
+    });
+
+    // Import additional predefined synonyms from specialtyDefinitions
+    this.importPredefinedSynonyms();
 
     // Save changes
     this.saveToStorage();
@@ -616,16 +695,24 @@ class SpecialtyManager {
    * @returns true if deleted, false if not found
    */
   deleteSpecialty(specialtyId: string): boolean {
-    const specialties = this.getAllSpecialties();
-    const index = specialties.findIndex(s => s.id === specialtyId);
+    if (!this.specialties.has(specialtyId)) {
+      return false;
+    }
+
+    // Record the operation before deleting
+    const specialty = this.specialties.get(specialtyId)!;
+    this.recordOperation({
+      type: 'delete',
+      timestamp: new Date(),
+      specialtyId,
+      changes: specialty
+    });
+
+    // Remove from the Map
+    this.specialties.delete(specialtyId);
     
-    if (index === -1) return false;
-    
-    // Remove the specialty
-    specialties.splice(index, 1);
-    
-    // Save the updated specialties
-    localStorage.setItem('specialties', JSON.stringify(specialties));
+    // Save changes
+    this.saveToStorage();
     
     return true;
   }
