@@ -7,7 +7,6 @@ import {
   SpecialtyValidationRules
 } from '@/types/specialty';
 import { predefinedSpecialties } from '@/data/predefinedSpecialties';
-import { specialtyDefinitions } from './specialtyMapping';
 
 const STORAGE_KEYS = {
   SPECIALTIES: 'specialty-management-specialties',
@@ -15,6 +14,90 @@ const STORAGE_KEYS = {
   CONFIG: 'specialty-management-config',
   OPERATIONS: 'specialty-management-operations'
 } as const;
+
+const PREDEFINED_SYNONYMS: Record<string, string[]> = {
+  'Cardiothoracic Surgery': [
+    'Cardiovascular Surgery',
+    'Surgery (Cardiothoracic/Cardiovascular)',
+    'Surgery (Cardiothoracic)',
+    'Cardiothoracic/Cardiovascular Surgery',
+    'Cardiovascular/Thoracic Surgery',
+    'CT Surgery',
+    'Heart Surgery',
+    'Thoracic Surgery',
+    'Cardiac Surgery',
+    'Surgery - Cardiothoracic',
+    'Surgery - Cardiovascular'
+  ],
+  'Otolaryngology': [
+    'Otorhinolaryngology', 
+    'ENT', 
+    'Ear Nose and Throat',
+    'Head and Neck Surgery',
+    'Ear Nose Throat',
+    'Otology'
+  ],
+  'Obstetrics and Gynecology': [
+    'OB/GYN', 
+    'OBGYN', 
+    'Obstetrics Gynecology',
+    'Women\'s Health',
+    'Obstetrics & Gynecology'
+  ],
+  'Physical Medicine and Rehabilitation': [
+    'Physiatry', 
+    'PM&R', 
+    'PMR',
+    'Rehabilitation Medicine'
+  ],
+  'Emergency Medicine': [
+    'EM', 
+    'Emergency Room',
+    'ER Medicine',
+    'Acute Care',
+    'Emergency Care'
+  ],
+  'Gastroenterology': [
+    'GI',
+    'Digestive Disease',
+    'Digestive Diseases',
+    'Gastrointestinal Medicine',
+    'Digestive Health'
+  ],
+  'Urgent Care': [
+    'Immediate Care',
+    'Walk-in Clinic',
+    'Express Care',
+    'Acute Care',
+    'Quick Care'
+  ],
+  'Adolescent Medicine': [
+    'Teen Medicine',
+    'Youth Medicine',
+    'Adolescent Health',
+    'Teen Health'
+  ],
+  'Child and Adolescent Psychiatry': [
+    'Pediatric Psychiatry',
+    'Child Psychiatry',
+    'Youth Psychiatry',
+    'Adolescent Psychiatry',
+    'Child & Adolescent Psychiatry'
+  ],
+  'Child Development': [
+    'Developmental Pediatrics',
+    'Pediatric Development',
+    'Child Developmental Medicine',
+    'Developmental Medicine (Pediatric)'
+  ],
+  'Developmental-Behavioral Medicine': [
+    'Developmental-Behavioral Pediatrics',
+    'Developmental Pediatrics',
+    'Behavioral Pediatrics',
+    'Developmental and Behavioral Pediatrics',
+    'Developmental & Behavioral Pediatrics'
+  ]
+};
 
 const DEFAULT_CONFIG: SpecialtyManagerConfig = {
   version: '1.0.0',
@@ -61,10 +144,12 @@ interface SynonymHistory {
 }
 
 interface SynonymConflict {
-  synonym: string;
-  existingSpecialty: string;
-  type: 'predefined' | 'custom';
-  suggestedAction: 'merge' | 'rename' | 'skip';
+  specialtyId?: string;
+  existingSpecialty?: string;
+  specialtyName?: string;
+  synonym?: string;
+  type: 'predefined' | 'custom' | 'name';
+  suggestedAction?: 'merge' | 'create' | 'ignore';
 }
 
 const isClient = typeof window !== 'undefined';
@@ -94,7 +179,7 @@ const saveToStorage = (key: string, value: string): void => {
   }
 };
 
-class SpecialtyManager {
+export class SpecialtyManager {
   private specialties: Map<string, Specialty>;
   private groups: Map<string, SpecialtyGroup>;
   private config: SpecialtyManagerConfig;
@@ -119,127 +204,102 @@ class SpecialtyManager {
     this.initialize();
   }
 
+  private getFromStorage<T>(key: string, defaultValue: T): T {
+    if (typeof window === 'undefined') return defaultValue;
+    
+    try {
+      const saved = localStorage.getItem(key);
+      if (!saved) return defaultValue;
+      return JSON.parse(saved) as T;
+    } catch (error) {
+      console.error(`Error loading ${key} from storage:`, error);
+      return defaultValue;
+    }
+  }
+
   private initialize(): void {
     try {
-      // Load config
-      const savedConfig = getFromStorage(STORAGE_KEYS.CONFIG);
-      if (savedConfig) {
-        this.config = { ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) };
-      }
+      // Load from storage first
+      const savedSpecialties = this.getFromStorage<Array<[string, Specialty]>>(
+        STORAGE_KEYS.SPECIALTIES,
+        []
+      );
+      const savedGroups = this.getFromStorage<Array<[string, SpecialtyGroup]>>(
+        STORAGE_KEYS.GROUPS,
+        []
+      );
+      const savedConfig = this.getFromStorage<SpecialtyManagerConfig>(
+        STORAGE_KEYS.CONFIG,
+        DEFAULT_CONFIG
+      );
+      const savedOperations = this.getFromStorage<SpecialtyOperation[]>(
+        STORAGE_KEYS.OPERATIONS,
+        []
+      );
 
-      // Always start with predefined specialties
-      predefinedSpecialties.forEach(specialty => {
-        this.specialties.set(specialty.id, {
-          ...specialty,
-          metadata: {
-            ...specialty.metadata,
-            lastModified: new Date()
-          }
-        });
-      });
-
-      // Load saved specialties (will override predefined ones if customized)
-      const savedSpecialties = getFromStorage(STORAGE_KEYS.SPECIALTIES);
-      if (savedSpecialties) {
-        const specialtiesArray = JSON.parse(savedSpecialties);
-        if (Array.isArray(specialtiesArray)) {
-          specialtiesArray.forEach(specialty => {
-            // Merge with existing predefined specialty if it exists
-            const existing = this.specialties.get(specialty.id);
-            if (existing) {
-              this.specialties.set(specialty.id, {
-                ...specialty,
-                synonyms: {
-                  predefined: existing.synonyms.predefined, // Keep predefined synonyms
-                  custom: specialty.synonyms.custom || [] // Use saved custom synonyms
-                },
-                metadata: {
-                  ...specialty.metadata,
-                  lastModified: new Date(specialty.metadata.lastModified)
-                }
-              });
-            } else {
-              this.specialties.set(specialty.id, {
-                ...specialty,
-                metadata: {
-                  ...specialty.metadata,
-                  lastModified: new Date(specialty.metadata.lastModified)
-                }
-              });
+      // Initialize maps with saved data, ensuring proper metadata
+      this.specialties = new Map(
+        savedSpecialties.map(([id, specialty]) => [
+          id,
+          {
+            ...specialty,
+            metadata: {
+              ...specialty.metadata,
+              lastModified: specialty.metadata?.lastModified ? new Date(specialty.metadata.lastModified) : new Date(),
+              source: specialty.metadata?.source || 'custom'
+            },
+            synonyms: {
+              predefined: specialty.synonyms?.predefined || [],
+              custom: specialty.synonyms?.custom || []
             }
-          });
-        }
-      }
-
-      // Load groups
-      const savedGroups = getFromStorage(STORAGE_KEYS.GROUPS);
-      if (savedGroups) {
-        const groupsArray = JSON.parse(savedGroups);
-        if (Array.isArray(groupsArray)) {
-          groupsArray.forEach(group => {
-            this.groups.set(group.id, {
-              ...group,
-              metadata: {
-                ...group.metadata,
-                lastModified: new Date(group.metadata.lastModified)
-              }
-            });
-          });
-        }
-      }
-
-      // Load operations
-      const savedOperations = getFromStorage(STORAGE_KEYS.OPERATIONS);
-      if (savedOperations) {
-        const operations = JSON.parse(savedOperations);
-        if (Array.isArray(operations)) {
-          this.operations = operations.map((op: SpecialtyOperation) => ({
-            ...op,
-            timestamp: new Date(op.timestamp)
-          }));
-        }
-      }
-
-      // Import predefined synonyms from specialtyDefinitions
-      this.importPredefinedSynonyms();
-
-      // Save initial state
-      this.saveToStorage();
-    } catch (error) {
-      console.error('Error initializing specialty data:', error);
-      // Initialize with defaults if load fails
-      this.specialties = new Map();
-      
-      // Add predefined specialties as fallback
-      predefinedSpecialties.forEach(specialty => {
-        this.specialties.set(specialty.id, {
-          ...specialty,
-          metadata: {
-            ...specialty.metadata,
-            lastModified: new Date()
           }
-        });
+        ])
+      );
+
+      this.groups = new Map(savedGroups);
+      this.config = savedConfig;
+      this.operations = savedOperations;
+
+      // Import predefined specialties if none exist
+      if (this.specialties.size === 0) {
+        this.importPredefinedSynonyms();
+      }
+
+      console.log('Initialized SpecialtyManager with:', {
+        specialties: this.specialties.size,
+        groups: this.groups.size,
+        operations: this.operations.length
       });
+    } catch (error) {
+      console.error('Error initializing SpecialtyManager:', error);
+      // Initialize with defaults on error
+      this.specialties = new Map();
+      this.groups = new Map();
+      this.operations = [];
+      this.config = { ...DEFAULT_CONFIG };
+      this.importPredefinedSynonyms();
+    }
+  }
+
+  private notifySynonymUpdate(): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('synonyms-updated'));
     }
   }
 
   private saveToStorage(): void {
+    if (typeof window === 'undefined') return;
+
     try {
-      saveToStorage(STORAGE_KEYS.CONFIG, JSON.stringify(this.config));
-      saveToStorage(
-        STORAGE_KEYS.SPECIALTIES,
-        JSON.stringify(Array.from(this.specialties.values()))
-      );
-      saveToStorage(
-        STORAGE_KEYS.GROUPS,
-        JSON.stringify(Array.from(this.groups.values()))
-      );
-      saveToStorage(
-        STORAGE_KEYS.OPERATIONS,
-        JSON.stringify(this.operations)
-      );
+      localStorage.setItem(STORAGE_KEYS.SPECIALTIES, JSON.stringify(Array.from(this.specialties.entries())));
+      localStorage.setItem(STORAGE_KEYS.GROUPS, JSON.stringify(Array.from(this.groups.entries())));
+      localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(this.config));
+      localStorage.setItem(STORAGE_KEYS.OPERATIONS, JSON.stringify(this.operations));
+      
+      // Notify listeners that synonyms have been updated
+      this.notifySynonymUpdate();
     } catch (error) {
-      console.error('Error saving specialty data:', error);
+      console.error('Error saving to storage:', error);
     }
   }
 
@@ -359,36 +419,26 @@ class SpecialtyManager {
   }
 
   private importPredefinedSynonyms(): void {
-    // Import predefined specialties from specialtyDefinitions
-    Object.entries(specialtyDefinitions).forEach(([name, definition]) => {
+    // Import predefined specialties
+    predefinedSpecialties.forEach(specialty => {
       // Find or create the specialty
-      let specialty = Array.from(this.specialties.values()).find(s => s.name === name);
+      let existingSpecialty = Array.from(this.specialties.values()).find(s => s.name === specialty.name);
       
-      if (!specialty) {
+      if (!existingSpecialty) {
         // Create new specialty if it doesn't exist
-        const id = this.generateId();
-        specialty = {
-          id,
-          name,
-          category: definition.category,
-          synonyms: {
-            predefined: [],
-            custom: []
-          },
+        this.specialties.set(specialty.id, {
+          ...specialty,
           metadata: {
+            ...specialty.metadata,
             lastModified: new Date(),
             source: 'predefined'
           }
-        };
-        this.specialties.set(id, specialty);
+        });
+      } else {
+        // Update existing specialty's predefined synonyms
+        existingSpecialty.synonyms.predefined = specialty.synonyms.predefined;
+        this.specialties.set(existingSpecialty.id, existingSpecialty);
       }
-
-      // Add predefined synonyms if they don't exist
-      definition.synonyms?.forEach(synonym => {
-        if (!specialty!.synonyms.predefined.includes(synonym)) {
-          specialty!.synonyms.predefined.push(synonym);
-        }
-      });
     });
 
     // Save changes
@@ -420,7 +470,7 @@ class SpecialtyManager {
       }
     });
 
-    // Import additional predefined synonyms from specialtyDefinitions
+    // Import additional predefined synonyms
     this.importPredefinedSynonyms();
 
     // Save changes
@@ -474,68 +524,118 @@ class SpecialtyManager {
       return { success: false, message: 'Specialty not found' };
     }
 
+    // Normalize the synonym to ensure consistent checking
+    const normalizedSynonym = this.normalizeSynonym(synonym);
+    
+    // Check if the synonym already exists in this specialty (in either predefined or custom)
+    const target = isPredefined ? 'predefined' : 'custom';
+    
+    // Check both predefined and custom collections using normalized comparison
+    const existsInPredefined = specialty.synonyms.predefined.some(s => 
+      this.normalizeSynonym(s) === normalizedSynonym
+    );
+    
+    const existsInCustom = specialty.synonyms.custom.some(s => 
+      this.normalizeSynonym(s) === normalizedSynonym
+    );
+    
+    if (existsInPredefined || existsInCustom) {
+      return { 
+        success: false, 
+        message: `Synonym "${synonym}" already exists for specialty "${specialty.name}"` 
+      };
+    }
+
     const validation = this.validateSynonym(synonym, specialtyId);
     if (!validation.isValid) {
       return { success: false, message: validation.message };
     }
 
-    const normalized = this.normalizeSynonym(synonym);
-    const target = isPredefined ? 'predefined' : 'custom';
-
-    // Check for conflicts
+    // Check for conflicts with other specialties
     for (const [id, other] of this.specialties) {
       if (id === specialtyId) continue;
-
-      const conflictingSynonym = [...other.synonyms.predefined, ...other.synonyms.custom]
-        .find(s => this.normalizeSynonym(s) === normalized);
-
-      if (conflictingSynonym) {
+      
+      // Check if it's a name of another specialty
+      if (this.normalizeSynonym(other.name) === normalizedSynonym) {
         return {
           success: false,
-          message: `Conflict detected with specialty "${other.name}"`,
+          message: `Synonym conflict: "${synonym}" is already a specialty name`,
           conflict: {
-            synonym,
-            existingSpecialty: other.name,
-            type: other.synonyms.predefined.includes(conflictingSynonym) 
-              ? 'predefined' 
-              : 'custom',
-            suggestedAction: 'merge'
+            specialtyId: id,
+            specialtyName: other.name,
+            type: 'name' as const
+          }
+        };
+      }
+      
+      // Check if it exists in predefined synonyms
+      const predefinedConflict = other.synonyms.predefined.some(s => 
+        this.normalizeSynonym(s) === normalizedSynonym
+      );
+      
+      if (predefinedConflict) {
+        return {
+          success: false,
+          message: `Synonym conflict: "${synonym}" is already a predefined synonym for "${other.name}"`,
+          conflict: {
+            specialtyId: id,
+            specialtyName: other.name,
+            type: 'predefined'
+          }
+        };
+      }
+      
+      // Check if it exists in custom synonyms
+      const customConflict = other.synonyms.custom.some(s => 
+        this.normalizeSynonym(s) === normalizedSynonym
+      );
+      
+      if (customConflict) {
+        return {
+          success: false,
+          message: `Synonym conflict: "${synonym}" is already a custom synonym for "${other.name}"`,
+          conflict: {
+            specialtyId: id,
+            specialtyName: other.name,
+            type: 'custom'
           }
         };
       }
     }
 
-    if (!specialty.synonyms[target].includes(synonym)) {
-      specialty.synonyms[target].push(synonym);
-      specialty.metadata.lastModified = new Date();
-
-      // Record history
-      this.synonymHistory.push({
-        id: this.generateId(),
-        specialtyId,
-        synonym,
-        action: 'add',
-        timestamp: new Date(),
-        type: target
-      });
-
-      this.recordOperation({
-        type: 'update',
-        timestamp: new Date(),
-        specialtyId,
-        changes: {
-          synonyms: specialty.synonyms
-        }
-      });
-
-      this.saveToStorage();
-      return { success: true };
+    // Add the synonym to the appropriate collection
+    if (isPredefined) {
+      specialty.synonyms.predefined.push(synonym);
+    } else {
+      specialty.synonyms.custom.push(synonym);
     }
-
-    return { 
-      success: false, 
-      message: `Synonym "${synonym}" already exists for this specialty` 
-    };
+    
+    // Update last modified date
+    specialty.metadata.lastModified = new Date();
+    
+    // Log the operation
+    this.recordOperation({
+      type: 'update',
+      timestamp: new Date(),
+      specialtyId,
+      changes: {
+        synonyms: {
+          ...specialty.synonyms
+        }
+      }
+    });
+    
+    // Save to storage
+    this.saveToStorage();
+    
+    // Add debug logging
+    console.log(`Successfully added ${isPredefined ? 'predefined' : 'custom'} synonym "${synonym}" to "${specialty.name}"`);
+    console.log('Updated synonyms:', {
+      predefined: specialty.synonyms.predefined,
+      custom: specialty.synonyms.custom
+    });
+    
+    return { success: true };
   }
 
   public removeSynonym(specialtyId: string, synonym: string): boolean {
@@ -789,7 +889,276 @@ class SpecialtyManager {
 
     return conflicts;
   }
+
+  // Methods from specialtySynonyms.ts
+  
+  /**
+   * Get all synonyms for a specialty (both predefined and custom)
+   * @param specialty The specialty name
+   * @returns Array of synonyms
+   */
+  public getAllSynonyms(specialty: string): string[] {
+    const predefined = PREDEFINED_SYNONYMS[specialty] || [];
+    const custom = Array.from(this.specialties.values()).find(s => s.name === specialty)?.synonyms.custom || [];
+    return Array.from(new Set([...predefined, ...custom]));
+  }
+
+  /**
+   * Update synonyms for a specialty
+   * @param specialtyId The specialty ID
+   * @param synonyms Object containing predefined and custom synonyms
+   */
+  public updateSpecialtySynonyms(
+    specialtyId: string, 
+    synonyms: { predefined: string[], custom: string[] }
+  ): void {
+    const specialty = this.specialties.get(specialtyId);
+    if (specialty) {
+      specialty.synonyms = {
+        predefined: synonyms.predefined,
+        custom: synonyms.custom
+      };
+      specialty.metadata.lastModified = new Date();
+      this.saveToStorage();
+    }
+  }
+
+  /**
+   * Get all specialties with their synonyms
+   * @returns Record of specialty names to synonym arrays
+   */
+  public getAllSpecialtiesWithSynonyms(): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+
+    // Add specialties and their synonyms from the specialties Map
+    Array.from(this.specialties.values()).forEach((specialty) => {
+      result[specialty.name] = [
+        ...(specialty.synonyms.predefined || []),
+        ...(specialty.synonyms.custom || [])
+      ];
+    });
+
+    return result;
+  }
+
+  /**
+   * Remove a specialty and its synonyms
+   * @param specialty The specialty name
+   */
+  public removeSpecialtySynonyms(specialty: string): void {
+    const specialtyObj = Array.from(this.specialties.values()).find(s => s.name === specialty);
+    if (specialtyObj) {
+      specialtyObj.synonyms.custom = [];
+      specialtyObj.metadata.lastModified = new Date();
+      this.saveToStorage();
+    }
+  }
+
+  /**
+   * Add a new specialty with synonyms
+   * @param specialty The specialty name
+   * @param synonyms Array of synonyms
+   */
+  public addSpecialtyWithSynonyms(specialty: string, synonyms: string[]): void {
+    const specialtyObj = Array.from(this.specialties.values()).find(s => s.name === specialty);
+    if (specialtyObj) {
+      specialtyObj.synonyms.custom = synonyms;
+      specialtyObj.metadata.lastModified = new Date();
+      this.saveToStorage();
+    }
+  }
+
+  /**
+   * Check if a specialty has custom synonyms
+   * @param specialty The specialty name
+   * @returns True if the specialty has custom synonyms
+   */
+  public hasCustomSynonyms(specialty: string): boolean {
+    const specialtyObj = Array.from(this.specialties.values()).find(s => s.name === specialty);
+    return !!specialtyObj?.synonyms.custom.length;
+  }
+
+  /**
+   * Get only custom synonyms for a specialty
+   * @param specialty The specialty name
+   * @returns Array of custom synonyms
+   */
+  public getCustomSynonyms(specialty: string): string[] {
+    const specialtyObj = Array.from(this.specialties.values()).find(s => s.name === specialty);
+    return specialtyObj?.synonyms.custom || [];
+  }
+
+  /**
+   * Get only predefined synonyms for a specialty
+   * @param specialty The specialty name
+   * @returns Array of predefined synonyms
+   */
+  public getPredefinedSynonyms(specialty: string): string[] {
+    const specialtyObj = Array.from(this.specialties.values()).find(s => s.name === specialty);
+    return specialtyObj?.synonyms.predefined || [];
+  }
+
+  private loadFromStorage(): void {
+    try {
+      // Attempt to load from localStorage
+      const storedSpecialties = localStorage.getItem(STORAGE_KEYS.SPECIALTIES);
+      const storedGroups = localStorage.getItem(STORAGE_KEYS.GROUPS);
+      const storedConfig = localStorage.getItem(STORAGE_KEYS.CONFIG);
+      const storedOperations = localStorage.getItem(STORAGE_KEYS.OPERATIONS);
+
+      // Parse and load specialties
+      if (storedSpecialties) {
+        const parsed = JSON.parse(storedSpecialties);
+        this.specialties = new Map(
+          Object.entries(parsed).map(([id, specialty]) => [id, specialty as Specialty])
+        );
+      } else {
+        console.log('No stored specialties found, using default specialties');
+        this.initializeDefaultSpecialties();
+      }
+
+      // Parse and load groups
+      if (storedGroups) {
+        const parsedGroups = JSON.parse(storedGroups);
+        this.groups = new Map(
+          Object.entries(parsedGroups).map(([id, group]) => [id, group as SpecialtyGroup])
+        );
+      } else {
+        this.groups = new Map(); // Initialize as empty Map instead of empty array
+      }
+
+      // Parse and load config
+      if (storedConfig) {
+        this.config = JSON.parse(storedConfig);
+      } else {
+        this.config = DEFAULT_CONFIG;
+      }
+
+      // Parse and load operations history
+      if (storedOperations) {
+        this.operations = JSON.parse(storedOperations);
+      } else {
+        this.operations = []; // Initialize as empty array
+      }
+    } catch (error) {
+      console.error('Error loading from storage, using defaults:', error);
+      // Initialize with defaults when there's an error
+      this.initializeDefaultSpecialties();
+      this.config = DEFAULT_CONFIG;
+      this.groups = new Map(); // Initialize as empty Map
+      this.operations = [];
+    }
+
+    // Always import predefined specialties to ensure we have the latest definitions
+    this.importPredefinedSynonyms();
+  }
+
+  private initializeDefaultSpecialties(): void {
+    // Start with an empty map
+    this.specialties = new Map();
+    
+    // Import predefined specialties from our data
+    predefinedSpecialties.forEach(specialty => {
+      this.specialties.set(specialty.id, {
+        ...specialty,
+        metadata: {
+          ...specialty.metadata,
+          lastModified: new Date()
+        }
+      });
+    });
+    
+    // Add special handling for Psychiatry to ensure it's always defined
+    const hasPsychiatry = Array.from(this.specialties.values()).some(
+      s => s.name.toLowerCase() === 'psychiatry'
+    );
+    
+    if (!hasPsychiatry) {
+      const psychiatryId = this.generateId();
+      this.specialties.set(psychiatryId, {
+        id: psychiatryId,
+        name: 'Psychiatry',
+        category: 'Medical',
+        synonyms: {
+          predefined: [
+            'Psychiatric Medicine',
+            'Mental Health'
+          ],
+          custom: []
+        },
+        metadata: {
+          lastModified: new Date(),
+          source: 'predefined'
+        }
+      });
+      
+      console.log('Added default Psychiatry specialty');
+    }
+    
+    // Also ensure Child and Adolescent Psychiatry is defined
+    const hasChildPsychiatry = Array.from(this.specialties.values()).some(
+      s => s.name.toLowerCase().includes('child') && s.name.toLowerCase().includes('psychiatry')
+    );
+    
+    if (!hasChildPsychiatry) {
+      const childPsychId = this.generateId();
+      this.specialties.set(childPsychId, {
+        id: childPsychId,
+        name: 'Child and Adolescent Psychiatry',
+        category: 'Medical',
+        synonyms: {
+          predefined: [
+            'Pediatric Psychiatry',
+            'Child Psychiatry',
+            'Adolescent Psychiatry',
+            'Youth Mental Health',
+            'Child & Adolescent Psychiatry'
+          ],
+          custom: []
+        },
+        metadata: {
+          lastModified: new Date(),
+          source: 'predefined'
+        }
+      });
+      
+      console.log('Added default Child and Adolescent Psychiatry specialty');
+    }
+  }
 }
 
 // Create and export a singleton instance
-export const specialtyManager = new SpecialtyManager(); 
+export const specialtyManager = new SpecialtyManager();
+
+// Export the functions from specialtySynonyms.ts for backward compatibility
+export function getAllSynonyms(specialty: string): string[] {
+  return specialtyManager.getAllSynonyms(specialty);
+}
+
+export function updateSpecialtySynonyms(specialty: string, synonyms: string[]): void {
+  specialtyManager.updateSpecialtySynonyms(specialty, synonyms);
+}
+
+export function getAllSpecialtiesWithSynonyms(): Record<string, string[]> {
+  return specialtyManager.getAllSpecialtiesWithSynonyms();
+}
+
+export function removeSpecialtySynonyms(specialty: string): void {
+  specialtyManager.removeSpecialtySynonyms(specialty);
+}
+
+export function addSpecialtyWithSynonyms(specialty: string, synonyms: string[]): void {
+  specialtyManager.addSpecialtyWithSynonyms(specialty, synonyms);
+}
+
+export function hasCustomSynonyms(specialty: string): boolean {
+  return specialtyManager.hasCustomSynonyms(specialty);
+}
+
+export function getCustomSynonyms(specialty: string): string[] {
+  return specialtyManager.getCustomSynonyms(specialty);
+}
+
+export function getPredefinedSynonyms(specialty: string): string[] {
+  return specialtyManager.getPredefinedSynonyms(specialty);
+} 

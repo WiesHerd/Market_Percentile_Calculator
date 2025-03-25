@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { specialtyMappingService } from '@/services/specialtyMappingService';
+import { specialtyManager } from '@/utils/specialtyManager';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { PlusIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
-import { normalizeSpecialtyName } from '@/utils/specialtyMapping';
 
 interface SpecialtyData {
   specialty: string;
@@ -75,6 +75,7 @@ export function AutoMappingPanel({
   // Listen for synonym changes
   useEffect(() => {
     const handleSynonymChange = () => {
+      console.log('Synonym change detected in AutoMappingPanel');
       setSynonymVersion(v => v + 1);
     };
 
@@ -87,6 +88,7 @@ export function AutoMappingPanel({
   }, []);
 
   useEffect(() => {
+    console.log('Generating auto mappings, synonym version:', synonymVersion);
     generateAutoMappings();
   }, [specialtiesByVendor, mappedGroups, synonymVersion]);
 
@@ -95,16 +97,42 @@ export function AutoMappingPanel({
     
     try {
       const newMappings: AutoMapSuggestion[] = [];
+      
+      // Helper function to normalize specialty names for comparison
+      const normalizeSpecialty = (name: string) => {
+        return name.toLowerCase()
+          .replace(/\s+/g, ' ')  // normalize spaces
+          .replace(/[\/\-–]/g, ' ')  // replace slashes and hyphens with spaces
+          .trim();
+      };
 
       // Process each vendor's specialties
       Object.entries(specialtiesByVendor).forEach(([sourceVendor, sourceSpecialties]) => {
         sourceSpecialties.forEach(sourceSpecialty => {
           // Skip if already mapped
-          if (mappedSpecialtySet.has(`${sourceSpecialty.specialty}:${sourceVendor}`)) {
+          const sourceKey = `${sourceSpecialty.specialty}:${sourceVendor}`;
+          if (mappedSpecialtySet.has(sourceKey)) {
             return;
           }
 
           const matches: AutoMapSuggestion['suggestedMatches'] = [];
+          const normalizedSourceName = normalizeSpecialty(sourceSpecialty.specialty);
+          
+          console.log('Processing source specialty:', {
+            original: sourceSpecialty.specialty,
+            normalized: normalizedSourceName,
+            vendor: sourceVendor
+          });
+
+          // First check for synonyms in the specialty manager
+          const sourceSpecialtyObj = specialtyManager.searchSpecialties(sourceSpecialty.specialty)[0];
+          const sourceSynonyms = sourceSpecialtyObj 
+            ? [
+                sourceSpecialtyObj.name,
+                ...sourceSpecialtyObj.synonyms.predefined,
+                ...sourceSpecialtyObj.synonyms.custom,
+              ].map(s => normalizeSpecialty(s))
+            : [normalizedSourceName];
 
           // Look for matches in other vendors
           Object.entries(specialtiesByVendor).forEach(([targetVendor, targetSpecialties]) => {
@@ -112,24 +140,89 @@ export function AutoMappingPanel({
 
             targetSpecialties.forEach(targetSpecialty => {
               // Skip if target is already mapped
-              if (mappedSpecialtySet.has(`${targetSpecialty.specialty}:${targetVendor}`)) {
+              const targetKey = `${targetSpecialty.specialty}:${targetVendor}`;
+              if (mappedSpecialtySet.has(targetKey)) {
                 return;
               }
 
-              // Get potential matches from the service
-              const potentialMatches = specialtyMappingService.findPotentialMatches(sourceSpecialty.specialty);
+              const normalizedTargetName = normalizeSpecialty(targetSpecialty.specialty);
               
-              // Find if this target specialty is in the potential matches
-              const matchInfo = potentialMatches.find(m => 
-                normalizeSpecialtyName(m.match) === normalizeSpecialtyName(targetSpecialty.specialty)
-              );
+              console.log('Comparing specialties:', {
+                source: {
+                  original: sourceSpecialty.specialty,
+                  normalized: normalizedSourceName,
+                  vendor: sourceVendor,
+                  synonyms: sourceSynonyms
+                },
+                target: {
+                  original: targetSpecialty.specialty,
+                  normalized: normalizedTargetName,
+                  vendor: targetVendor
+                }
+              });
 
-              if (matchInfo) {
+              // Check target specialty against source synonyms
+              const targetSpecialtyObj = specialtyManager.searchSpecialties(targetSpecialty.specialty)[0];
+              const targetSynonyms = targetSpecialtyObj
+                ? [
+                    targetSpecialtyObj.name,
+                    ...targetSpecialtyObj.synonyms.predefined,
+                    ...targetSpecialtyObj.synonyms.custom,
+                  ].map(s => normalizeSpecialty(s))
+                : [normalizedTargetName];
+
+              // Check for direct matches first (including normalized forms)
+              if (normalizedSourceName === normalizedTargetName) {
+                console.log('Found exact match after normalization:', {
+                  source: sourceSpecialty.specialty,
+                  target: targetSpecialty.specialty
+                });
                 matches.push({
                   specialty: targetSpecialty,
-                  confidence: matchInfo.confidence,
-                  reason: matchInfo.reason
+                  confidence: 1,
+                  reason: 'Exact match (normalized)'
                 });
+                return;
+              }
+
+              // Check for synonym matches
+              const hasDirectSynonymMatch = sourceSynonyms.some(s1 => 
+                targetSynonyms.some(s2 => s1 === s2)
+              );
+
+              if (hasDirectSynonymMatch) {
+                console.log('Found synonym match:', {
+                  source: sourceSpecialty.specialty,
+                  target: targetSpecialty.specialty,
+                  sourceSynonyms,
+                  targetSynonyms
+                });
+                matches.push({
+                  specialty: targetSpecialty,
+                  confidence: 0.95,
+                  reason: 'Synonym match'
+                });
+                return;
+              }
+
+              // Special handling for Critical Care variations
+              const isCriticalCare = (name: string) => {
+                const normalized = normalizeSpecialty(name);
+                return normalized.includes('critical care') || 
+                       normalized.includes('intensivist');
+              };
+
+              if (isCriticalCare(sourceSpecialty.specialty) && isCriticalCare(targetSpecialty.specialty)) {
+                console.log('Found Critical Care match:', {
+                  source: sourceSpecialty.specialty,
+                  target: targetSpecialty.specialty
+                });
+                matches.push({
+                  specialty: targetSpecialty,
+                  confidence: 0.9,
+                  reason: 'Critical Care specialty match'
+                });
+                return;
               }
             });
           });
@@ -144,6 +237,7 @@ export function AutoMappingPanel({
         });
       });
 
+      console.log('Generated mappings:', newMappings);
       setAutoMappings(newMappings);
     } catch (error) {
       console.error('Error generating auto-mappings:', error);

@@ -1,5 +1,21 @@
 import { specialtyManager } from './specialtyManager';
 
+// Common words to ignore in specialty comparisons
+const COMMON_WORDS = new Set([
+  'surgery',
+  'surgical',
+  'medicine',
+  'medical',
+  'care',
+  'specialist',
+  'specialties',
+  'specialty',
+  'and',
+  'the',
+  'of',
+  'in'
+]);
+
 // Types for survey-specific specialty mapping
 export type SurveyVendor = 'MGMA' | 'GALLAGHER' | 'SULLIVANCOTTER';
 
@@ -8,25 +24,23 @@ export interface SpecialtyMapping {
   vendor: SurveyVendor;
 }
 
-// Enhanced normalization for specialty names
-const normalizeSpecialtyName = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[\/\-&,()]/g, ' ')  // Replace special chars with space
-    .replace(/\b(and|or|the|of|in|with|without)\b/g, '')    // Remove common conjunctions
-    .replace(/\s+/g, ' ')         // Normalize spaces
-    .trim();
-};
+// Normalize specialty name
+const normalizeSpecialtyName = (name: string): string => name.toLowerCase().trim();
 
 // Calculate similarity score between two specialty names
-const calculateSimilarity = (name1: string, name2: string): number => {
+export const calculateSimilarity = (name1: string, name2: string): number => {
   const norm1 = normalizeSpecialtyName(name1);
   const norm2 = normalizeSpecialtyName(name2);
   
+  console.log(`Calculating similarity between "${norm1}" and "${norm2}"`);
+  
   // Exact match after normalization
-  if (norm1 === norm2) return 1.0;
+  if (norm1 === norm2) {
+    console.log('Exact match after normalization');
+    return 1.0;
+  }
 
-  // Check if they are known synonyms using specialtyManager
+  // Get specialties from manager
   const specialties1 = specialtyManager.searchSpecialties(name1);
   const specialties2 = specialtyManager.searchSpecialties(name2);
 
@@ -35,84 +49,92 @@ const calculateSimilarity = (name1: string, name2: string): number => {
     // For each specialty found for name1, check against each specialty found for name2
     for (const specialty1 of specialties1) {
       for (const specialty2 of specialties2) {
-        // Check if either is a synonym of the other
-        const synonyms1 = [...specialty1.synonyms.predefined, ...specialty1.synonyms.custom];
-        const synonyms2 = [...specialty2.synonyms.predefined, ...specialty2.synonyms.custom];
-
-        // If they are synonyms of each other, high confidence
-        if (synonyms1.some(s => normalizeSpecialtyName(s) === norm2) || 
-            synonyms2.some(s => normalizeSpecialtyName(s) === norm1)) {
+        // Check if they're the same specialty
+        if (specialty1.id === specialty2.id) {
+          console.log('Same specialty ID match');
           return 0.95;
         }
 
-        // Check if they share any synonyms
-        const sharedSynonyms = synonyms1.filter(s1 => 
-          synonyms2.some(s2 => normalizeSpecialtyName(s1) === normalizeSpecialtyName(s2))
-        );
+        // Get all synonyms including predefined and custom
+        const synonyms1 = [
+          specialty1.name,
+          ...specialty1.synonyms.predefined,
+          ...specialty1.synonyms.custom
+        ].map(normalizeSpecialtyName);
+
+        const synonyms2 = [
+          specialty2.name,
+          ...specialty2.synonyms.predefined,
+          ...specialty2.synonyms.custom
+        ].map(normalizeSpecialtyName);
+
+        console.log('Synonyms for specialty1:', synonyms1);
+        console.log('Synonyms for specialty2:', synonyms2);
+
+        // Check if either specialty name is in the other's synonym list
+        if (synonyms1.includes(norm2) || synonyms2.includes(norm1)) {
+          console.log('Direct synonym match found');
+          return 0.95;
+        }
+
+        // Check for shared synonyms
+        const sharedSynonyms = synonyms1.filter(s1 => synonyms2.includes(s1));
         if (sharedSynonyms.length > 0) {
+          console.log('Shared synonyms found:', sharedSynonyms);
           return 0.9;
         }
 
         // Check if they're in the same category
         if (specialty1.category && specialty2.category && specialty1.category === specialty2.category) {
-          return 0.85;  // 85% confidence for same category
+          console.log('Same category match');
+          return 0.85;
         }
       }
     }
   }
   
-  // If one contains the other but they're not equal, it's not a perfect match
-  // For example: "Cardiology" vs "Critical Care Medicine - Cardiology"
-  if (norm1.includes(norm2) || norm2.includes(norm1)) {
-    // Calculate length difference penalty
-    const lengthDiff = Math.abs(norm1.length - norm2.length) / Math.max(norm1.length, norm2.length);
-    return Math.max(0.7, 0.8 - lengthDiff); // Score between 0.7 and 0.8
-  }
+  // Split into words and normalize
+  const words1 = norm1.split(/[\s\/\-]+/).filter(Boolean).map(w => w.toLowerCase());
+  const words2 = norm2.split(/[\s\/\-]+/).filter(Boolean).map(w => w.toLowerCase());
   
-  // Calculate word overlap with synonym consideration
-  const words1 = new Set(norm1.split(' ').filter(Boolean));
-  const words2 = new Set(norm2.split(' ').filter(Boolean));
-
-  // Add synonym words to the sets
-  if (specialties1.length > 0) {
-    specialties1.forEach(specialty => {
-      [...specialty.synonyms.predefined, ...specialty.synonyms.custom].forEach(syn => {
-        normalizeSpecialtyName(syn).split(' ').filter(Boolean).forEach(word => words1.add(word));
-      });
-    });
-  }
-  if (specialties2.length > 0) {
-    specialties2.forEach(specialty => {
-      [...specialty.synonyms.predefined, ...specialty.synonyms.custom].forEach(syn => {
-        normalizeSpecialtyName(syn).split(' ').filter(Boolean).forEach(word => words2.add(word));
-      });
-    });
-  }
-
-  const intersection = new Set([...words1].filter(x => words2.has(x)));
-  const union = new Set([...words1, ...words2]);
+  // Create sets of significant words (excluding common words)
+  const significantWords1 = new Set(words1.filter(w => !COMMON_WORDS.has(w)));
+  const significantWords2 = new Set(words2.filter(w => !COMMON_WORDS.has(w)));
   
-  // Add position penalty for words that appear in different orders
-  const positionPenalty = 0.1; // 10% penalty for different word positions
-  const arr1 = Array.from(words1);
-  const arr2 = Array.from(words2);
-  let outOfOrderCount = 0;
-  
-  for (let i = 0; i < Math.min(arr1.length, arr2.length); i++) {
-    if (arr1[i] !== arr2[i] && words2.has(arr1[i])) {
-      outOfOrderCount++;
+  // Check for critical care specific matches
+  if ((words1.includes('critical') && words1.includes('care')) ||
+      (words2.includes('critical') && words2.includes('care'))) {
+    // If both are critical care related
+    if ((words1.includes('critical') && words1.includes('care')) &&
+        (words2.includes('critical') && words2.includes('care'))) {
+      // Check for intensivist variations
+      const hasIntensivistVariation = 
+        (words1.includes('intensivist') || words1.includes('intensive')) ||
+        (words2.includes('intensivist') || words2.includes('intensive'));
+      
+      if (hasIntensivistVariation) {
+        console.log('Critical Care with Intensivist variation match');
+        return 0.9;
+      }
+      
+      console.log('Critical Care base match');
+      return 0.85;
     }
   }
   
-  // Calculate base similarity with word overlap
-  let similarity = (intersection.size / union.size) * (1 - (outOfOrderCount * positionPenalty));
+  // Calculate word overlap for remaining cases
+  const intersection = new Set([...significantWords1].filter(x => significantWords2.has(x)));
+  const union = new Set([...significantWords1, ...significantWords2]);
   
-  // Cap similarity at 0.7 for word overlap matches
-  similarity = Math.min(0.7, similarity);
+  const similarity = intersection.size / union.size;
+  console.log('Word overlap similarity:', similarity);
   
-  console.log(`Similarity between "${norm1}" and "${norm2}":`, similarity, 
-              'Intersection:', Array.from(intersection), 
-              'Union:', Array.from(union));
+  // Boost similarity for partial matches
+  if (similarity > 0.5) {
+    const boostedSimilarity = Math.min(1, similarity + 0.2);
+    console.log('Boosted similarity:', boostedSimilarity);
+    return boostedSimilarity;
+  }
   
   return similarity;
 };
@@ -125,28 +147,87 @@ const findMatchingSpecialties = (
   availableSpecialties: SpecialtyMapping[]
 ): { matches: string[]; confidence: number } => {
   const normalizedSpecialty = normalizeSpecialtyName(specialty);
+  console.log(`Finding matches for "${specialty}" (${fromVendor}) -> ${toVendor}`);
   console.log('Normalized source specialty:', normalizedSpecialty);
   
   // Get all specialties from the target vendor
   const targetVendorSpecialties = availableSpecialties.filter(s => 
     s.vendor === toVendor
   );
-  console.log('Target vendor specialties:', targetVendorSpecialties);
+  console.log(`Found ${targetVendorSpecialties.length} specialties for ${toVendor}`);
+  
+  // Get source specialty synonyms
+  const sourceSpecialtyObj = specialtyManager.searchSpecialties(specialty)[0];
+  const sourceSynonyms = sourceSpecialtyObj 
+    ? [
+        sourceSpecialtyObj.name,
+        ...sourceSpecialtyObj.synonyms.predefined,
+        ...sourceSpecialtyObj.synonyms.custom
+      ].map(normalizeSpecialtyName)
+    : [normalizedSpecialty];
+  
+  console.log('Source specialty synonyms:', sourceSynonyms);
   
   // Find matches with confidence scores
   const matches = targetVendorSpecialties.map(targetSpecialty => {
     const normalizedTarget = normalizeSpecialtyName(targetSpecialty.specialty);
+    console.log(`\nComparing with "${targetSpecialty.specialty}"`);
+    
+    // Get target specialty synonyms
+    const targetSpecialtyObj = specialtyManager.searchSpecialties(targetSpecialty.specialty)[0];
+    const targetSynonyms = targetSpecialtyObj
+      ? [
+          targetSpecialtyObj.name,
+          ...targetSpecialtyObj.synonyms.predefined,
+          ...targetSpecialtyObj.synonyms.custom
+        ].map(normalizeSpecialtyName)
+      : [normalizedTarget];
+    
+    console.log('Target specialty synonyms:', targetSynonyms);
+    
+    // Check for direct synonym matches first
+    const hasDirectSynonymMatch = sourceSynonyms.some(s1 => 
+      targetSynonyms.some(s2 => normalizeSpecialtyName(s1) === normalizeSpecialtyName(s2))
+    );
+    
+    if (hasDirectSynonymMatch) {
+      console.log('Found direct synonym match!');
+      return {
+        specialty: targetSpecialty.specialty,
+        confidence: 1.0,
+        reason: 'Direct synonym match'
+      };
+    }
+    
+    // If no direct synonym match, calculate similarity
     const confidence = calculateSimilarity(specialty, targetSpecialty.specialty);
-    console.log(`Comparing "${normalizedSpecialty}" with "${normalizedTarget}" - confidence: ${confidence}`);
+    console.log(`Similarity score: ${confidence}`);
+    
+    // Special handling for Critical Care specialties
+    const isCriticalCare = (name: string) => {
+      const norm = normalizeSpecialtyName(name);
+      return norm.includes('critical') && norm.includes('care');
+    };
+
+    if (isCriticalCare(specialty) && isCriticalCare(targetSpecialty.specialty)) {
+      console.log('Both are Critical Care specialties - boosting confidence');
+      return {
+        specialty: targetSpecialty.specialty,
+        confidence: Math.max(confidence, 0.85),
+        reason: 'Critical Care specialty match'
+      };
+    }
+    
     return {
       specialty: targetSpecialty.specialty,
-      confidence
+      confidence,
+      reason: confidence > 0.8 ? 'High similarity' : 'Partial match'
     };
   })
-  .filter(match => match.confidence > 0.5) // Only keep matches above 50% confidence
+  .filter(match => match.confidence > 0.4) // Lower threshold to catch more potential matches
   .sort((a, b) => b.confidence - a.confidence);
 
-  console.log('Final matches:', matches);
+  console.log('\nFinal matches:', matches);
 
   if (matches.length > 0) {
     return {

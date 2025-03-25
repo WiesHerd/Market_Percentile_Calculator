@@ -1,5 +1,5 @@
 import { calculateStringSimilarity } from '@/utils/string';
-import { normalizeSpecialtyName } from '@/utils/specialtyMapping';
+import { specialtyManager } from '@/utils/specialtyManager';
 
 export interface LearningEvent {
   type: 'manual_map' | 'auto_map_approve' | 'auto_map_reject' | 'synonym_add' | 'synonym_remove';
@@ -197,8 +197,8 @@ export class SpecialtyLearningService {
   }
 
   private analyzePatterns(source: string, target: string): LearningEvent['patterns'] {
-    const normalizedSource = normalizeSpecialtyName(source);
-    const normalizedTarget = normalizeSpecialtyName(target);
+    const normalizedSource = source.toLowerCase().trim();
+    const normalizedTarget = target.toLowerCase().trim();
     
     const sourceWords = normalizedSource.split(' ');
     const targetWords = normalizedTarget.split(' ');
@@ -487,7 +487,7 @@ export class SpecialtyLearningService {
       .filter(r => r.isActive)
       .forEach(rule => {
         const [source] = rule.pattern.split(' → ');
-        if (normalizeSpecialtyName(source) === normalizeSpecialtyName(specialty)) {
+        if (source === specialty) {
           const [, target] = rule.pattern.split(' → ');
           suggestions.push({
             targetSpecialty: target,
@@ -499,7 +499,7 @@ export class SpecialtyLearningService {
       });
 
     // Add pattern-based suggestions
-    const normalizedSpecialty = normalizeSpecialtyName(specialty);
+    const normalizedSpecialty = specialty.toLowerCase().trim();
     const patterns = this.analyzePatterns(specialty, specialty); // Get base patterns
 
     this.learningEvents

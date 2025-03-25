@@ -21,6 +21,12 @@ A modern web application that helps healthcare providers analyze compensation da
   - Search and filter specialties
   - Persistent storage of uploaded data
 
+- **Specialty Mapping Studio**:
+  - Map specialties across different survey vendors
+  - Auto-mapping based on synonym relationships
+  - Custom synonym management
+  - Interactive mapping interface
+
 - **User-Friendly Interface**:
   - Clean, modern design
   - Responsive layout
@@ -72,6 +78,13 @@ Required columns:
 - `p25_TCC`, `p50_TCC`, `p75_TCC`, `p90_TCC`: Total Cash Compensation percentiles
 - `p25_wrvu`, `p50_wrvu`, `p75_wrvu`, `p90_wrvu`: Work RVU percentiles
 - `p25_cf`, `p50_cf`, `p75_cf`, `p90_cf`: Conversion Factor percentiles
+
+## Documentation
+
+Detailed documentation for various components and fixes can be found in the `docs` directory:
+
+- [Specialty Mapping System Fix](docs/specialty-mapping-fix.md) - Documentation of the fix for the auto-mapping system's synonym recognition
+- [CSV Upload Format](#csv-upload-format) - Information about the required format for CSV uploads
 
 ## Built With
 

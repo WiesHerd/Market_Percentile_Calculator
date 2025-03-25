@@ -138,6 +138,8 @@ export const predefinedSpecialties: Specialty[] = [
         "Digestive Disease",
         "Gastroenterologist",
         "Digestive Health",
+        "Gastrointestinal Medicine",
+        "Digestive Diseases"
       ],
       custom: [],
     },
@@ -312,13 +314,15 @@ export const predefinedSpecialties: Specialty[] = [
   {
     id: "otolaryngology",
     name: "Otolaryngology",
-    category: "Medical",
+    category: "Surgical",
     synonyms: {
       predefined: [
-        "ENT",
-        "Ear Nose & Throat",
-        "Head & Neck Surgery",
         "Otorhinolaryngology",
+        "ENT",
+        "Ear Nose and Throat",
+        "Head and Neck Surgery",
+        "Ear Nose Throat",
+        "Otology"
       ],
       custom: [],
     },
@@ -506,7 +510,8 @@ export const predefinedSpecialties: Specialty[] = [
         "Teen Medicine",
         "Youth Medicine",
         "Adolescent Health",
-        "Teen Health"
+        "Teen Health",
+        "Adolescent Healthcare"
       ],
       custom: [],
     },
@@ -522,8 +527,9 @@ export const predefinedSpecialties: Specialty[] = [
     synonyms: {
       predefined: [
         "Developmental Pediatrics",
-        "Child Development Medicine",
-        "Developmental Medicine"
+        "Pediatric Development",
+        "Developmental Medicine",
+        "Child Developmental Medicine"
       ],
       custom: [],
     },
@@ -666,7 +672,9 @@ export const predefinedSpecialties: Specialty[] = [
       predefined: [
         "Immediate Care",
         "Walk-in Care",
-        "Acute Care Medicine"
+        "Acute Care",
+        "Urgent Medical Care",
+        "Emergency Care"
       ],
       custom: [],
     },
@@ -746,14 +754,16 @@ export const predefinedSpecialties: Specialty[] = [
     },
   },
   {
-    id: "developmental-behavioral",
+    id: "developmental-behavioral-medicine",
     name: "Developmental-Behavioral Medicine",
     category: "Medical",
     synonyms: {
       predefined: [
-        "Developmental Medicine",
-        "Behavioral Medicine",
-        "Child Development and Behavior"
+        "Developmental Pediatrics",
+        "Behavioral Pediatrics",
+        "Developmental-Behavioral Pediatrics",
+        "Child Development",
+        "Developmental Medicine"
       ],
       custom: [],
     },
@@ -763,7 +773,7 @@ export const predefinedSpecialties: Specialty[] = [
     },
   },
   {
-    id: "child-psychiatry",
+    id: "child-adolescent-psychiatry",
     name: "Child and Adolescent Psychiatry",
     category: "Medical",
     synonyms: {
@@ -771,7 +781,8 @@ export const predefinedSpecialties: Specialty[] = [
         "Pediatric Psychiatry",
         "Child Psychiatry",
         "Adolescent Psychiatry",
-        "Youth Mental Health"
+        "Youth Mental Health",
+        "Child & Adolescent Psychiatry"
       ],
       custom: [],
     },

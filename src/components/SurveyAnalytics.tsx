@@ -3,15 +3,6 @@
 import React, { useState, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { ChevronDownIcon, ArrowDownTrayIcon, ChartBarIcon, DocumentChartBarIcon, ArrowsRightLeftIcon, MagnifyingGlassIcon, CheckIcon, PrinterIcon } from '@heroicons/react/24/outline';
 import { useSurveyContext } from '@/context/SurveyContext';
-import { 
-  areSpecialtiesSynonyms, 
-  getSpecialtySynonyms,
-  normalizeSpecialtyName,
-  areSpecialtyVariations,
-  findStandardSpecialty,
-  standardSpecialties,
-  StandardSpecialty
-} from '@/utils/specialtyMapping';
 
 interface SurveyMetric {
   p25: number;

@@ -8,23 +8,7 @@ import { calculateStringSimilarity } from '@/utils/string';
 import { findMatchingSpecialties } from '@/utils/surveySpecialtyMapping';
 import type { SurveyVendor, SpecialtyMapping } from '@/utils/surveySpecialtyMapping';
 import { toast } from 'react-hot-toast';
-import { 
-  areSpecialtiesSynonyms, 
-  getSpecialtySynonyms,
-  normalizeSpecialtyName,
-  areSpecialtyVariations,
-  findStandardSpecialty,
-  specialtyDefinitions,
-  calculateSpecialtySimilarity
-} from '@/utils/specialtyMapping';
-import {
-  getAllSynonyms,
-  updateSpecialtySynonyms,
-  getAllSpecialtiesWithSynonyms,
-  hasCustomSynonyms,
-  getCustomSynonyms,
-  getPredefinedSynonyms
-} from '@/utils/specialtySynonyms';
+import { specialtyManager } from '@/utils/specialtyManager';
 import { formatCurrency, formatNumber } from '@/utils/formatting';
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
@@ -32,11 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { specialtyManager } from "@/utils/specialtyManager";
 import { Label } from "@/components/ui/label";
 import { Trash2 } from "lucide-react";
 import type { SpecialtyMetadata } from "@/types/specialty";
 import type { Specialty } from "@/types/specialty";
+import { useDebounce } from 'use-debounce';
 
 interface SpecialtyMetrics {
   tcc?: {
@@ -215,12 +199,44 @@ function convertToSpecialtyWithStats(specialty: Specialty): SpecialtyWithStats {
   };
 }
 
+// Update the formatVendorName function to ensure consistent vendor names
+const formatVendorName = (vendor: string): string => {
+  // Normalize the input first
+  const normalized = vendor.toLowerCase().trim();
+  
+  const vendorMap: Record<string, string> = {
+    'mgma': 'MGMA',
+    'gallagher': 'GALLAGHER',
+    'sullivan': 'SULLIVANCOTTER',
+    'sullivancotter': 'SULLIVANCOTTER',
+    'sullivan cotter': 'SULLIVANCOTTER',
+    'sullivan-cotter': 'SULLIVANCOTTER'
+  };
+
+  return vendorMap[normalized] || vendor.toUpperCase();
+};
+
+interface AutoMapping {
+  sourceSpecialty: SpecialtyData;
+  matches: Array<{
+    specialty: SpecialtyData;
+    confidence: number;
+    reason: string;
+    status?: 'approved' | 'rejected';
+  }>;
+}
+
 const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   surveys,
   onMappingChange,
   onSave,
   initialMappings,
-}) => {
+}: SpecialtyMappingStudioProps): JSX.Element => {
+  console.log('🚀 SpecialtyMappingStudio initializing with:', {
+    surveyCount: surveys.length,
+    initialMappings: initialMappings ? Object.keys(initialMappings).length : 0
+  });
+
   // State declarations
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
@@ -279,10 +295,27 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [specialtyToDelete, setSpecialtyToDelete] = useState<SpecialtyWithStats | null>(null);
 
+  // Add debounced search query state
+  const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
+
+  // Create a set of already mapped specialties
+  const mappedSpecialtySet = useMemo(() => {
+    console.log('Computing mapped specialty set');
+    return new Set(
+      mappedGroups.flatMap(group => 
+        group.specialties.map(s => `${s.specialty}:${s.vendor}`)
+      )
+    );
+  }, [mappedGroups]);
+
   // Load all specialties and their synonyms on mount
   useEffect(() => {
-    // Refresh predefined synonyms first
-    specialtyManager.refreshPredefinedSynonyms();
+    // Only refresh predefined synonyms on initial mount
+    const hasInitialized = localStorage.getItem('synonyms_initialized');
+    if (!hasInitialized) {
+      specialtyManager.refreshPredefinedSynonyms();
+      localStorage.setItem('synonyms_initialized', 'true');
+    }
     
     // Load all specialties with stats
     const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
@@ -293,40 +326,25 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     
     // Initialize specialty stats
     getSpecialtyStats();
-  }, []);
+  }, []); // Empty dependency array since this should only run once on mount
 
   // Organize specialties by vendor
   const specialtiesByVendor = useMemo(() => {
+    console.log('📊 Computing specialtiesByVendor');
     const result: Record<string, SpecialtyData[]> = {};
-    
+
     surveys.forEach(survey => {
-      const vendorName = survey.vendor.toUpperCase();
-      if (!result[vendorName]) {
-        result[vendorName] = [];
-      }
-      
-      survey.data.forEach(item => {
-        if (item.specialty && typeof item.specialty === 'string') {
-          // Check if specialty is already mapped
-          const isAlreadyMapped = mappedGroups.some(group =>
-            group.specialties.some(s => 
-              s.specialty === item.specialty && s.vendor === vendorName
-            )
-          );
-          
-          if (!isAlreadyMapped) {
-            result[vendorName].push({
-              specialty: item.specialty.trim(),
-              vendor: vendorName,
-              metrics: {
-                tcc: item.tcc,
-                wrvu: item.wrvu,
-                cf: item.cf
-              }
-            });
-          }
+      const vendorSpecialties = survey.data.map(item => ({
+        specialty: item.specialty,
+        vendor: survey.vendor,
+        metrics: {
+          tcc: item.tcc,
+          wrvu: item.wrvu,
+          cf: item.cf
         }
-      });
+      }));
+
+      result[survey.vendor] = vendorSpecialties;
     });
 
     // Sort specialties alphabetically within each vendor
@@ -334,11 +352,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       result[vendor].sort((a, b) => a.specialty.localeCompare(b.specialty));
     });
 
+    console.log('📊 Loaded specialties by vendor:', result);
     return result;
-  }, [surveys, mappedGroups]);
+  }, [surveys]);
 
   // Filter specialties based on search
   const filteredSpecialties = useMemo(() => {
+    console.log('🔍 Filtering specialties with search:', searchQuery);
     const result: Record<string, SpecialtyData[]> = {};
     const searchTerm = searchQuery.toLowerCase();
 
@@ -348,11 +368,14 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       );
     });
 
+    console.log('🔍 Filtered specialties result:', result);
     return result;
   }, [specialtiesByVendor, searchQuery]);
 
-  // New function to find potential matches for a specialty
+  // New enhanced function to find potential matches for a specialty
   const findPotentialMatches = (specialty: SpecialtyData): AutoMapSuggestion => {
+    console.log('🔍 findPotentialMatches called for:', specialty);
+    
     const suggestions: AutoMapSuggestion = {
       sourceSpecialty: specialty,
       suggestedMatches: []
@@ -360,49 +383,283 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
     // Look through all vendors except the source vendor
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
+      console.log(`\n📊 Checking vendor: ${vendor} with ${specialties.length} specialties`);
+      
       if (vendor !== specialty.vendor) {
         specialties.forEach(targetSpecialty => {
-          let reason = '';
-          let confidence = 0;
+          console.log(`\n🎯 Evaluating target specialty: ${targetSpecialty.specialty}`);
+          
+          // STEP 1: Check for exact matches and synonyms first
+          const sourceSpecialtyObj = specialtyManager.searchSpecialties(specialty.specialty)[0];
+          const targetSpecialtyObj = specialtyManager.searchSpecialties(targetSpecialty.specialty)[0];
 
-          // First check for exact matches and variations
-          if (normalizeSpecialtyName(specialty.specialty) === normalizeSpecialtyName(targetSpecialty.specialty)) {
-            reason = 'Exact match';
-            confidence = 1;
-          } else if (areSpecialtyVariations(specialty.specialty, targetSpecialty.specialty)) {
-            reason = 'Specialty variation';
-            confidence = 0.95;
-          } else if (areSpecialtiesSynonyms(specialty.specialty, targetSpecialty.specialty)) {
-            reason = 'Known synonym';
-            confidence = 0.95;
-          } else {
-            // Fall back to string similarity only if no specialty-based match
-            const similarity = calculateStringSimilarity(
-              normalizeSpecialtyName(specialty.specialty),
-              normalizeSpecialtyName(targetSpecialty.specialty)
-            );
-            confidence = similarity;
-            if (similarity >= 0.8) {
-              reason = 'Very similar name';
-            } else if (similarity >= 0.6) {
-              reason = 'Similar name';
+          console.log('Source specialty object:', sourceSpecialtyObj);
+          console.log('Target specialty object:', targetSpecialtyObj);
+
+          if (sourceSpecialtyObj && targetSpecialtyObj) {
+            // Get all synonyms including predefined and custom
+            const sourceSynonyms = [
+              sourceSpecialtyObj.name,
+              ...sourceSpecialtyObj.synonyms.predefined,
+              ...sourceSpecialtyObj.synonyms.custom
+            ].map(s => s.toLowerCase().trim());
+
+            const targetSynonyms = [
+              targetSpecialtyObj.name,
+              ...targetSpecialtyObj.synonyms.predefined,
+              ...targetSpecialtyObj.synonyms.custom
+            ].map(s => s.toLowerCase().trim());
+
+            console.log('Source synonyms:', sourceSynonyms);
+            console.log('Target synonyms:', targetSynonyms);
+
+            // Check for exact matches or synonym matches
+            const normalizedSource = specialty.specialty.toLowerCase().trim();
+            const normalizedTarget = targetSpecialty.specialty.toLowerCase().trim();
+
+            console.log('Normalized source:', normalizedSource);
+            console.log('Normalized target:', normalizedTarget);
+
+            if (normalizedSource === normalizedTarget) {
+              console.log('✅ Found exact match!');
+              suggestions.suggestedMatches.push({
+                specialty: targetSpecialty,
+                confidence: 1.0,
+                reason: 'Exact match'
+              });
+              return; // Skip further checks for this specialty
             }
-          }
 
-          if (confidence >= 0.6) {
-            suggestions.suggestedMatches.push({
-              specialty: targetSpecialty,
-              confidence,
-              reason
-            });
+            // Check if either specialty is in the other's synonym list
+            if (sourceSynonyms.includes(normalizedTarget) || targetSynonyms.includes(normalizedSource)) {
+              console.log('✅ Found synonym match!');
+              suggestions.suggestedMatches.push({
+                specialty: targetSpecialty,
+                confidence: 1.0,
+                reason: 'Synonym match'
+              });
+              return; // Skip further checks for this specialty
+            }
+
+            // Check for shared synonyms
+            const hasSharedSynonym = sourceSynonyms.some(s => targetSynonyms.includes(s));
+            if (hasSharedSynonym) {
+              console.log('✅ Found shared synonym!');
+              suggestions.suggestedMatches.push({
+                specialty: targetSpecialty,
+                confidence: 1.0,
+                reason: 'Shared synonym'
+              });
+              return; // Skip further checks for this specialty
+            }
+
+            // STEP 2: Only if no synonym matches were found, try string similarity
+            const similarity = calculateStringSimilarity(
+              specialty.specialty,
+              targetSpecialty.specialty
+            );
+            
+            console.log('String similarity score:', similarity);
+            
+            if (similarity >= 0.8) {
+              console.log('✅ Found similar name match!');
+              suggestions.suggestedMatches.push({
+                specialty: targetSpecialty,
+                confidence: similarity,
+                reason: 'Similar name'
+              });
+            }
           }
         });
       }
     });
 
-    // Sort by confidence
+    console.log('📝 Final suggestions:', suggestions);
+    // Sort by confidence and return
     suggestions.suggestedMatches.sort((a, b) => b.confidence - a.confidence);
     return suggestions;
+  };
+
+  // Add a function to check for vendor-specific matching rules
+  const checkVendorSpecificMatches = (
+    sourceSpecialty: SpecialtyData,
+    targetSpecialty: SpecialtyData
+  ): { isMatch: boolean; reason: string; confidence: number } => {
+    const result = { isMatch: false, reason: '', confidence: 0 };
+    
+    // Normalize specialty names for comparison
+    const sourceName = sourceSpecialty.specialty.toLowerCase().trim();
+    const targetName = targetSpecialty.specialty.toLowerCase().trim();
+    
+    // Normalize vendor names
+    const sourceVendor = formatVendorName(sourceSpecialty.vendor);
+    const targetVendor = formatVendorName(targetSpecialty.vendor);
+    
+    // Define vendor-specific matching rules
+    const vendorSpecificRules: Array<{
+      source: { name: string; vendor?: string };
+      target: { name: string; vendor?: string };
+      confidence: number;
+      reason: string;
+    }> = [
+      // Adolescent Medicine rules
+      {
+        source: { name: 'adolescent medicine' },
+        target: { name: 'adolescent medicine' },
+        confidence: 0.95,
+        reason: 'Exact specialty match'
+      },
+      // Child and Adolescent Psychiatry rules
+      {
+        source: { name: 'child and adolescent psychiatry' },
+        target: { name: 'child and adolescent psychiatry' },
+        confidence: 0.95,
+        reason: 'Exact specialty match'
+      },
+      // Add specific rules for Psychiatry and Child/Adolescent Psychiatry
+      {
+        source: { name: 'psychiatry' },
+        target: { name: 'child and adolescent psychiatry' },
+        confidence: 0.85,
+        reason: 'Psychiatry specialty family'
+      },
+      {
+        source: { name: 'child and adolescent psychiatry' },
+        target: { name: 'psychiatry' },
+        confidence: 0.85,
+        reason: 'Psychiatry specialty family'
+      },
+      {
+        source: { name: 'psychiatry' },
+        target: { name: 'psychiatry' },
+        confidence: 0.95,
+        reason: 'Exact psychiatry match'
+      },
+      // Child Development rules
+      {
+        source: { name: 'child development' },
+        target: { name: 'child development' },
+        confidence: 0.95,
+        reason: 'Exact specialty match'
+      },
+      {
+        source: { name: 'child development' },
+        target: { name: 'developmental-behavioral medicine' },
+        confidence: 0.85,
+        reason: 'Related specialty'
+      },
+      {
+        source: { name: 'developmental-behavioral medicine' },
+        target: { name: 'child development' },
+        confidence: 0.85,
+        reason: 'Related specialty'
+      },
+      // Gastroenterology rules
+      {
+        source: { name: 'gastroenterology' },
+        target: { name: 'gastroenterology' },
+        confidence: 0.95,
+        reason: 'Exact specialty match'
+      },
+      // Otolaryngology/Otorhinolaryngology rules
+      {
+        source: { name: 'otolaryngology' },
+        target: { name: 'otorhinolaryngology' },
+        confidence: 0.95,
+        reason: 'Known synonym'
+      },
+      {
+        source: { name: 'otorhinolaryngology' },
+        target: { name: 'otolaryngology' },
+        confidence: 0.95,
+        reason: 'Known synonym'
+      },
+      // Urgent Care rules
+      {
+        source: { name: 'urgent care' },
+        target: { name: 'urgent care' },
+        confidence: 0.95,
+        reason: 'Exact specialty match'
+      },
+      // Cross-vendor specific rules
+      {
+        source: { name: 'adolescent medicine', vendor: 'MGMA' },
+        target: { name: 'adolescent medicine', vendor: 'SULLIVANCOTTER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'adolescent medicine', vendor: 'MGMA' },
+        target: { name: 'adolescent medicine', vendor: 'GALLAGHER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'child and adolescent psychiatry', vendor: 'MGMA' },
+        target: { name: 'child and adolescent psychiatry', vendor: 'SULLIVANCOTTER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'child development', vendor: 'MGMA' },
+        target: { name: 'child development', vendor: 'GALLAGHER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'gastroenterology', vendor: 'MGMA' },
+        target: { name: 'gastroenterology', vendor: 'SULLIVANCOTTER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'gastroenterology', vendor: 'MGMA' },
+        target: { name: 'gastroenterology', vendor: 'GALLAGHER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'otorhinolaryngology', vendor: 'MGMA' },
+        target: { name: 'otolaryngology', vendor: 'SULLIVANCOTTER' },
+        confidence: 0.98,
+        reason: 'Known cross-vendor synonym'
+      },
+      {
+        source: { name: 'otorhinolaryngology', vendor: 'MGMA' },
+        target: { name: 'otorhinolaryngology', vendor: 'GALLAGHER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'urgent care', vendor: 'MGMA' },
+        target: { name: 'urgent care', vendor: 'SULLIVANCOTTER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      },
+      {
+        source: { name: 'urgent care', vendor: 'MGMA' },
+        target: { name: 'urgent care', vendor: 'GALLAGHER' },
+        confidence: 0.98,
+        reason: 'Exact cross-vendor match'
+      }
+    ];
+    
+    // Check if any rules match
+    for (const rule of vendorSpecificRules) {
+      if (
+        (rule.source.name === sourceName || sourceName.includes(rule.source.name)) &&
+        (rule.target.name === targetName || targetName.includes(rule.target.name)) &&
+        (!rule.source.vendor || rule.source.vendor === sourceVendor) &&
+        (!rule.target.vendor || rule.target.vendor === targetVendor)
+      ) {
+        result.isMatch = true;
+        result.reason = rule.reason;
+        result.confidence = rule.confidence;
+        break;
+      }
+    }
+    
+    return result;
   };
 
   // Update the toggleSpecialtySelection function
@@ -420,11 +677,18 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     });
   };
 
-  // New function to accept suggested matches
-  const acceptSuggestedMatches = (suggestion: AutoMapSuggestion) => {
+  // Update the acceptSuggestedMatches function to handle multiple suggestions
+  const acceptSuggestedMatches = (suggestion: AutoMapSuggestion, matchesToAccept?: Array<{specialty: SpecialtyData; confidence: number; reason: string}>) => {
+    const selectedMatches = matchesToAccept || suggestion.suggestedMatches;
+    
+    if (selectedMatches.length === 0) {
+      toast.error('No matches to accept');
+      return;
+    }
+    
     const selectedItems: SpecialtyData[] = [
       suggestion.sourceSpecialty,
-      ...suggestion.suggestedMatches.map(match => match.specialty)
+      ...selectedMatches.map(match => match.specialty)
     ];
 
     const newGroup: MappedGroup = {
@@ -438,10 +702,24 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     setAutoMapSuggestions(null);
     
     // Notify parent component
-    const mappedSpecialties = suggestion.suggestedMatches.map(match => match.specialty.specialty);
+    const mappedSpecialties = selectedMatches.map(match => match.specialty.specialty);
     onMappingChange(suggestion.sourceSpecialty.specialty, mappedSpecialties);
     
-    toast.success('Created new mapping group from suggestions');
+    toast.success(`Created new mapping group with ${selectedMatches.length} matches`);
+  };
+
+  // Add a function to accept all matches above a certain confidence threshold
+  const acceptAllMatches = (suggestion: AutoMapSuggestion, threshold = 0.9) => {
+    const highConfidenceMatches = suggestion.suggestedMatches.filter(
+      match => match.confidence >= threshold
+    );
+    
+    if (highConfidenceMatches.length === 0) {
+      toast.success('No high-confidence matches found');
+      return;
+    }
+    
+    acceptSuggestedMatches(suggestion, highConfidenceMatches);
   };
 
   // Render a specialty card
@@ -481,154 +759,73 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     );
   };
 
-  // New function to generate all possible mappings
+  // Optimize the generateAllMappings function to fix performance issues
   const generateAllMappings = useCallback(() => {
-    // First, collect all mapped specialties from current state
-    const currentMappedGroups = mappedGroups;
-    const currentSpecialtiesByVendor = specialtiesByVendor;
+    console.log('Starting generateAllMappings');
     
-    // Create a set of all specialties that are already mapped or have approved matches
-    const mappedSpecialtySet = new Set(
-      currentMappedGroups.flatMap(group => 
-        group.specialties.map(s => `${s.specialty}:${s.vendor}`)
+    // Track processed specialties to prevent duplicates
+    const processedSpecialties = new Set<string>();
+    const processedAsTarget = new Set<string>();
+    const newMappings: AutoMapping[] = [];
+
+    // Get currently mapped specialties
+    const mappedSpecialtyKeys = new Set(
+      mappedGroups.flatMap(group => 
+        group.specialties.map(s => `${s.specialty}:${s.vendor}`.toLowerCase())
       )
     );
 
-    // Also add specialties that have approved matches in allAutoMappings
-    allAutoMappings.forEach(mapping => {
-      if (mapping.matches.some(m => m.status === 'approved')) {
-        mappedSpecialtySet.add(`${mapping.sourceSpecialty.specialty}:${mapping.sourceSpecialty.vendor}`);
-      }
-    });
-
-    // Keep track of specialties that are included in matches
-    const includedInMatches = new Set<string>();
-
-    // Group specialties by normalized name and synonyms
-    const specialtiesByNormalizedName = new Map<string, SpecialtyData[]>();
-    
-    // First pass: collect all specialties into groups
-    Object.entries(currentSpecialtiesByVendor).forEach(([vendor, specialties]) => {
+    // Process each vendor
+    Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
       specialties.forEach(specialty => {
-        const key = `${specialty.specialty}:${specialty.vendor}`;
-        // Skip if already mapped
-        if (!mappedSpecialtySet.has(key)) {
-          // Find if this specialty matches any existing group
-          let foundGroup = false;
-          for (const [groupKey, existingSpecialties] of specialtiesByNormalizedName.entries()) {
-            // Check if this specialty is a variation of any specialty in the group
-            if (existingSpecialties.some(existing => 
-              areSpecialtiesSynonyms(existing.specialty, specialty.specialty)
-            )) {
-              specialtiesByNormalizedName.set(groupKey, [...existingSpecialties, specialty]);
-              foundGroup = true;
-              break;
-            }
-          }
+        const specialtyKey = `${specialty.specialty}:${specialty.vendor}`.toLowerCase();
+        
+        // Check if specialty is unmapped and not processed
+        const isUnmapped = !mappedSpecialtyKeys.has(specialtyKey);
+        const isUnprocessed = !processedSpecialties.has(specialtyKey);
+        const isNotTarget = !processedAsTarget.has(specialtyKey.split(':')[0]); // Compare just the specialty name
+
+        if (isUnmapped && isUnprocessed && isNotTarget) {
+          // Find potential matches
+          const suggestions = findPotentialMatches(specialty);
           
-          // If no matching group found, create a new one
-          if (!foundGroup) {
-            specialtiesByNormalizedName.set(key, [specialty]);
+          // Filter out matches that are already mapped or processed
+          const validMatches = suggestions.suggestedMatches.filter(match => {
+            const matchKey = `${match.specialty.specialty}:${match.specialty.vendor}`.toLowerCase();
+            const matchName = match.specialty.specialty.toLowerCase();
+            
+            const isMatchUnmapped = !mappedSpecialtyKeys.has(matchKey);
+            const isMatchUnprocessed = !processedSpecialties.has(matchKey);
+            
+            if (isMatchUnmapped && isMatchUnprocessed) {
+              // Mark this specialty as processed as a target
+              processedAsTarget.add(matchName);
+              return true;
+            }
+            return false;
+          });
+
+          if (validMatches.length > 0) {
+            newMappings.push({
+              sourceSpecialty: specialty,
+              matches: validMatches
+            });
+            
+            // Mark this specialty as processed
+            processedSpecialties.add(specialtyKey);
           }
         }
       });
     });
 
-    // Create mappings for each unique specialty group
-    const allMappings = Array.from(specialtiesByNormalizedName.values())
-      .map(instances => {
-        // Take the first instance as source
-        const sourceSpecialty = instances[0];
-        const sourceKey = `${sourceSpecialty.specialty}:${sourceSpecialty.vendor}`;
-        
-        // Skip if this specialty is already included in matches
-        if (includedInMatches.has(sourceKey)) {
-          return null;
-        }
+    setAllAutoMappings(newMappings);
+  }, [specialtiesByVendor, mappedGroups, findPotentialMatches]);
 
-        // Find matches from other vendors in the same group
-        const matches = instances.slice(1).map(match => {
-          const matchKey = `${match.specialty}:${match.vendor}`;
-          includedInMatches.add(matchKey);
-          return {
-            specialty: match,
-            confidence: 0.95, // High confidence since they're in the same group
-            reason: 'Known synonym',
-            status: undefined as 'approved' | 'rejected' | undefined
-          };
-        });
-
-        // Also look for potential matches in other specialties
-        Object.entries(currentSpecialtiesByVendor).forEach(([vendor, vendorSpecialties]) => {
-          if (vendor !== sourceSpecialty.vendor) {
-            vendorSpecialties
-              .filter(s => {
-                const targetKey = `${s.specialty}:${s.vendor}`;
-                return !instances.some(grouped => grouped.specialty === s.specialty) && 
-                       !mappedSpecialtySet.has(targetKey) &&
-                       !includedInMatches.has(targetKey);
-              })
-              .forEach(targetSpecialty => {
-                let reason = '';
-                let confidence = 0;
-
-                // First check for exact matches and variations
-                if (normalizeSpecialtyName(sourceSpecialty.specialty) === normalizeSpecialtyName(targetSpecialty.specialty)) {
-                  reason = 'Exact match';
-                  confidence = 1;
-                } else if (areSpecialtyVariations(sourceSpecialty.specialty, targetSpecialty.specialty)) {
-                  reason = 'Specialty variation';
-                  confidence = 0.95;
-                } else if (areSpecialtiesSynonyms(sourceSpecialty.specialty, targetSpecialty.specialty)) {
-                  reason = 'Known synonym';
-                  confidence = 0.95;
-                } else {
-                  // Fall back to string similarity
-                  const similarity = calculateStringSimilarity(
-                    normalizeSpecialtyName(sourceSpecialty.specialty),
-                    normalizeSpecialtyName(targetSpecialty.specialty)
-                  );
-                  confidence = similarity;
-                  if (similarity >= 0.8) {
-                    reason = 'Very similar name';
-                  } else if (similarity >= 0.6) {
-                    reason = 'Similar name';
-                  }
-                }
-
-                if (confidence >= 0.6) {
-                  const matchKey = `${targetSpecialty.specialty}:${targetSpecialty.vendor}`;
-                  includedInMatches.add(matchKey);
-                  matches.push({
-                    specialty: targetSpecialty,
-                    confidence,
-                    reason,
-                    status: undefined
-                  });
-                }
-              });
-          }
-        });
-
-        return matches.length > 0 ? {
-          sourceSpecialty,
-          matches: matches.sort((a, b) => b.confidence - a.confidence)
-        } : null;
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
-
-    // Sort by source specialty name
-    allMappings.sort((a, b) => 
-      a.sourceSpecialty.specialty.localeCompare(b.sourceSpecialty.specialty)
-    );
-
-    setAllAutoMappings(allMappings);
-  }, [mappedGroups, specialtiesByVendor, allAutoMappings]); // Include allAutoMappings in dependencies
-
-  // Initialize auto mappings on mount
+  // Update useEffect hooks to prevent infinite loops
   useEffect(() => {
+    console.log('🔄 Initializing auto mappings');
     generateAllMappings();
-  }, []); // Only run on mount
+  }, [mappedGroups]); // Only depend on mappedGroups
 
   // Function to approve/reject a mapping
   const updateMappingStatus = (
@@ -667,11 +864,21 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Effect to handle mapping group creation when matches are updated
   useEffect(() => {
+    console.log('👥 Processing auto mappings updates:', allAutoMappings);
+    
     allAutoMappings.forEach(mapping => {
       const allMatchesHandled = mapping.matches.every(m => m.status === 'approved' || m.status === 'rejected');
       const approvedMatches = mapping.matches.filter(m => m.status === 'approved');
 
+      console.log('Processing mapping:', {
+        sourceSpecialty: mapping.sourceSpecialty.specialty,
+        allMatchesHandled,
+        approvedMatchesCount: approvedMatches.length
+      });
+
       if (allMatchesHandled && approvedMatches.length > 0) {
+        console.log('✅ Creating new mapping group for:', mapping.sourceSpecialty.specialty);
+        
         // Create the mapping group
         const newGroup: MappedGroup = {
           id: Math.random().toString(36).substr(2, 9),
@@ -697,17 +904,58 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           )
         );
 
-        toast.success('Created mapping group with all approved matches');
+        console.log('✅ Mapping group created successfully');
       }
     });
   }, [allAutoMappings, onMappingChange]);
 
   // Filter mappings based on search
   const filteredMappings = useMemo(() => {
-    return allAutoMappings.filter(mapping =>
-      mapping.sourceSpecialty.specialty.toLowerCase().includes(searchQuery.toLowerCase())
+    console.log('Filtering mappings with search:', debouncedSearchQuery);
+    
+    // Get all mapped specialties
+    const mappedSpecialtyKeys = new Set(
+      mappedGroups.flatMap(group => 
+        group.specialties.map(s => `${s.specialty}:${s.vendor}`)
+      )
     );
-  }, [allAutoMappings, searchQuery]);
+
+    // First filter out any mappings where the source specialty is already mapped
+    let mappingsToShow = allAutoMappings.filter(mapping => {
+      const sourceKey = `${mapping.sourceSpecialty.specialty}:${mapping.sourceSpecialty.vendor}`;
+      return !mappedSpecialtyKeys.has(sourceKey);
+    });
+
+    // Then filter out any matches that are already mapped
+    mappingsToShow = mappingsToShow.map(mapping => ({
+      sourceSpecialty: mapping.sourceSpecialty,
+      matches: mapping.matches.filter(match => {
+        const matchKey = `${match.specialty.specialty}:${match.specialty.vendor}`;
+        return !mappedSpecialtyKeys.has(matchKey);
+      })
+    }));
+
+    // Remove any mappings that no longer have matches
+    mappingsToShow = mappingsToShow.filter(mapping => mapping.matches.length > 0);
+
+    // Then apply search filter if there's a search query
+    if (debouncedSearchQuery) {
+      const searchTerm = debouncedSearchQuery.toLowerCase();
+      mappingsToShow = mappingsToShow.filter(mapping => {
+        // Check if source specialty matches
+        if (mapping.sourceSpecialty.specialty.toLowerCase().includes(searchTerm)) {
+          return true;
+        }
+        
+        // Check if any matches contain the search term
+        return mapping.matches.some(match => 
+          match.specialty.specialty.toLowerCase().includes(searchTerm)
+        );
+      });
+    }
+
+    return mappingsToShow;
+  }, [allAutoMappings, debouncedSearchQuery, mappedGroups]);
 
   // Update handleSpecialtySelect to properly load synonyms
   const handleSpecialtySelect = (specialty: string): void => {
@@ -759,56 +1007,66 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       return;
     }
 
-    // Add to specialty manager
-    const success = specialtyManager.addSynonym(specialtyObj.id, synonym);
+    // Check if it's already a synonym for this specialty
+    const existingSynonyms = [
+      ...specialtyObj.synonyms.predefined,
+      ...specialtyObj.synonyms.custom
+    ];
     
-    if (success) {
-      // Update local state
-      setCurrentSynonyms(prev => ({
-        ...prev,
-        custom: [...prev.custom, synonym]
-      }));
+    if (existingSynonyms.includes(synonym)) {
+      toast(`"${synonym}" is already a synonym for "${specialtyObj.name}"`);
+      return;
+    }
+
+    // Check if it's used by another specialty
+    const otherSpecialty = allSpecialties.find(s => 
+      s.id !== specialtyObj.id && (
+        s.name === synonym ||
+        s.synonyms.predefined.includes(synonym) ||
+        s.synonyms.custom.includes(synonym)
+      )
+    );
+
+    if (otherSpecialty) {
+      const isPredefined = otherSpecialty.synonyms.predefined.includes(synonym);
+      toast(
+        `Mapping Already Defined: "${synonym}" is already ${
+          otherSpecialty.name === synonym 
+            ? "a specialty name" 
+            : `a ${isPredefined ? 'predefined' : 'custom'} synonym for "${otherSpecialty.name}"`
+        }`
+      );
+      return;
+    }
+
+    // Add to specialty manager
+    const result = specialtyManager.addSynonym(specialtyObj.id, synonym);
+    
+    if (result.success) {
+      // Update local state - ensure no duplicates are added
+      setCurrentSynonyms(prev => {
+        // Check if the synonym already exists in either array to prevent duplicates
+        if (prev.predefined.includes(synonym) || prev.custom.includes(synonym)) {
+          return prev; // Return unchanged state if already exists
+        }
+        
+        return {
+          ...prev,
+          custom: [...prev.custom, synonym]
+        };
+      });
+      
       // Clear both inputs
       setNewSynonym('');
       setPendingSynonym('');
       toast(`Added synonym: ${synonym}`);
       
-      // Refresh stats
+      // Refresh stats and specialties list to maintain data integrity
       getSpecialtyStats();
+      loadSpecialties(); // Reload all specialties to ensure UI is in sync with backend
     } else {
-      // Check if it's already a synonym for this specialty
-      const existingSynonyms = [
-        ...specialtyObj.synonyms.predefined,
-        ...specialtyObj.synonyms.custom
-      ];
-      
-      if (existingSynonyms.includes(synonym)) {
-        toast(`"${synonym}" is already a synonym for "${specialtyObj.name}"`);
-        return;
-      }
-
-      // Check if it's used by another specialty
-      const otherSpecialty = allSpecialties.find(s => 
-        s.id !== specialtyObj.id && (
-          s.name === synonym ||
-          s.synonyms.predefined.includes(synonym) ||
-          s.synonyms.custom.includes(synonym)
-        )
-      );
-
-      if (otherSpecialty) {
-        const isPredefined = otherSpecialty.synonyms.predefined.includes(synonym);
-        toast(
-          `"${synonym}" is already ${
-            otherSpecialty.name === synonym 
-              ? "a specialty name" 
-              : `a ${isPredefined ? 'predefined' : 'custom'} synonym for "${otherSpecialty.name}"`
-          }`
-        );
-        return;
-      }
-
-      toast("Failed to add synonym. Please try again.");
+      // Display the specific error message from specialtyManager
+      toast(result.message || "Failed to add synonym. Please try again.");
     }
   };
 
@@ -857,12 +1115,21 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update handleSaveSynonyms
   const handleSaveSynonyms = (): void => {
     if (selectedSpecialtyForSynonyms) {
-      updateSpecialtySynonyms(
-        selectedSpecialtyForSynonyms, 
-        [...currentSynonyms.predefined, ...currentSynonyms.custom]
-      );
-      getSpecialtyStats();
-      setShowSynonymModal(false);
+      const specialty = allSpecialties.find(s => s.name === selectedSpecialtyForSynonyms);
+      if (specialty) {
+        // Update both predefined and custom synonyms using the correct interface
+        specialtyManager.updateSpecialtySynonyms(specialty.id, currentSynonyms);
+        
+        // Refresh the specialties list
+        const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
+        setAllSpecialties(loadedSpecialties);
+        setSearchResults(loadedSpecialties);
+        
+        // Update stats and close modal
+        getSpecialtyStats();
+        setShowSynonymModal(false);
+        toast.success('Synonyms updated successfully');
+      }
     }
   };
 
@@ -892,8 +1159,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Update useEffect to load specialties
   useEffect(() => {
-    // Refresh predefined synonyms first
-    specialtyManager.refreshPredefinedSynonyms();
+    // Only refresh predefined synonyms on initial mount
+    const hasInitialized = localStorage.getItem('synonyms_initialized');
+    if (!hasInitialized) {
+      specialtyManager.refreshPredefinedSynonyms();
+      localStorage.setItem('synonyms_initialized', 'true');
+    }
     
     // Load all specialties with stats
     const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
@@ -904,7 +1175,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     
     // Initialize specialty stats
     getSpecialtyStats();
-  }, []);
+  }, []); // Empty dependency array since this should only run once on mount
 
   // Update the search function to properly filter specialties
   const getFilteredSpecialties = (): SpecialtyWithStats[] => {
@@ -973,7 +1244,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     }
   };
 
-  // Update the loadSpecialties function to include stats
+  // Update the loadSpecialties function to properly convert Specialty to SpecialtyWithStats
   const loadSpecialties = useCallback(() => {
     const loadedSpecialties = specialtyManager.getAllSpecialties()
       .map(convertToSpecialtyWithStats);
@@ -986,6 +1257,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     loadSpecialties();
   }, [loadSpecialties]);
 
+  // Update the handleSearch function to properly convert Specialty to SpecialtyWithStats
   const handleSearch = (value: string) => {
     setSpecialtySearch(value);
     setSelectedSpecialty(null);
@@ -1193,7 +1465,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="px-6 py-4">
@@ -1454,10 +1726,10 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   </div>
             </div>
 
-                <div className="flex divide-x divide-gray-200 flex-1 overflow-hidden">
+                <div className="flex divide-x divide-gray-200 flex-1 min-h-0 overflow-hidden">
                   {/* Left side - Specialty List */}
                   <div className="w-1/2 flex flex-col overflow-hidden">
-                    <div className="p-4">
+                    <div className="p-4 flex-shrink-0">
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
@@ -1480,61 +1752,59 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                       </div>
                     </div>
 
-                    <div className="px-4 pb-4">
-                      <div className="border border-gray-200 rounded-lg bg-gray-50/50">
-                        <ScrollArea className="h-[400px]">
-                          <div className="p-2 space-y-1">
-                            {getFilteredSpecialties().map((specialty) => (
-                              <div
-                                key={specialty.id}
-                                className="group flex items-center gap-2 w-full"
+                    <div className="px-4 pb-4 flex-1 overflow-hidden">
+                      <div className="border border-gray-200 rounded-lg bg-gray-50/50 h-[500px] overflow-y-auto">
+                        <div className="p-2 space-y-1">
+                          {getFilteredSpecialties().map((specialty) => (
+                            <div
+                              key={specialty.id}
+                              className="group flex items-center gap-2 w-full"
+                            >
+                              <button
+                                onClick={() => handleSpecialtySelect(specialty.name)}
+                                className={cn(
+                                  "flex-1 text-left px-3 py-2 rounded-md transition-all text-sm",
+                                  selectedSpecialtyForSynonyms === specialty.name
+                                    ? "bg-blue-50 text-blue-700"
+                                    : "hover:bg-gray-50"
+                                )}
                               >
-                                <button
-                                  onClick={() => handleSpecialtySelect(specialty.name)}
-                                  className={cn(
-                                    "flex-1 text-left px-3 py-2 rounded-md transition-all text-sm",
-                                    selectedSpecialtyForSynonyms === specialty.name
-                                      ? "bg-blue-50 text-blue-700"
-                                      : "hover:bg-gray-50"
-                                  )}
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-medium truncate">{specialty.name}</span>
-                                    <div className="flex gap-1 flex-shrink-0">
-                                      {specialty.synonyms.predefined.length > 0 && (
-                                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
-                                          {specialty.synonyms.predefined.length}
-                                        </Badge>
-                                      )}
-                                      {specialty.synonyms.custom.length > 0 && (
-                                        <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
-                                          {specialty.synonyms.custom.length}
-                                        </Badge>
-                                      )}
-                                    </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium truncate">{specialty.name}</span>
+                                  <div className="flex gap-1 flex-shrink-0">
+                                    {specialty.synonyms.predefined.length > 0 && (
+                                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                                        {specialty.synonyms.predefined.length}
+                                      </Badge>
+                                    )}
+                                    {specialty.synonyms.custom.length > 0 && (
+                                      <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
+                                        {specialty.synonyms.custom.length}
+                                      </Badge>
+                                    )}
                                   </div>
-                                </button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="opacity-0 group-hover:opacity-100 p-1"
-                                  onClick={() => handleDeleteClick(specialty)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
+                                </div>
+                              </button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="opacity-0 group-hover:opacity-100 p-1"
+                                onClick={() => handleDeleteClick(specialty)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Right side - Synonym Management */}
                   <div className="w-1/2 flex flex-col overflow-hidden">
-                    <div className="p-4 space-y-4">
+                    <div className="p-4 space-y-4 flex-1 overflow-hidden flex flex-col">
                       {/* Add New Synonym */}
-                      <div className="space-y-2">
+                      <div className="space-y-2 flex-shrink-0">
                         {pendingSynonym ? (
                           <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
                             <span className="text-sm text-blue-700">Ready to add: <strong>{pendingSynonym}</strong></span>
@@ -1546,78 +1816,80 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                             </button>
                           </div>
                         ) : (
-                <div className="flex gap-2">
-                        <Input
-                    placeholder="Enter new synonym..."
-                    value={newSynonym}
-                    onChange={(e) => setNewSynonym(e.target.value)}
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Enter new synonym..."
+                              value={newSynonym}
+                              onChange={(e) => setNewSynonym(e.target.value)}
                               className="flex-1"
-                  />
-                  <Button
-                    onClick={handleAddSynonym}
+                            />
+                            <Button
+                              onClick={handleAddSynonym}
                               disabled={!newSynonym.trim() || !selectedSpecialtyForSynonyms}
                               size="sm"
                               className="bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    Add
-                  </Button>
+                            >
+                              Add
+                            </Button>
                           </div>
                         )}
-                </div>
+                      </div>
 
                       {/* Synonyms List */}
-                      <ScrollArea className="h-[300px]">
-                        <div className="space-y-1">
-                          {selectedSpecialtyForSynonyms && currentSynonyms && (
-                            <>
-                    {currentSynonyms.predefined.length > 0 && (
-                                <div className="mb-2">
-                                  <h4 className="text-xs font-medium text-gray-500 mb-1">Predefined</h4>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {currentSynonyms.predefined.map((synonym, index) => (
-                                      <Badge
-                                        key={`predefined-${index}`}
-                                        variant="secondary"
-                                        className="bg-blue-50 text-blue-700 border border-blue-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
-                                      >
-                                        {synonym}
-                                        <button
-                                          onClick={() => handleRemoveSynonym(synonym)}
-                                          className="hover:bg-blue-100 rounded p-0.5"
+                      <div className="flex-1 overflow-hidden border border-gray-200 rounded-lg">
+                        <ScrollArea className="h-full">
+                          <div className="p-3 space-y-1">
+                            {selectedSpecialtyForSynonyms && currentSynonyms && (
+                              <>
+                                {currentSynonyms.predefined.length > 0 && (
+                                  <div className="mb-2">
+                                    <h4 className="text-xs font-medium text-gray-500 mb-1">Predefined</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {currentSynonyms.predefined.map((synonym, index) => (
+                                        <Badge
+                                          key={`predefined-${index}`}
+                                          variant="secondary"
+                                          className="bg-blue-50 text-blue-700 border border-blue-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
                                         >
-                                          <XMarkIcon className="h-3 w-3" />
-                                        </button>
-                                      </Badge>
-                                    ))}
+                                          {synonym}
+                                          <button
+                                            onClick={() => handleRemoveSynonym(synonym)}
+                                            className="hover:bg-blue-100 rounded p-0.5"
+                                          >
+                                            <XMarkIcon className="h-3 w-3" />
+                                          </button>
+                                        </Badge>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                              {currentSynonyms.custom.length > 0 && (
-                      <div>
-                                  <h4 className="text-xs font-medium text-gray-500 mb-1">Custom</h4>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {currentSynonyms.custom.map((synonym, index) => (
-                                      <Badge
-                                        key={`custom-${index}`}
-                                        variant="secondary"
-                                        className="bg-purple-50 text-purple-700 border border-purple-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
-                                      >
-                                        {synonym}
-                                        <button
-                                          onClick={() => handleRemoveSynonym(synonym)}
-                                          className="hover:bg-purple-100 rounded p-0.5"
+                                )}
+                                {currentSynonyms.custom.length > 0 && (
+                                  <div>
+                                    <h4 className="text-xs font-medium text-gray-500 mb-1">Custom</h4>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {currentSynonyms.custom.map((synonym, index) => (
+                                        <Badge
+                                          key={`custom-${index}`}
+                                          variant="secondary"
+                                          className="bg-purple-50 text-purple-700 border border-purple-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
                                         >
-                                          <XMarkIcon className="h-3 w-3" />
-                                        </button>
-                                      </Badge>
-                                    ))}
+                                          {synonym}
+                                          <button
+                                            onClick={() => handleRemoveSynonym(synonym)}
+                                            className="hover:bg-purple-100 rounded p-0.5"
+                                          >
+                                            <XMarkIcon className="h-3 w-3" />
+                                          </button>
+                                        </Badge>
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </ScrollArea>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2115,9 +2387,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                     return;
                                   }
                                   // Refresh the specialties list
-                                  const loadedSpecialties = specialtyManager.getAllSpecialties();
+                                  const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
                                   setAllSpecialties(loadedSpecialties);
-                                  specialty = newSpecialty;
+                                  specialty = convertToSpecialtyWithStats(newSpecialty);
                                 }
                                 
                                 // Get potential matches as predefined synonyms
@@ -2134,7 +2406,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                 
                                 // Refresh stats and specialties list again after adding synonyms
                                 getSpecialtyStats();
-                                const updatedSpecialties = specialtyManager.getAllSpecialties();
+                                const updatedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
                                 setAllSpecialties(updatedSpecialties);
                                 
                                 // Select the specialty and open the modal
@@ -2570,6 +2842,95 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Add the autoMapSuggestions UI here */}
+      {autoMapSuggestions && (
+        <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900">
+                Suggested Matches for "{autoMapSuggestions.sourceSpecialty.specialty}"
+                <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
+                  {autoMapSuggestions.sourceSpecialty.vendor}
+                </span>
+              </h3>
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={() => acceptAllMatches(autoMapSuggestions, 0.9)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+                >
+                  Accept All Matches ({autoMapSuggestions.suggestedMatches.filter(m => m.confidence >= 0.9).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAutoMapSuggestions(null)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-md text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="px-6 py-4 max-h-96 overflow-y-auto">
+            <div className="space-y-3">
+              {autoMapSuggestions.suggestedMatches.map((match, index) => (
+                <div 
+                  key={`${match.specialty.vendor}:${match.specialty.specialty}`}
+                  className={`flex items-center justify-between p-3 rounded-md border ${
+                    match.confidence >= 0.9 
+                      ? 'border-green-200 bg-green-50' 
+                      : match.confidence >= 0.7 
+                        ? 'border-yellow-200 bg-yellow-50' 
+                        : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <span className="font-medium text-gray-900">{match.specialty.specialty}</span>
+                      <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
+                        {match.specialty.vendor}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500 flex items-center">
+                      <span className={`inline-block w-16 text-xs font-medium ${
+                        match.confidence >= 0.9 ? 'text-green-600' : 
+                        match.confidence >= 0.7 ? 'text-yellow-600' : 'text-gray-500'
+                      }`}>
+                        {Math.round(match.confidence * 100)}% match
+                      </span>
+                      <span className="ml-2">{match.reason}</span>
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Add to synonyms
+                        if (selectedSpecialtyForSynonyms) {
+                          handleAddSynonym();
+                        } else {
+                          handleAddToSynonyms(match.specialty.specialty);
+                        }
+                      }}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                    >
+                      Add to Synonyms
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => acceptSuggestedMatches(autoMapSuggestions, [match])}
+                      className="px-3 py-1.5 text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                    >
+                      Accept Match
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

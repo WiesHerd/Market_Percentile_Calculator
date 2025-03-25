@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Link from 'next/link';
 import { Dialog } from '@headlessui/react';
 import { SpecialtyProgressDisplay } from '@/components/SpecialtyProgressDisplay';
+import { SpecialtyMappingTest } from '@/components/SpecialtyMappingTest';
 
 interface ColumnMappingMetric {
   p25: string;
