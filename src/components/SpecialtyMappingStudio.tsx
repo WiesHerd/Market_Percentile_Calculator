@@ -21,6 +21,7 @@ import { Trash2 } from "lucide-react";
 import type { SpecialtyMetadata } from "@/types/specialty";
 import type { Specialty } from "@/types/specialty";
 import { useDebounce } from 'use-debounce';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface SpecialtyMetrics {
   tcc?: {
@@ -332,16 +333,16 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const specialtiesByVendor = useMemo(() => {
     console.log('📊 Computing specialtiesByVendor');
     const result: Record<string, SpecialtyData[]> = {};
-
+    
     surveys.forEach(survey => {
       const vendorSpecialties = survey.data.map(item => ({
         specialty: item.specialty,
         vendor: survey.vendor,
-        metrics: {
-          tcc: item.tcc,
-          wrvu: item.wrvu,
-          cf: item.cf
-        }
+              metrics: {
+                tcc: item.tcc,
+                wrvu: item.wrvu,
+                cf: item.cf
+              }
       }));
 
       result[survey.vendor] = vendorSpecialties;
@@ -463,11 +464,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             
             if (similarity >= 0.8) {
               console.log('✅ Found similar name match!');
-              suggestions.suggestedMatches.push({
-                specialty: targetSpecialty,
+            suggestions.suggestedMatches.push({
+              specialty: targetSpecialty,
                 confidence: similarity,
                 reason: 'Similar name'
-              });
+            });
             }
           }
         });
@@ -944,9 +945,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       mappingsToShow = mappingsToShow.filter(mapping => {
         // Check if source specialty matches
         if (mapping.sourceSpecialty.specialty.toLowerCase().includes(searchTerm)) {
-          return true;
-        }
-        
+        return true;
+      }
+      
         // Check if any matches contain the search term
         return mapping.matches.some(match => 
           match.specialty.specialty.toLowerCase().includes(searchTerm)
@@ -1490,72 +1491,122 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className="flex items-center gap-2">
               {/* Primary Actions Group */}
               <div className="flex rounded-lg shadow-sm">
-                <button
-                  onClick={() => setShowSynonymModal(true)}
-                  className={`px-4 py-2 text-sm font-medium rounded-l-lg border
-                    bg-white text-gray-700 hover:bg-gray-50 border-gray-300`}
-                >
-                  Manage Synonyms
-                </button>
-                <button
-                  onClick={() => setViewMode('auto')}
-                  className={`px-4 py-2 text-sm font-medium border-y inline-flex items-center gap-1.5
-                    ${viewMode === 'auto'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
-                  >
-                    <ComputerDesktopIcon className="h-4 w-4" />
-                    Auto-Map Mode
-                  </button>
-                <button
-                  onClick={() => setViewMode('manual')}
-                  className={`px-4 py-2 text-sm font-medium border-y
-                    ${viewMode === 'manual'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
-                  >
-                    Manual Map Mode
-                  </button>
-                <button
-                  onClick={() => setViewMode('mapped')}
-                  className={`px-4 py-2 text-sm font-medium rounded-r-lg border
-                    ${viewMode === 'mapped'
-                      ? 'bg-blue-50 text-blue-700 border-blue-200'
-                      : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
-                >
-                  View Mapped
-                </button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setShowSynonymModal(true)}
+                        className={`px-4 py-2 text-sm font-medium rounded-l
+                          bg-white text-gray-700 hover:bg-gray-50 border border-gray-300`}
+                      >
+                        Manage Mappings
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Add and manage specialty mappings and variations</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setViewMode('auto')}
+                        className={`px-4 py-2 text-sm font-medium border-y inline-flex items-center gap-1.5
+                          ${viewMode === 'auto'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                      >
+                        <ComputerDesktopIcon className="h-4 w-4" />
+                        Auto-Map Mode
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Automatically find and suggest specialty matches</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setViewMode('manual')}
+                        className={`px-4 py-2 text-sm font-medium border-y
+                          ${viewMode === 'manual'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                      >
+                        Manual Map Mode
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Manually map specialties across vendors</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setViewMode('mapped')}
+                        className={`px-4 py-2 text-sm font-medium rounded-r-lg border
+                          ${viewMode === 'mapped'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                      >
+                        View Mapped
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Review and manage existing specialty mappings</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
 
               {/* Status and Actions Group */}
               <div className="ml-4 flex items-center gap-2">
-              <span className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border shadow-sm
-                  ${Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) 
-                    ? 'bg-green-50 text-green-700 border-green-200' 
-                    : 'bg-yellow-50 text-yellow-700 border-yellow-200'}
-                transition-colors duration-150 ease-in-out`}
-              >
-                  {Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) ? (
-                  <>
-                    <CheckCircleIcon className="h-4 w-4 mr-1.5" />
-                    100% Complete
-                  </>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="h-4 w-4 mr-1.5" />
-                    In Progress
-                  </>
-                )}
-              </span>
-              <button
-                onClick={() => setShowClearConfirmation(true)}
-                  className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium
-                  bg-white text-red-600 hover:bg-red-50 border border-red-200
-                  transition-colors duration-150 ease-in-out shadow-sm"
-              >
-                <XMarkIcon className="h-4 w-4 mr-1.5" />
-                Clear All Mappings
-              </button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border shadow-sm
+                        ${Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) 
+                          ? 'bg-green-50 text-green-700 border-green-200' 
+                          : 'bg-yellow-50 text-yellow-700 border-yellow-200'}
+                        transition-colors duration-150 ease-in-out`}
+                      >
+                        {Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) ? (
+                          <>
+                            <CheckCircleIcon className="h-4 w-4 mr-1.5" />
+                            100% Complete
+                          </>
+                        ) : (
+                          <>
+                            <ArrowPathIcon className="h-4 w-4 mr-1.5" />
+                            In Progress
+                          </>
+                        )}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Current mapping progress status</p>
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setShowClearConfirmation(true)}
+                        className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium
+                          bg-white text-red-600 hover:bg-red-50 border border-red-200
+                          transition-colors duration-150 ease-in-out shadow-sm"
+                      >
+                        <XMarkIcon className="h-4 w-4 mr-1.5" />
+                        Clear All Mappings
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Remove all specialty mappings</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
           </div>
@@ -1709,12 +1760,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-lg font-semibold text-gray-900">
-                        Manage Specialty Synonyms
+                        Manage Specialty Mappings
                       </h2>
                       <p className="mt-0.5 text-sm text-gray-500">
                         {pendingSynonym 
-                          ? `Select a specialty to add "${pendingSynonym}" as a synonym`
-                          : "Add, edit, or remove synonyms for specialties."}
+                          ? `Select a specialty to map "${pendingSynonym}"`
+                          : "Add, edit, or remove specialty mappings and variations."}
                       </p>
                     </div>
                     <button
