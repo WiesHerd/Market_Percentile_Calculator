@@ -2323,7 +2323,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
                     <div className="space-y-2">
                       {Array.from(selectedSpecialties).map(key => {
-                        const [vendor, specialty] = key.split(':');
+                        const [vendor, ...specialtyParts] = key.split(':');
+                        // Join back the specialty parts to handle cases where specialty name contains colons
+                        const specialty = specialtyParts.join(':');
                         return (
                           <div
                             key={key}
@@ -2331,7 +2333,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                           >
                             <div>
                               <div className="text-sm font-medium text-gray-900">
-                                {specialty}
+                                {specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.specialty || specialty}
                               </div>
                               <div className="mt-0.5 text-xs text-gray-500">
                                 {vendor}
@@ -2767,22 +2769,22 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               <div>
                 <h3 className="text-lg font-semibold text-blue-700 mb-2">Auto-Mapping System</h3>
                 <div className="space-y-4 text-gray-600">
-                  <p>The auto-mapping system uses a sophisticated algorithm to identify potential specialty matches across different vendors:</p>
+                  <p>The auto-mapping system uses pattern matching and text analysis to identify potential specialty matches across different vendors:</p>
                   
                   <div className="pl-4 space-y-3">
                     <div>
                       <h4 className="font-medium text-gray-900">Match Detection</h4>
                       <ul className="list-disc pl-4 space-y-1">
                         <li>Exact String Matches: Direct specialty name comparisons</li>
-                        <li>Synonym Matches: Using predefined and custom synonym database</li>
-                        <li>Pattern Recognition: Identifying common naming patterns</li>
-                        <li>String Similarity: Using fuzzy matching for close variations</li>
+                        <li>Synonym Database: Using predefined and custom synonyms</li>
+                        <li>Text Analysis: Basic prefix, suffix, and acronym detection</li>
+                        <li>String Similarity: Fuzzy matching for close variations</li>
                       </ul>
                     </div>
                     
                     <div>
                       <h4 className="font-medium text-gray-900">Confidence Score Calculation</h4>
-                      <p>Confidence scores (0-1) are calculated based on multiple factors:</p>
+                      <p>Confidence scores (0-1) indicate match quality:</p>
                       <ul className="list-disc pl-4 space-y-1">
                         <li><span className="font-medium">1.0 (Exact Match)</span>: Perfect string match or known synonym match</li>
                         <li><span className="font-medium">0.95 (High)</span>: Known variations or predefined specialty patterns</li>
@@ -2793,12 +2795,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </div>
 
                     <div>
-                      <h4 className="font-medium text-gray-900">Match Types</h4>
+                      <h4 className="font-medium text-gray-900">Special Cases</h4>
                       <ul className="list-disc pl-4 space-y-1">
-                        <li><span className="font-medium">Exact</span>: Direct name matches (e.g., "Cardiology" = "Cardiology")</li>
-                        <li><span className="font-medium">Synonym</span>: Matches through synonym database (e.g., "ENT" = "Otorhinolaryngology")</li>
-                        <li><span className="font-medium">Similar</span>: High string similarity matches (e.g., "Cardiac Surgery" ≈ "Cardiothoracic Surgery")</li>
-                        <li><span className="font-medium">Category</span>: Matches based on specialty categories and related fields</li>
+                        <li>Critical Care specialties receive additional pattern matching</li>
+                        <li>Vendor-specific naming patterns are considered</li>
+                        <li>Common medical abbreviations are recognized</li>
                       </ul>
                     </div>
                   </div>
