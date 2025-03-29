@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { MagnifyingGlassIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 interface SurveyData {
   specialty: string;
@@ -332,9 +333,8 @@ export default function ViewSurveysPage() {
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center p-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-3 text-gray-600">Loading survey data...</span>
+              <div className="min-h-[400px] relative">
+                <LoadingScreen message="Loading survey data..." />
               </div>
             ) : (
               <div className="overflow-x-auto border rounded-lg">

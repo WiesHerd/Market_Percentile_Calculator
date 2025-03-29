@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Transition } from '@headlessui/react';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 import { 
   ChartBarIcon, 
   DocumentChartBarIcon,
@@ -36,6 +37,7 @@ interface SubNavigationItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  prefetch?: boolean;
 }
 
 interface NavigationItem {
@@ -43,17 +45,42 @@ interface NavigationItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   subItems?: SubNavigationItem[];
+  prefetch?: boolean;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isPageLoading, setIsPageLoading] = useState(false);
   const pathname = usePathname();
 
+  // Handle hydration and initial load
   useEffect(() => {
-    setIsLoaded(true);
+    // Set hydrated immediately
+    setIsHydrated(true);
   }, []);
+
+  // Handle page transitions
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    const startLoading = () => setIsPageLoading(true);
+    const stopLoading = () => setIsPageLoading(false);
+
+    // Start loading
+    startLoading();
+
+    // Stop loading after a short delay
+    const timer = setTimeout(stopLoading, 300);
+    return () => clearTimeout(timer);
+  }, [pathname, isLoaded]);
+
+  // Return loading screen only during initial hydration
+  if (!isHydrated) {
+    return <LoadingScreen message="Initializing..." />;
+  }
 
   const downloadSampleCSV = () => {
     const headers = 'specialty,p25_TCC,p50_TCC,p75_TCC,p90_TCC,p25_wrvu,p50_wrvu,p75_wrvu,p90_wrvu,p25_cf,p50_cf,p75_cf,p90_cf\n';
@@ -73,12 +100,14 @@ export function AppLayout({ children }: AppLayoutProps) {
     { 
       name: 'Dashboard', 
       href: '/',
-      icon: HomeIcon 
+      icon: HomeIcon,
+      prefetch: true 
     },
     {
       name: 'Percentile Calculator',
       href: '/percentile-calculator',
-      icon: CalculatorIcon
+      icon: CalculatorIcon,
+      prefetch: true
     },
     { 
       name: 'Survey Management',
@@ -88,17 +117,20 @@ export function AppLayout({ children }: AppLayoutProps) {
         { 
           name: 'Survey Processing', 
           href: '/survey-management', 
-          icon: TableCellsIcon 
+          icon: TableCellsIcon,
+          prefetch: true
         },
         { 
           name: 'View Surveys', 
           href: '/survey-management/view-surveys', 
-          icon: DocumentTextIcon 
+          icon: DocumentTextIcon,
+          prefetch: true 
         },
         { 
           name: 'Upload History', 
           href: '/survey-management/recent', 
-          icon: ClockIcon 
+          icon: ClockIcon,
+          prefetch: true
         }
       ]
     },
@@ -110,12 +142,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         {
           name: 'Survey Aggregation',
           href: '/survey-analytics',
-          icon: Square3Stack3DIcon
+          icon: Square3Stack3DIcon,
+          prefetch: true
         },
         { 
           name: 'Compare Specialties', 
           href: '/compare', 
-          icon: ArrowsPointingOutIcon 
+          icon: ArrowsPointingOutIcon,
+          prefetch: true 
         }
       ]
     },
@@ -127,12 +161,14 @@ export function AppLayout({ children }: AppLayoutProps) {
         { 
           name: 'Documentation', 
           href: './help',
-          icon: BookOpenIcon 
+          icon: BookOpenIcon,
+          prefetch: true 
         },
         { 
           name: 'About Me', 
           href: '/about',
-          icon: UserIcon 
+          icon: UserIcon,
+          prefetch: true
         }
       ]
     }
@@ -140,6 +176,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {isPageLoading && <LoadingScreen message="Loading..." />}
       <div className="flex">
         {/* Sidebar */}
         <div 
@@ -207,6 +244,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                                 <Link
                                   key={subItem.href}
                                   href={subItem.href}
+                                  prefetch={subItem.prefetch}
                                   className={`
                                     flex items-center px-4 py-2 text-sm transition-colors
                                     ${pathname === subItem.href
@@ -254,7 +292,15 @@ export function AppLayout({ children }: AppLayoutProps) {
                         )}
                       </Link>
                       {isCollapsed && item.subItems && (
-                        <div className="absolute left-full top-0 ml-2 invisible group-hover:visible">
+                        <div 
+                          className="absolute left-full top-0 ml-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 ease-in-out"
+                          style={{ 
+                            paddingLeft: '12px',  // Creates a hover bridge to the submenu
+                            marginTop: '-8px',    // Adds more hover area above
+                            paddingTop: '8px',    // Matches the negative margin
+                            paddingBottom: '8px'  // Adds more hover area below
+                          }}
+                        >
                           <div className="bg-white rounded-md shadow-lg border border-gray-100 py-1.5 w-48">
                             <div className="px-4 py-2 text-sm font-medium text-gray-600 border-b border-gray-100">
                               {item.name}
@@ -263,6 +309,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                               <Link
                                 key={subItem.href}
                                 href={subItem.href}
+                                prefetch={subItem.prefetch}
                                 className={`
                                   flex items-center px-4 py-2 text-sm transition-colors
                                   ${pathname === subItem.href
@@ -360,11 +407,19 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Main Content */}
         <div className={`transition-all duration-300 w-full ${isCollapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
-          {isLoaded && (
-            <main className="bg-gray-50">
+          <Transition
+            show={true}
+            enter="transition-all duration-500 ease-in-out"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="transition-all duration-300 ease-in-out"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+          >
+            <main className="bg-gray-50 relative">
               {children}
             </main>
-          )}
+          </Transition>
         </div>
 
         {/* Overlay */}

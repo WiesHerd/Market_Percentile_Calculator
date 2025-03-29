@@ -1,21 +1,35 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
-  basePath: process.env.NODE_ENV === 'production' ? '/Market_Percentile_Calculator' : '',
+  output: 'standalone',
+  experimental: {
+    serverActions: true
+  },
+  // Development optimizations
+  poweredByHeader: false,
+  compress: true,
+  reactStrictMode: false, // Disable in development for better performance
+  swcMinify: false, // Disable in development for better debugging
+  // Enable static exports for production
   images: {
     unoptimized: true
   },
-  eslint: {
-    // Warning: This allows production builds to successfully complete even if
-    // your project has ESLint errors.
-    ignoreDuringBuilds: true,
+  // Webpack optimizations for development
+  webpack: (config, { dev, isServer }) => {
+    if (dev) {
+      config.watchOptions = {
+        poll: 1000,
+        aggregateTimeout: 300,
+      }
+    }
+    return config
   },
+  // Allow builds to complete even with errors during development
   typescript: {
-    // !! WARN !!
-    // Dangerously allow production builds to successfully complete even if
-    // your project has type errors.
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: true
   },
-};
+  eslint: {
+    ignoreDuringBuilds: true
+  }
+}
 
-module.exports = nextConfig; 
+export default nextConfig 

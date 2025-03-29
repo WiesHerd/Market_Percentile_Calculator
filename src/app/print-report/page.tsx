@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { CalculationHistory, MarketData } from '@/types/logs';
 import { format } from 'date-fns';
 import { PrintReportGraph } from '@/components/PrintReportGraph';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 export default function PrintReport() {
   const [data, setData] = useState<{
@@ -107,13 +108,8 @@ export default function PrintReport() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="max-w-lg w-full space-y-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <h2 className="mt-4 text-xl font-medium text-gray-900">Loading report...</h2>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <LoadingScreen message="Loading report..." />
       </div>
     );
   }

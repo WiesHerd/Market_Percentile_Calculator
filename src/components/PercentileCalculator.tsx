@@ -11,6 +11,7 @@ import { CalculationHistoryView } from './CalculationHistory';
 import { performComplianceChecks, createAuditLog, getFairMarketValue, formatComplianceMessage } from '@/utils/compliance';
 import { ComplianceInfo } from './ComplianceInfo';
 import { Switch } from './Switch';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 interface UploadedData {
   specialty: string;
@@ -179,125 +180,61 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
     const loadData = async () => {
       try {
         setLoading(true);
-    setError(null);
+        setError(null);
 
-        // Get uploaded surveys from localStorage
-        const uploadedSurveys = localStorage.getItem('uploadedSurveys');
+        // Fetch survey data from the API
+        const response = await fetch('/api/surveys');
+        if (!response.ok) {
+          throw new Error('Failed to fetch survey data');
+        }
+        
+        const surveys = await response.json();
         let data: MarketData[] = [];
         
-        if (uploadedSurveys) {
-          const surveys = JSON.parse(uploadedSurveys);
-          const aggregatedData = new Map<string, {
-            specialty: string;
-            tcc: { sum: number; count: number; }[];
-            wrvu: { sum: number; count: number; }[];
-            cf: { sum: number; count: number; }[];
-          }>();
-
-          // Process each survey
+        if (surveys && surveys.length > 0) {
+          // Process each survey's data
           surveys.forEach((survey: any) => {
             survey.data.forEach((row: any) => {
-              const specialty = row[survey.mappings.specialty]?.trim();
-              if (!specialty) return;
-
-              if (!aggregatedData.has(specialty)) {
-                aggregatedData.set(specialty, {
-                specialty,
-                  tcc: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
-                  wrvu: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
-                  cf: Array(4).fill(null).map(() => ({ sum: 0, count: 0 }))
-                });
-              }
-
-              const specialtyData = aggregatedData.get(specialty)!;
-
-              // Aggregate TCC data
-              const tccFields = [
-                survey.mappings.tcc.p25,
-                survey.mappings.tcc.p50,
-                survey.mappings.tcc.p75,
-                survey.mappings.tcc.p90
-              ];
-              tccFields.forEach((field, index) => {
-                const value = parseFloat(row[field]);
-                if (!isNaN(value) && value > 0) {
-                  specialtyData.tcc[index].sum += value;
-                  specialtyData.tcc[index].count += 1;
-                }
-              });
-
-              // Aggregate WRVU data
-              const wrvuFields = [
-                survey.mappings.wrvu.p25,
-                survey.mappings.wrvu.p50,
-                survey.mappings.wrvu.p75,
-                survey.mappings.wrvu.p90
-              ];
-              wrvuFields.forEach((field, index) => {
-                const value = parseFloat(row[field]);
-                if (!isNaN(value) && value > 0) {
-                  specialtyData.wrvu[index].sum += value;
-                  specialtyData.wrvu[index].count += 1;
-                }
-              });
-
-              // Aggregate CF data
-              const cfFields = [
-                survey.mappings.cf.p25,
-                survey.mappings.cf.p50,
-                survey.mappings.cf.p75,
-                survey.mappings.cf.p90
-              ];
-              cfFields.forEach((field, index) => {
-                const value = parseFloat(row[field]);
-                if (!isNaN(value) && value > 0) {
-                  specialtyData.cf[index].sum += value;
-                  specialtyData.cf[index].count += 1;
+              data.push({
+                id: row.id,
+                specialty: row.specialty,
+                p25_total: row.tccP25 || 0,
+                p50_total: row.tccP50 || 0,
+                p75_total: row.tccP75 || 0,
+                p90_total: row.tccP90 || 0,
+                p25_wrvu: row.wrvuP25 || 0,
+                p50_wrvu: row.wrvuP50 || 0,
+                p75_wrvu: row.wrvuP75 || 0,
+                p90_wrvu: row.wrvuP90 || 0,
+                p25_cf: row.cfP25 || 0,
+                p50_cf: row.cfP50 || 0,
+                p75_cf: row.cfP75 || 0,
+                p90_cf: row.cfP90 || 0,
+                source: {
+                  type: 'survey',
+                  name: `${survey.vendor} ${survey.year}`,
+                  timestamp: survey.uploadDate
                 }
               });
             });
           });
-
-          // Convert aggregated data to MarketData format
-          data = Array.from(aggregatedData.values()).map((item, index) => ({
-            id: `aggregated_${index + 1}`,
-            specialty: item.specialty,
-            p25_total: item.tcc[0].count > 0 ? item.tcc[0].sum / item.tcc[0].count : 0,
-            p50_total: item.tcc[1].count > 0 ? item.tcc[1].sum / item.tcc[1].count : 0,
-            p75_total: item.tcc[2].count > 0 ? item.tcc[2].sum / item.tcc[2].count : 0,
-            p90_total: item.tcc[3].count > 0 ? item.tcc[3].sum / item.tcc[3].count : 0,
-            p25_wrvu: item.wrvu[0].count > 0 ? item.wrvu[0].sum / item.wrvu[0].count : 0,
-            p50_wrvu: item.wrvu[1].count > 0 ? item.wrvu[1].sum / item.wrvu[1].count : 0,
-            p75_wrvu: item.wrvu[2].count > 0 ? item.wrvu[2].sum / item.wrvu[2].count : 0,
-            p90_wrvu: item.wrvu[3].count > 0 ? item.wrvu[3].sum / item.wrvu[3].count : 0,
-            p25_cf: item.cf[0].count > 0 ? item.cf[0].sum / item.cf[0].count : 0,
-            p50_cf: item.cf[1].count > 0 ? item.cf[1].sum / item.cf[1].count : 0,
-            p75_cf: item.cf[2].count > 0 ? item.cf[2].sum / item.cf[2].count : 0,
-            p90_cf: item.cf[3].count > 0 ? item.cf[3].sum / item.cf[3].count : 0,
-            source: {
-              type: 'aggregated_survey',
-              name: 'Aggregated Survey Data',
-              timestamp: new Date().toISOString()
-            }
-          }));
         }
 
         // If no survey data, show an error
-      if (!Array.isArray(data) || data.length === 0) {
+        if (!Array.isArray(data) || data.length === 0) {
           throw new Error('No survey data available. Please upload survey data first.');
-      }
-      
-      setMarketData(data);
+        }
+        
+        setMarketData(data);
         if (onDataSourceSelected) {
           onDataSourceSelected();
         }
       } catch (error) {
         console.error('Error loading market data:', error);
         setError(error instanceof Error ? error.message : 'Failed to load market data');
-    } finally {
+      }
       setLoading(false);
-    }
-  };
+    };
 
     loadData();
   }, [onDataSourceSelected]);
@@ -1259,6 +1196,14 @@ export default function PercentileCalculator({ onDataSourceSelected }: Props) {
   }, [modelingState.basePayAmount, modelingState.actualProductivity, modelingState.productivityThreshold, modelingState.conversionFactor, modelingState.modelType, modelingState.tierRates, calculateProjectedEarnings]);
 
   if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <LoadingScreen message="Loading Market Data..." />
+      </div>
+    );
+  }
+
+  if (error) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white">
         <div className="max-w-md w-full mx-4">

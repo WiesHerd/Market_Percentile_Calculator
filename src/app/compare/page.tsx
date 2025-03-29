@@ -5,6 +5,8 @@ import { MarketData, MetricType } from '@/types/logs';
 import { SpecialtyComparison } from '@/components/SpecialtyComparison';
 import { SpecialtyComparisonView } from '@/components/SpecialtyComparisonView';
 import Link from 'next/link';
+import { ChartBarIcon } from '@heroicons/react/24/outline';
+import { LoadingScreen } from '@/components/ui/loading-screen';
 
 export default function ComparePage() {
   const [marketData, setMarketData] = useState<MarketData[]>([]);
@@ -170,8 +172,8 @@ export default function ComparePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <LoadingScreen message="Loading Comparison Data..." />
       </div>
     );
   }

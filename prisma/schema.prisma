@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Survey {
+  id                String             @id @default(uuid())
+  vendor            String
+  year              String
+  uploadDate        DateTime           @default(now())
+  status            SurveyStatus       @default(PROCESSING)
+  columnMappings    Json
+  specialtyMappings SpecialtyMapping[]
+  data              SurveyData[]
+
+  @@map("surveys")
+}
+
+model SurveyData {
+  id           String  @id @default(uuid())
+  surveyId     String
+  specialty    String
+  providerType String?
+  region       String?
+  nOrgs        Int?
+  nIncumbents  Int?
+  tccP25       Float?
+  tccP50       Float?
+  tccP75       Float?
+  tccP90       Float?
+  wrvuP25      Float?
+  wrvuP50      Float?
+  wrvuP75      Float?
+  wrvuP90      Float?
+  cfP25        Float?
+  cfP50        Float?
+  cfP75        Float?
+  cfP90        Float?
+  survey       Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@map("survey_data")
+}
+
+model SpecialtyMapping {
+  id              String  @id @default(uuid())
+  surveyId        String
+  sourceSpecialty String
+  mappedSpecialty String
+  confidence      Float
+  isVerified      Boolean @default(false)
+  notes           String?
+  survey          Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@map("specialty_mappings")
+}
+
+model LearningEvent {
+  id                 String   @id @default(uuid())
+  type               String
+  sourceSpecialty    String
+  targetSpecialty    String?
+  confidence         Float
+  reason             String
+  timestamp          DateTime @default(now())
+  vendor             String?
+  patterns           Json?
+  chainedSpecialties Json?
+
+  @@map("learning_events")
+}
+
+model MatchingRule {
+  id            String    @id @default(uuid())
+  pattern       String
+  confidence    Float
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  lastApplied   DateTime?
+  successCount  Int       @default(0)
+  failureCount  Int       @default(0)
+  matchType     String
+  examples      Json
+  vendorContext Json?
+
+  @@map("matching_rules")
+}
+
+model MappedGroup {
+  id             String   @id @default(uuid())
+  specialties    Json
+  createdAt      DateTime @default(now())
+  isSingleSource Boolean?
+
+  @@map("mapped_groups")
+}
+
+model UnmappedSpecialty {
+  id        String   @id @default(uuid())
+  specialty String
+  vendor    String
+  createdAt DateTime @default(now())
+
+  @@map("unmapped_specialties")
+}
+
+enum SurveyStatus {
+  PROCESSING
+  READY
+  ERROR
+}

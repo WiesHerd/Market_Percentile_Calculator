@@ -1,5 +1,8 @@
 import { calculateStringSimilarity } from '@/utils/string';
 import { specialtyManager } from '@/utils/specialtyManager';
+import { PrismaClient, LearningEvent as PrismaLearningEvent, MatchingRule as PrismaMatchingRule, MappedGroup as PrismaMappedGroup } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export interface LearningEvent {
   type: 'manual_map' | 'auto_map_approve' | 'auto_map_reject' | 'synonym_add' | 'synonym_remove';
@@ -22,7 +25,7 @@ export interface LearningEvent {
   }[];
 }
 
-export interface LearningRule {
+export interface MatchingRule {
   id: string;
   pattern: string;
   confidence: number;
@@ -44,11 +47,11 @@ export interface LearningRule {
   };
 }
 
-export interface LearningStats {
+export interface MatchingStats {
   totalMappings: number;
   accuracyRate: number;
   activeRules: number;
-  recentLearnings: LearningEvent[];
+  recentMatches: LearningEvent[];
   vendorStats: Record<string, {
     totalMappings: number;
     successRate: number;
@@ -101,98 +104,94 @@ export interface UnmappedSpecialty {
 }
 
 const MAPPINGS_STORAGE_KEY = 'specialty-mappings-v1';
-const LEARNING_STORAGE_KEY = 'specialty-learning-data';
+const MATCHING_STORAGE_KEY = 'specialty-matching-data';
 
-export class SpecialtyLearningService {
-  private learningEvents: LearningEvent[] = [];
-  private rules: LearningRule[] = [];
+export class SpecialtyMatchingService {
+  private matchingEvents: LearningEvent[] = [];
+  private rules: MatchingRule[] = [];
   private mappedGroups: MappedGroup[] = [];
 
   constructor() {
     this.loadFromStorage();
   }
 
-  private loadFromStorage() {
+  private async loadFromStorage() {
     try {
-      // Load mapped groups from SpecialtyMappingStudio
-      const mappingsData = localStorage.getItem(MAPPINGS_STORAGE_KEY);
-      if (mappingsData) {
-        this.mappedGroups = JSON.parse(mappingsData).map((group: any) => ({
-          ...group,
-          createdAt: new Date(group.createdAt)
-        }));
-      }
+      // Load learning events
+      const events = await prisma.learningEvent.findMany({
+        orderBy: { timestamp: 'desc' }
+      });
+      this.matchingEvents = events.map((event: PrismaLearningEvent) => ({
+        ...event,
+        timestamp: new Date(event.timestamp)
+      }));
 
-      // Load learning data
-      const learningData = localStorage.getItem(LEARNING_STORAGE_KEY);
-      if (learningData) {
-        const data = JSON.parse(learningData);
-        
-        // Initialize rules array if data is missing or malformed
-        this.rules = Array.isArray(data?.rules) ? data.rules.map((rule: any) => ({
-          id: rule.id || Math.random().toString(36).substr(2, 9),
-          pattern: rule.pattern || '',
-          confidence: rule.confidence || 0,
-          isActive: rule.isActive ?? true,
-          createdAt: new Date(rule.createdAt || Date.now()),
-          lastApplied: rule.lastApplied ? new Date(rule.lastApplied) : undefined,
-          successCount: rule.successCount || 0,
-          failureCount: rule.failureCount || 0,
-          matchType: rule.matchType || 'similar',
-          examples: Array.isArray(rule.examples) ? rule.examples.map((ex: any) => ({
-            source: ex.source || '',
-            target: ex.target || '',
-            confidence: ex.confidence || 0,
-            timestamp: new Date(ex.timestamp || Date.now())
-          })) : [],
-          vendorContext: rule.vendorContext ? {
-            vendor: rule.vendorContext.vendor || '',
-            successRate: rule.vendorContext.successRate || 0
-          } : undefined
-        })) : [];
-      }
+      // Load matching rules
+      const rules = await prisma.matchingRule.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+      this.rules = rules.map((rule: PrismaMatchingRule) => ({
+        ...rule,
+        createdAt: new Date(rule.createdAt),
+        lastApplied: rule.lastApplied ? new Date(rule.lastApplied) : undefined
+      }));
 
-      // Convert mapped groups to learning events - show complete mapping chains
-      this.learningEvents = this.mappedGroups.map(group => {
-        // Skip single source mappings
-        if (group.isSingleSource || group.specialties.length < 2) {
-          return null;
-        }
-
-        // Create a single event that represents the entire mapping chain
-        return {
-          type: 'manual_map',
-          sourceSpecialty: group.specialties[0].specialty,
-          targetSpecialty: group.specialties[0].specialty, // Same as source since it's the reference
-          confidence: 1,
-          reason: 'Mapping chain',
-          timestamp: group.createdAt,
-          vendor: group.specialties[0].vendor,
-          chainedSpecialties: group.specialties.map(s => ({
-            specialty: s.specialty,
-            vendor: s.vendor
-          }))
-        };
-      }).filter(Boolean) as LearningEvent[];
+      // Load mapped groups
+      const groups = await prisma.mappedGroup.findMany({
+        orderBy: { createdAt: 'desc' }
+      });
+      this.mappedGroups = groups.map((group: PrismaMappedGroup) => ({
+        ...group,
+        createdAt: new Date(group.createdAt)
+      }));
     } catch (error) {
-      console.error('Error loading data:', error);
-      this.learningEvents = [];
-      this.rules = [];
-      this.mappedGroups = [];
+      console.error('Error loading data from database:', error);
     }
   }
 
-  private saveToStorage() {
+  private async saveToStorage() {
     try {
-      // Save learning rules
-      localStorage.setItem(LEARNING_STORAGE_KEY, JSON.stringify({
-        rules: this.rules
-      }));
+      // Save learning events
+      await prisma.learningEvent.createMany({
+        data: this.matchingEvents.map(event => ({
+          type: event.type,
+          sourceSpecialty: event.sourceSpecialty,
+          targetSpecialty: event.targetSpecialty,
+          confidence: event.confidence,
+          reason: event.reason,
+          timestamp: event.timestamp,
+          vendor: event.vendor,
+          patterns: event.patterns,
+          chainedSpecialties: event.chainedSpecialties
+        }))
+      });
 
-      // Save mapped groups back to SpecialtyMappingStudio storage
-      localStorage.setItem(MAPPINGS_STORAGE_KEY, JSON.stringify(this.mappedGroups));
+      // Save matching rules
+      await prisma.matchingRule.createMany({
+        data: this.rules.map(rule => ({
+          pattern: rule.pattern,
+          confidence: rule.confidence,
+          isActive: rule.isActive,
+          createdAt: rule.createdAt,
+          lastApplied: rule.lastApplied,
+          successCount: rule.successCount,
+          failureCount: rule.failureCount,
+          matchType: rule.matchType,
+          examples: rule.examples,
+          vendorContext: rule.vendorContext
+        }))
+      });
+
+      // Save mapped groups
+      await prisma.mappedGroup.createMany({
+        data: this.mappedGroups.map(group => ({
+          specialties: group.specialties,
+          createdAt: group.createdAt,
+          isSingleSource: group.isSingleSource
+        }))
+      });
     } catch (error) {
-      console.error('Error saving data:', error);
+      console.error('Error saving data to database:', error);
     }
   }
 
@@ -236,7 +235,7 @@ export class SpecialtyLearningService {
       patterns
     };
 
-    this.learningEvents.push(event);
+    this.matchingEvents.push(event);
     this.saveToStorage();
     this.generateRules();
   }
@@ -261,7 +260,7 @@ export class SpecialtyLearningService {
       patterns
     };
 
-    this.learningEvents.push(event);
+    this.matchingEvents.push(event);
     this.saveToStorage();
     this.generateRules();
   }
@@ -279,12 +278,12 @@ export class SpecialtyLearningService {
       patterns
     };
 
-    this.learningEvents.push(event);
+    this.matchingEvents.push(event);
     this.saveToStorage();
     this.generateRules();
   }
 
-  getStats(): LearningStats {
+  getStats(): MatchingStats {
     // Calculate total mappings (count all connections in chains)
     const totalMappings = this.mappedGroups.reduce((count, group) => {
       if (!group.isSingleSource && group.specialties.length > 1) {
@@ -344,9 +343,9 @@ export class SpecialtyLearningService {
       totalMappings,
       accuracyRate: 100, // All manual mappings are considered 100% accurate
       activeRules: this.rules.filter(r => r.isActive).length,
-      recentLearnings: this.learningEvents
+      recentMatches: this.matchingEvents
         .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-        .slice(0, 100), // Only return the 100 most recent learnings
+        .slice(0, 100), // Only return the 100 most recent matches
       vendorStats,
       patternSuccess: {
         exact: totalPatterns ? (patternCounts.exact / totalPatterns) * 100 : 0,
@@ -360,7 +359,7 @@ export class SpecialtyLearningService {
   }
 
   private calculateAccuracyRate(): number {
-    const autoMapEvents = this.learningEvents.filter(
+    const autoMapEvents = this.matchingEvents.filter(
       e => e.type === 'auto_map_approve' || e.type === 'auto_map_reject'
     );
     
@@ -380,7 +379,7 @@ export class SpecialtyLearningService {
     );
 
     // Analyze patterns in successful mappings
-    const successfulMappings = this.learningEvents.filter(
+    const successfulMappings = this.matchingEvents.filter(
       e => e.type === 'manual_map' || e.type === 'auto_map_approve'
     );
 
@@ -397,7 +396,7 @@ export class SpecialtyLearningService {
         if (!event.targetSpecialty) return;
 
         // Determine match type based on patterns
-        let matchType: LearningRule['matchType'] = 'similar';
+        let matchType: MatchingRule['matchType'] = 'similar';
         if (event.patterns) {
           if (event.patterns.wordMatch === 1) matchType = 'exact';
           else if (event.patterns.prefixMatch === 1) matchType = 'prefix';
@@ -456,7 +455,7 @@ export class SpecialtyLearningService {
     this.saveToStorage();
   }
 
-  getRules(): LearningRule[] {
+  getRules(): MatchingRule[] {
     return this.rules.sort((a, b) => b.confidence - a.confidence);
   }
 
@@ -473,13 +472,13 @@ export class SpecialtyLearningService {
     targetSpecialty: string;
     confidence: number;
     reason: string;
-    rule?: LearningRule;
+    rule?: MatchingRule;
   }> {
     const suggestions: Array<{
       targetSpecialty: string;
       confidence: number;
       reason: string;
-      rule?: LearningRule;
+      rule?: MatchingRule;
     }> = [];
 
     // Check active rules first
@@ -502,7 +501,7 @@ export class SpecialtyLearningService {
     const normalizedSpecialty = specialty.toLowerCase().trim();
     const patterns = this.analyzePatterns(specialty, specialty); // Get base patterns
 
-    this.learningEvents
+    this.matchingEvents
       .filter(e => e.type === 'manual_map' || e.type === 'auto_map_approve')
       .forEach(event => {
         if (!event.targetSpecialty) return;
@@ -549,7 +548,7 @@ export class SpecialtyLearningService {
 
     // Get all specialties that appear in learning events
     const allSpecialties = new Set(
-      this.learningEvents.flatMap(event => {
+      this.matchingEvents.flatMap(event => {
         const specialties: string[] = [];
         if (event.sourceSpecialty && event.vendor) {
           specialties.push(`${event.sourceSpecialty}|${event.vendor}`);
@@ -572,4 +571,4 @@ export class SpecialtyLearningService {
 }
 
 // Export a singleton instance
-export const specialtyLearningService = new SpecialtyLearningService(); 
+export const specialtyMatchingService = new SpecialtyMatchingService(); 

@@ -5,13 +5,13 @@ import Link from 'next/link';
 
 export default function UploadGuidePage() {
   const downloadSampleCSV = () => {
-    const headers = 'specialty,p25_TCC,p50_TCC,p75_TCC,p90_TCC,p25_wrvu,p50_wrvu,p75_wrvu,p90_wrvu,p25_cf,p50_cf,p75_cf,p90_cf\n';
-    const sampleData = 'Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25\n';
+    const headers = 'specialty,geographic_region,n_orgs,n_incumbents,tcc_p25,tcc_p50,tcc_p75,tcc_p90,wrvu_p25,wrvu_p50,wrvu_p75,wrvu_p90,cf_p25,cf_p50,cf_p75,cf_p90\n';
+    const sampleData = 'Family Medicine,National,150,1250,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25\nInternal Medicine,Northeast,125,980,240000,270000,300000,330000,4500,5000,5500,6000,46.50,49.75,53.00,57.25\n';
     const blob = new Blob([headers + sampleData], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'market_data_template.csv';
+    a.download = 'survey_data_template.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -63,22 +63,43 @@ export default function UploadGuidePage() {
                     <div className="flex items-start">
                       <span className="text-blue-600 mr-2">•</span>
                       <div>
-                        <span className="font-medium">p25_TCC, p50_TCC, p75_TCC, p90_TCC</span>
-                        <p className="text-sm text-gray-600 mt-0.5">Whole numbers (e.g., 250000)</p>
+                        <span className="font-medium">geographic_region</span>
+                        <p className="text-sm text-gray-600 mt-0.5">Text value (e.g., "National")</p>
                       </div>
                     </div>
                     <div className="flex items-start">
                       <span className="text-blue-600 mr-2">•</span>
                       <div>
-                        <span className="font-medium">p25_wrvu, p50_wrvu, p75_wrvu, p90_wrvu</span>
-                        <p className="text-sm text-gray-600 mt-0.5">Whole numbers (e.g., 4800)</p>
+                        <span className="font-medium">n_orgs</span>
+                        <p className="text-sm text-gray-600 mt-0.5">Whole numbers (e.g., 150)</p>
                       </div>
                     </div>
                     <div className="flex items-start">
                       <span className="text-blue-600 mr-2">•</span>
                       <div>
-                        <span className="font-medium">p25_cf, p50_cf, p75_cf, p90_cf</span>
-                        <p className="text-sm text-gray-600 mt-0.5">Decimal numbers (e.g., 48.75)</p>
+                        <span className="font-medium">n_incumbents</span>
+                        <p className="text-sm text-gray-600 mt-0.5">Whole numbers (e.g., 1250)</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      <div>
+                        <span className="font-medium">tcc_p25, tcc_p50, tcc_p75, tcc_p90</span>
+                        <p className="text-sm text-gray-600 mt-0.5">Whole numbers representing annual compensation in USD</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      <div>
+                        <span className="font-medium">wrvu_p25, wrvu_p50, wrvu_p75, wrvu_p90</span>
+                        <p className="text-sm text-gray-600 mt-0.5">Whole numbers representing annual work relative value units</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      <div>
+                        <span className="font-medium">cf_p25, cf_p50, cf_p75, cf_p90</span>
+                        <p className="text-sm text-gray-600 mt-0.5">Decimal numbers representing dollars per RVU</p>
                       </div>
                     </div>
                   </div>
@@ -114,7 +135,7 @@ export default function UploadGuidePage() {
                 </div>
                 <div className="p-4">
                   <code className="text-sm text-gray-600 break-all font-mono">
-                    Family Medicine,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25
+                    Family Medicine,National,150,1250,220000,250000,280000,320000,4200,4800,5400,6200,45.50,48.75,52.00,56.25
                   </code>
                 </div>
               </div>

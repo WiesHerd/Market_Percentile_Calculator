@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowUpTrayIcon,
@@ -20,7 +20,7 @@ interface SurveyUpload {
   uploadTime: string;
   fileName: string;
   fileSize: number;
-  uploadStatus: 'success' | 'failed';
+  uploadStatus: 'success' | 'error' | 'processing';
 }
 
 interface SurveyMappings {
@@ -53,34 +53,16 @@ export default function UploadHistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof SurveyUpload>('uploadTime');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [uploadedSurveys, setUploadedSurveys] = useState<SurveyUpload[]>([]);
 
+  useEffect(() => {
     // Load surveys from localStorage
-  const loadSurveys = (): SurveyUpload[] => {
-    try {
-      const storedSurveys = localStorage.getItem('uploadedSurveys');
-      if (storedSurveys) {
-        const parsedSurveys = JSON.parse(storedSurveys);
-        return parsedSurveys.map((survey: any) => {
-          // Ensure we have a valid date string
-          const uploadTime = survey.uploadTime 
-            ? new Date(survey.uploadTime).toISOString()
-            : new Date().toISOString();
-          
-          return {
-            id: survey.id,
-            vendor: survey.vendor,
-            uploadTime,
-            fileName: `${survey.vendor}_${survey.year || 'survey'}.csv`,
-            fileSize: new Blob([JSON.stringify(survey.data)]).size,
-            uploadStatus: 'success' // All existing records were successful uploads
-          };
-        });
-      }
-    } catch (error) {
-      console.error('Error loading surveys:', error);
+    const storedSurveys = localStorage.getItem('uploadedSurveys');
+    if (storedSurveys) {
+      const parsedSurveys = JSON.parse(storedSurveys);
+      setUploadedSurveys(parsedSurveys);
     }
-    return [];
-  };
+  }, []);
 
   const formatVendorName = (vendor: string): string => {
     const vendorMap: Record<string, string> = {
@@ -122,20 +104,29 @@ export default function UploadHistoryPage() {
     }
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm('Are you sure you want to delete this survey?')) return;
+  const handleDelete = async (surveyId: string) => {
+    if (window.confirm('Are you sure you want to delete this survey?')) {
+      try {
+        // Delete from database first
+        const response = await fetch(`/api/surveys?id=${surveyId}`, {
+          method: 'DELETE',
+        });
 
-    try {
-    const storedSurveys = localStorage.getItem('uploadedSurveys');
-    if (storedSurveys) {
-      const surveys = JSON.parse(storedSurveys);
-        const updatedSurveys = surveys.filter((s: any) => s.id !== id);
-      localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-        // Force re-render
-        setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        if (!response.ok) {
+          throw new Error('Failed to delete survey from database');
+        }
+
+        // If database deletion was successful, update localStorage
+        const storedSurveys = JSON.parse(localStorage.getItem('uploadedSurveys') || '[]');
+        const updatedSurveys = storedSurveys.filter((survey: SurveyUpload) => survey.id !== surveyId);
+        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+
+        // Update the UI
+        setUploadedSurveys(updatedSurveys);
+      } catch (error) {
+        console.error('Error deleting survey:', error);
+        alert('Failed to delete survey. Please try again.');
       }
-    } catch (error) {
-      console.error('Error deleting survey:', error);
     }
   };
 
@@ -192,7 +183,7 @@ export default function UploadHistoryPage() {
     }
   };
 
-  let surveys = loadSurveys();
+  let surveys = uploadedSurveys;
 
   // Apply search filter
   if (searchTerm) {
@@ -202,15 +193,16 @@ export default function UploadHistoryPage() {
     );
   }
 
-  // Apply sorting
-  surveys.sort((a, b) => {
-    let comparison = 0;
-    if (sortField === 'uploadTime') {
-      comparison = new Date(a[sortField]).getTime() - new Date(b[sortField]).getTime();
+  // Sort surveys
+  const sortedSurveys = [...surveys].sort((a: SurveyUpload, b: SurveyUpload) => {
+    const aValue = a[sortField];
+    const bValue = b[sortField];
+    
+    if (sortDirection === 'asc') {
+      return aValue > bValue ? 1 : -1;
     } else {
-      comparison = String(a[sortField]).localeCompare(String(b[sortField]));
+      return aValue < bValue ? 1 : -1;
     }
-    return sortDirection === 'asc' ? comparison : -comparison;
   });
 
   return (
@@ -345,7 +337,7 @@ export default function UploadHistoryPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {surveys.map((survey, index) => (
+                {sortedSurveys.map((survey, index) => (
                   <tr 
                     key={survey.id} 
                     className={`
@@ -363,12 +355,12 @@ export default function UploadHistoryPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {formatDate(survey.uploadTime)}
+                        {(survey.fileSize / 1024).toFixed(1)} KB
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {(survey.fileSize / 1024).toFixed(1)} KB
+                        {formatDate(survey.uploadTime)}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -398,7 +390,7 @@ export default function UploadHistoryPage() {
                     </td>
                   </tr>
                 ))}
-                {surveys.length === 0 && (
+                {sortedSurveys.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-6 py-12">
                       <div className="text-center">

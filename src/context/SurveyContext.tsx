@@ -7,6 +7,9 @@ interface SurveyData {
   vendor: string;
   data: Array<{
     specialty: string;
+    geographic_region: string;
+    n_orgs: number;
+    n_incumbents: number;
     tcc: {
       p25: number;
       p50: number;
@@ -106,57 +109,53 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadSurveyData = () => {
-    try {
-      // Load survey data
-      const storedSurveys = localStorage.getItem('uploadedSurveys');
-      if (storedSurveys) {
-        const parsedSurveys = JSON.parse(storedSurveys);
-        
-        // Transform the surveys into the expected format
-        const transformedSurveys = parsedSurveys.map((survey: any) => {
-          // Get all unique specialties from the survey data
-          const specialties = Array.from(new Set(
-            survey.data
-              .map((row: any) => String(row[survey.mappings.specialty] || ''))
-              .filter((s: string) => s && s.trim() !== '')
-          ));
+    const surveys = localStorage.getItem('surveys');
+    if (surveys) {
+      const parsedSurveys = JSON.parse(surveys);
+      const transformedSurveys = parsedSurveys.map((survey: any) => {
+        // Get all unique specialties from the survey data
+        const specialties = Array.from(new Set(
+          survey.data
+            .map((row: any) => String(row[survey.mappings.specialty] || ''))
+            .filter((s: string) => s && s.trim() !== '')
+        ));
 
-          // Create the transformed survey object
-          return {
-            vendor: survey.vendor,
-            data: survey.data.map((row: any) => {
-              const specialty = String(row[survey.mappings.specialty] || '').trim();
-              if (!specialty) return null;
+        // Create the transformed survey object
+        return {
+          vendor: survey.vendor,
+          data: survey.data.map((row: any) => {
+            const specialty = String(row[survey.mappings.specialty] || '').trim();
+            if (!specialty) return null;
 
-              return {
-                specialty,
-                tcc: {
-                  p25: parseFloat(String(row[survey.mappings.tcc.p25] || '0')),
-                  p50: parseFloat(String(row[survey.mappings.tcc.p50] || '0')),
-                  p75: parseFloat(String(row[survey.mappings.tcc.p75] || '0')),
-                  p90: parseFloat(String(row[survey.mappings.tcc.p90] || '0')),
-                },
-                wrvu: {
-                  p25: parseFloat(String(row[survey.mappings.wrvu.p25] || '0')),
-                  p50: parseFloat(String(row[survey.mappings.wrvu.p50] || '0')),
-                  p75: parseFloat(String(row[survey.mappings.wrvu.p75] || '0')),
-                  p90: parseFloat(String(row[survey.mappings.wrvu.p90] || '0')),
-                },
-                cf: {
-                  p25: parseFloat(String(row[survey.mappings.cf.p25] || '0')),
-                  p50: parseFloat(String(row[survey.mappings.cf.p50] || '0')),
-                  p75: parseFloat(String(row[survey.mappings.cf.p75] || '0')),
-                  p90: parseFloat(String(row[survey.mappings.cf.p90] || '0')),
-                }
-              };
-            }).filter((row: any) => row !== null) // Remove null entries
-          };
-        });
+            return {
+              specialty,
+              geographic_region: String(row[survey.mappings.geographic_region] || 'National').trim(),
+              n_orgs: parseInt(String(row[survey.mappings.n_orgs] || '0'), 10),
+              n_incumbents: parseInt(String(row[survey.mappings.n_incumbents] || '0'), 10),
+              tcc: {
+                p25: parseFloat(String(row[survey.mappings.tcc.p25] || '0')),
+                p50: parseFloat(String(row[survey.mappings.tcc.p50] || '0')),
+                p75: parseFloat(String(row[survey.mappings.tcc.p75] || '0')),
+                p90: parseFloat(String(row[survey.mappings.tcc.p90] || '0')),
+              },
+              wrvu: {
+                p25: parseFloat(String(row[survey.mappings.wrvu.p25] || '0')),
+                p50: parseFloat(String(row[survey.mappings.wrvu.p50] || '0')),
+                p75: parseFloat(String(row[survey.mappings.wrvu.p75] || '0')),
+                p90: parseFloat(String(row[survey.mappings.wrvu.p90] || '0')),
+              },
+              cf: {
+                p25: parseFloat(String(row[survey.mappings.cf.p25] || '0')),
+                p50: parseFloat(String(row[survey.mappings.cf.p50] || '0')),
+                p75: parseFloat(String(row[survey.mappings.cf.p75] || '0')),
+                p90: parseFloat(String(row[survey.mappings.cf.p90] || '0')),
+              }
+            };
+          }).filter((row: any) => row !== null) // Remove null entries
+        };
+      });
 
-        setSurveyData(transformedSurveys);
-      }
-    } catch (error) {
-      console.error('Error loading survey data:', error);
+      setSurveyData(transformedSurveys);
     }
   };
 
