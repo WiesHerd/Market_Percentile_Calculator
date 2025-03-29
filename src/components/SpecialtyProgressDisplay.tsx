@@ -1,44 +1,56 @@
 import { useEffect, useState } from 'react';
+import { PrismaClient } from '@prisma/client';
 
-interface SpecialtyProgressDisplayProps {}
+const prisma = new PrismaClient();
 
-export function SpecialtyProgressDisplay({}: SpecialtyProgressDisplayProps) {
+interface SpecialtyProgressDisplayProps {
+  surveyId: string;
+}
+
+export function SpecialtyProgressDisplay({ surveyId }: SpecialtyProgressDisplayProps) {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    // Get progress from localStorage
-    const getProgress = () => {
+    const getProgress = async () => {
       try {
-        const uploadedSurveys = JSON.parse(localStorage.getItem('uploadedSurveys') || '[]');
-        const mappedSpecialties = JSON.parse(localStorage.getItem('mappedSpecialties') || '[]');
+        // Get total unique specialties for this survey
+        const totalSpecialties = await prisma.surveyData.findMany({
+          where: {
+            surveyId: surveyId
+          },
+          select: {
+            specialty: true
+          },
+          distinct: ['specialty']
+        });
+
+        // Get mapped specialties for this survey
+        const mappedSpecialties = await prisma.specialtyMapping.findMany({
+          where: {
+            surveyId: surveyId
+          },
+          select: {
+            sourceSpecialty: true
+          },
+          distinct: ['sourceSpecialty']
+        });
+
+        if (totalSpecialties.length === 0) return 0;
         
-        if (uploadedSurveys.length === 0) return 0;
-        
-        // Calculate progress based on mapped specialties vs total specialties
-        const totalSpecialties = new Set(uploadedSurveys.flatMap((survey: any) => 
-          survey.data.map((row: any) => row.specialty)
-        )).size;
-        
-        const mappedCount = mappedSpecialties.length;
-        return Math.round((mappedCount / totalSpecialties) * 100);
+        const progress = Math.round((mappedSpecialties.length / totalSpecialties.length) * 100);
+        setProgress(progress);
       } catch (error) {
         console.error('Error calculating specialty mapping progress:', error);
-        return 0;
+        setProgress(0);
       }
     };
 
-    setProgress(getProgress());
+    getProgress();
 
-    // Set up storage event listener
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'mappedSpecialties' || e.key === 'uploadedSurveys') {
-        setProgress(getProgress());
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+    // Set up an interval to check progress periodically
+    const interval = setInterval(getProgress, 5000);
+    return () => clearInterval(interval);
+  }, [surveyId]);
 
   if (progress === 0) return null;
 

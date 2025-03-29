@@ -22,6 +22,9 @@ import type { SpecialtyMetadata } from "@/types/specialty";
 import type { Specialty } from "@/types/specialty";
 import { useDebounce } from 'use-debounce';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 interface SpecialtyMetrics {
   tcc?: {
@@ -71,20 +74,16 @@ interface MappedGroup {
   specialties: SpecialtyData[];
   createdAt: Date;
   isSingleSource?: boolean;
+  notes?: string;
 }
 
 interface SpecialtyMappingStudioProps {
   surveys: Array<{
     id: string;
     vendor: string;
-    data: Array<{
-      specialty: string;
-      tcc?: SpecialtyMetrics['tcc'];
-      wrvu?: SpecialtyMetrics['wrvu'];
-      cf?: SpecialtyMetrics['cf'];
-    }>;
+    data: any[];
   }>;
-  onMappingChange: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => void;
+  onMappingChange?: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => void;
   onSave?: (mappings: Record<string, string[]>) => void;
   initialMappings?: Record<string, string[]>;
 }
@@ -241,21 +240,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // State declarations
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
-  const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>(() => {
-    try {
-      const savedMappings = localStorage.getItem(STORAGE_KEY);
-      if (savedMappings) {
-        const parsed = JSON.parse(savedMappings);
-        return parsed.map((group: any) => ({
-          ...group,
-          createdAt: new Date(group.createdAt)
-        }));
-      }
-    } catch (error) {
-      console.error('Error loading saved mappings:', error);
-    }
-    return [];
-  });
+  const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>([]);
   const [autoMapSuggestions, setAutoMapSuggestions] = useState<AutoMapSuggestion | null>(null);
   const [viewMode, setViewMode] = useState<'auto' | 'manual' | 'mapped'>('auto');
   const [allAutoMappings, setAllAutoMappings] = useState<Array<{
@@ -678,7 +663,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     });
   };
 
-  // Update the acceptSuggestedMatches function to handle multiple suggestions
+  // Update the acceptSuggestedMatches function
   const acceptSuggestedMatches = (suggestion: AutoMapSuggestion, matchesToAccept?: Array<{specialty: SpecialtyData; confidence: number; reason: string}>) => {
     const selectedMatches = matchesToAccept || suggestion.suggestedMatches;
     
@@ -704,7 +689,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     
     // Notify parent component
     const mappedSpecialties = selectedMatches.map(match => match.specialty.specialty);
-    onMappingChange(suggestion.sourceSpecialty.specialty, mappedSpecialties);
+    if (onMappingChange) {
+      onMappingChange(suggestion.sourceSpecialty.specialty, mappedSpecialties);
+    }
     
     toast.success(`Created new mapping group with ${selectedMatches.length} matches`);
   };
@@ -861,6 +848,15 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     } else {
       toast.success('Match rejected');
     }
+    
+    // Update mappedGroups (this will trigger the save effect)
+    setMappedGroups(prev => [...prev, newGroup]);
+    if (onMappingChange) {
+      onMappingChange(
+        mapping.sourceSpecialty.specialty, 
+        approvedMatches.map(m => m.specialty.specialty)
+      );
+    }
   };
 
   // Effect to handle mapping group creation when matches are updated
@@ -892,10 +888,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         
         // Update mappedGroups (this will trigger the save effect)
         setMappedGroups(prev => [...prev, newGroup]);
-        onMappingChange(
-          mapping.sourceSpecialty.specialty, 
-          approvedMatches.map(m => m.specialty.specialty)
-        );
+        if (onMappingChange) {
+          onMappingChange(
+            mapping.sourceSpecialty.specialty, 
+            approvedMatches.map(m => m.specialty.specialty)
+          );
+        }
 
         // Remove this mapping from auto-mappings
         setAllAutoMappings(prev => 
@@ -1308,11 +1306,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     // Only notify of mapping change when creating a new mapping
     const sourceSpecialty = selectedItems[0].specialty;
     const mappedSpecialties = selectedItems.slice(1).map(item => item.specialty);
-    onMappingChange(sourceSpecialty, mappedSpecialties);
+    if (onMappingChange) {
+      onMappingChange(sourceSpecialty, mappedSpecialties);
+    }
     
     toast.success(selectedItems.length === 1 
       ? 'Created single source specialty mapping'
-      : 'Created new mapping group');
+      : 'Created new specialty mapping group');
   };
 
   // Function to get available specialties for mapping
@@ -1379,31 +1379,108 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     }
   };
 
-  // Add a new effect to save mappings whenever they change
+  // Load mappings from Prisma on mount
   useEffect(() => {
-    try {
-      // Save to localStorage
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mappedGroups));
-    } catch (error) {
-      console.error('Error saving mappings:', error);
-    }
-  }, [mappedGroups]);
+    const loadMappings = async () => {
+      try {
+        // Get all specialty mappings for the current surveys
+        const surveyIds = surveys.map(s => s.id);
+        const dbMappings = await prisma.specialtyMapping.findMany({
+          where: {
+            surveyId: {
+              in: surveyIds
+            }
+          }
+        });
 
-  // Separate effect for onSave callback
+        // Convert Prisma mappings to MappedGroup format
+        const groupedMappings = new Map<string, MappedGroup>();
+        
+        dbMappings.forEach(mapping => {
+          const key = mapping.sourceSpecialty;
+          if (!groupedMappings.has(key)) {
+            groupedMappings.set(key, {
+              id: `${key}-${Date.now()}`, // Generate a unique ID
+              specialties: [{
+                specialty: mapping.sourceSpecialty,
+                vendor: surveys.find(s => s.id === mapping.surveyId)?.vendor || 'unknown'
+              }],
+              createdAt: new Date(),
+              notes: mapping.notes || '',
+              isSingleSource: false
+            });
+          }
+          
+          const group = groupedMappings.get(key)!;
+          group.specialties.push({
+            specialty: mapping.mappedSpecialty,
+            vendor: surveys.find(s => s.id === mapping.surveyId)?.vendor || 'unknown'
+          });
+        });
+
+        setMappedGroups(Array.from(groupedMappings.values()));
+      } catch (error) {
+        console.error('Error loading specialty mappings:', error);
+        toast.error('Failed to load specialty mappings');
+      }
+    };
+
+    loadMappings();
+  }, [surveys]);
+
+  // Save mappings to Prisma when they change
   useEffect(() => {
-    if (onSave) {
-      const simpleMappings: Record<string, string[]> = {};
-      mappedGroups.forEach(group => {
-        const sourceSpecialty = group.specialties[0];
-        if (sourceSpecialty) {
-          simpleMappings[sourceSpecialty.specialty] = group.specialties
-            .slice(1)
-            .map(s => s.specialty);
+    const saveMappings = async () => {
+      try {
+        if (!surveys.length) return;
+        const surveyId = surveys[0].id; // Using first survey as reference
+
+        // First, delete all existing mappings for these surveys
+        await prisma.specialtyMapping.deleteMany({
+          where: {
+            surveyId: surveyId
+          }
+        });
+
+        // Then create new mappings
+        for (const group of mappedGroups) {
+          const sourceSpecialty = group.specialties[0];
+          const mappedSpecialties = group.specialties.slice(1);
+
+          for (const mappedSpecialty of mappedSpecialties) {
+            await prisma.specialtyMapping.create({
+              data: {
+                surveyId: surveyId,
+                sourceSpecialty: sourceSpecialty.specialty,
+                mappedSpecialty: mappedSpecialty.specialty,
+                confidence: 1, // Default high confidence for manual mappings
+                notes: group.notes
+              }
+            });
+          }
         }
-      });
-      onSave(simpleMappings);
-    }
-  }, [mappedGroups, onSave]);
+
+        // Notify parent component
+        if (onSave) {
+          const simpleMappings: Record<string, string[]> = {};
+          mappedGroups.forEach(group => {
+            const sourceSpecialty = group.specialties[0];
+            if (sourceSpecialty) {
+              simpleMappings[sourceSpecialty.specialty] = group.specialties
+                .slice(1)
+                .map(s => s.specialty);
+            }
+          });
+          onSave(simpleMappings);
+        }
+      } catch (error) {
+        console.error('Error saving specialty mappings:', error);
+        toast.error('Failed to save specialty mappings');
+      }
+    };
+
+    saveMappings();
+  }, [mappedGroups, surveys, onSave]);
 
   // Add new function to create individual single mappings
   const createIndividualSingleMappings = (): void => {
@@ -1432,7 +1509,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       
       setMappedGroups(prev => [...prev, newGroup]);
       // Notify of mapping change for each individual mapping
-      onMappingChange(item.specialty, []);
+      if (onMappingChange) {
+        onMappingChange(item.specialty, []);
+      }
     });
 
     setSelectedSpecialties(new Set());

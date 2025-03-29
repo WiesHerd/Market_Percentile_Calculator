@@ -1,197 +1,148 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { MappingState } from '@/types/mapping';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
-interface SurveyData {
-  vendor: string;
-  data: Array<{
-    specialty: string;
-    geographic_region: string;
-    n_orgs: number;
-    n_incumbents: number;
-    tcc: {
-      p25: number;
-      p50: number;
-      p75: number;
-      p90: number;
-    };
-    wrvu: {
-      p25: number;
-      p50: number;
-      p75: number;
-      p90: number;
-    };
-    cf: {
-      p25: number;
-      p50: number;
-      p75: number;
-      p90: number;
-    };
-  }>;
+interface MappingState {
+  [sourceSpecialty: string]: {
+    mappedSpecialties: string[];
+    notes?: string;
+    isSingleSource?: boolean;
+  };
 }
 
 interface SurveyContextType {
   specialtyMappings: MappingState;
-  surveyData: SurveyData[];
-  confidenceScores: Record<string, number>;
-  updateSpecialtyMapping: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => void;
-  loadSurveyData: () => void;
+  updateSpecialtyMapping: (surveyId: string, sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => Promise<void>;
+  loadSurveyData: (surveyId: string) => Promise<void>;
 }
 
 const SurveyContext = createContext<SurveyContextType | undefined>(undefined);
 
-// Use the existing storage key from SpecialtyMappingStudio
-const STORAGE_KEY = 'specialty-mappings-v1';
-
 export function SurveyProvider({ children }: { children: React.ReactNode }) {
   const [specialtyMappings, setSpecialtyMappings] = useState<MappingState>({});
-  const [surveyData, setSurveyData] = useState<SurveyData[]>([]);
-  const [confidenceScores, setConfidenceScores] = useState<Record<string, number>>({});
 
-  // Load specialty mappings from localStorage on mount and when storage changes
+  // Load specialty mappings from API on mount
   useEffect(() => {
-    const loadMappings = () => {
+    const loadMappings = async () => {
       try {
-        const savedMappings = localStorage.getItem(STORAGE_KEY);
-        if (savedMappings) {
-          const parsedMappings = JSON.parse(savedMappings);
-          // Convert MappedGroup[] to MappingState
-          const mappingState: MappingState = {};
-          parsedMappings.forEach((group: any) => {
-            const sourceSpecialty = group.specialties[0].specialty;
-            const mappedSpecialties = group.specialties.slice(1).map((s: any) => s.specialty);
-            mappingState[sourceSpecialty] = {
-              mappedSpecialties,
-              notes: group.notes,
-              isSingleSource: group.isSingleSource
-            };
-          });
-          setSpecialtyMappings(mappingState);
+        const response = await fetch('/api/specialty-mappings');
+        if (!response.ok) {
+          throw new Error('Failed to fetch specialty mappings');
         }
+        const dbMappings = await response.json();
+
+        // Convert API response to MappingState format
+        const mappingState: MappingState = {};
+        dbMappings.forEach((mapping: { sourceSpecialty: string; mappedSpecialty: string; notes?: string }) => {
+          if (!mappingState[mapping.sourceSpecialty]) {
+            mappingState[mapping.sourceSpecialty] = {
+              mappedSpecialties: [],
+              notes: mapping.notes
+            };
+          }
+          mappingState[mapping.sourceSpecialty].mappedSpecialties.push(mapping.mappedSpecialty);
+        });
+
+        setSpecialtyMappings(mappingState);
       } catch (error) {
         console.error('Error loading specialty mappings:', error);
+        toast.error('Failed to load specialty mappings');
       }
     };
 
     loadMappings();
-
-    // Listen for changes to specialty-mappings-v1
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY) {
-        loadMappings();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  const updateSpecialtyMapping = (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => {
-    console.log('Updating specialty mapping:', {
-      sourceSpecialty,
-      mappedSpecialties,
-      notes
-    });
-
-    const updatedMappings = {
-      ...specialtyMappings,
-      [sourceSpecialty]: {
-        mappedSpecialties,
-        notes
-      }
-    };
-    
-    console.log('New specialty mappings state:', updatedMappings);
-    
-    // Update state
-    setSpecialtyMappings(updatedMappings);
-  };
-
-  const loadSurveyData = () => {
-    const surveys = localStorage.getItem('surveys');
-    if (surveys) {
-      const parsedSurveys = JSON.parse(surveys);
-      const transformedSurveys = parsedSurveys.map((survey: any) => {
-        // Get all unique specialties from the survey data
-        const specialties = Array.from(new Set(
-          survey.data
-            .map((row: any) => String(row[survey.mappings.specialty] || ''))
-            .filter((s: string) => s && s.trim() !== '')
-        ));
-
-        // Create the transformed survey object
-        return {
-          vendor: survey.vendor,
-          data: survey.data.map((row: any) => {
-            const specialty = String(row[survey.mappings.specialty] || '').trim();
-            if (!specialty) return null;
-
-            return {
-              specialty,
-              geographic_region: String(row[survey.mappings.geographic_region] || 'National').trim(),
-              n_orgs: parseInt(String(row[survey.mappings.n_orgs] || '0'), 10),
-              n_incumbents: parseInt(String(row[survey.mappings.n_incumbents] || '0'), 10),
-              tcc: {
-                p25: parseFloat(String(row[survey.mappings.tcc.p25] || '0')),
-                p50: parseFloat(String(row[survey.mappings.tcc.p50] || '0')),
-                p75: parseFloat(String(row[survey.mappings.tcc.p75] || '0')),
-                p90: parseFloat(String(row[survey.mappings.tcc.p90] || '0')),
-              },
-              wrvu: {
-                p25: parseFloat(String(row[survey.mappings.wrvu.p25] || '0')),
-                p50: parseFloat(String(row[survey.mappings.wrvu.p50] || '0')),
-                p75: parseFloat(String(row[survey.mappings.wrvu.p75] || '0')),
-                p90: parseFloat(String(row[survey.mappings.wrvu.p90] || '0')),
-              },
-              cf: {
-                p25: parseFloat(String(row[survey.mappings.cf.p25] || '0')),
-                p50: parseFloat(String(row[survey.mappings.cf.p50] || '0')),
-                p75: parseFloat(String(row[survey.mappings.cf.p75] || '0')),
-                p90: parseFloat(String(row[survey.mappings.cf.p90] || '0')),
-              }
-            };
-          }).filter((row: any) => row !== null) // Remove null entries
-        };
+  const updateSpecialtyMapping = async (surveyId: string, sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => {
+    try {
+      const response = await fetch('/api/specialty-mappings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          surveyId,
+          sourceSpecialty,
+          mappedSpecialties,
+          notes
+        }),
       });
 
-      setSurveyData(transformedSurveys);
+      if (!response.ok) {
+        throw new Error('Failed to update specialty mappings');
+      }
+
+      // Update state
+      setSpecialtyMappings(prev => ({
+        ...prev,
+        [sourceSpecialty]: {
+          mappedSpecialties,
+          notes
+        }
+      }));
+
+      toast.success('Specialty mapping updated successfully');
+    } catch (error) {
+      console.error('Error updating specialty mapping:', error);
+      toast.error('Failed to update specialty mapping');
     }
   };
 
-  // Add effect to reload data when localStorage changes
-  useEffect(() => {
-    loadSurveyData();
-    
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'uploadedSurveys') {
-        loadSurveyData();
+  const loadSurveyData = async (surveyId: string) => {
+    try {
+      const response = await fetch(`/api/surveys/${surveyId}/data`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch survey data');
       }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+      const data = await response.json();
 
-  const value = {
-    specialtyMappings,
-    surveyData,
-    confidenceScores,
-    updateSpecialtyMapping,
-    loadSurveyData,
+      if (!data.surveyData?.length) {
+        toast.error('No survey data found');
+        return;
+      }
+
+      // Load associated specialty mappings
+      const mappingsResponse = await fetch(`/api/surveys/${surveyId}/specialty-mappings`);
+      if (!mappingsResponse.ok) {
+        throw new Error('Failed to fetch specialty mappings');
+      }
+      const mappings = await mappingsResponse.json();
+
+      // Convert to MappingState format
+      const mappingState: MappingState = {};
+      mappings.forEach((mapping: { sourceSpecialty: string; mappedSpecialty: string; notes?: string }) => {
+        if (!mappingState[mapping.sourceSpecialty]) {
+          mappingState[mapping.sourceSpecialty] = {
+            mappedSpecialties: [],
+            notes: mapping.notes
+          };
+        }
+        mappingState[mapping.sourceSpecialty].mappedSpecialties.push(mapping.mappedSpecialty);
+      });
+
+      setSpecialtyMappings(mappingState);
+    } catch (error) {
+      console.error('Error loading survey data:', error);
+      toast.error('Failed to load survey data');
+    }
   };
 
   return (
-    <SurveyContext.Provider value={value}>
+    <SurveyContext.Provider value={{
+      specialtyMappings,
+      updateSpecialtyMapping,
+      loadSurveyData
+    }}>
       {children}
     </SurveyContext.Provider>
   );
 }
 
-export function useSurveyContext() {
+export function useSurvey() {
   const context = useContext(SurveyContext);
   if (context === undefined) {
-    throw new Error('useSurveyContext must be used within a SurveyProvider');
+    throw new Error('useSurvey must be used within a SurveyProvider');
   }
   return context;
 } 

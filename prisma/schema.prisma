@@ -14,6 +14,7 @@ model Survey {
   uploadDate        DateTime           @default(now())
   status            SurveyStatus       @default(PROCESSING)
   columnMappings    Json
+  mappingProgress   Float              @default(0)
   specialtyMappings SpecialtyMapping[]
   data              SurveyData[]
 

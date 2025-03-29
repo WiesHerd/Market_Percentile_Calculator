@@ -56,12 +56,21 @@ export default function UploadHistoryPage() {
   const [uploadedSurveys, setUploadedSurveys] = useState<SurveyUpload[]>([]);
 
   useEffect(() => {
-    // Load surveys from localStorage
-    const storedSurveys = localStorage.getItem('uploadedSurveys');
-    if (storedSurveys) {
-      const parsedSurveys = JSON.parse(storedSurveys);
-      setUploadedSurveys(parsedSurveys);
-    }
+    const loadSurveys = async () => {
+      try {
+        // Fetch surveys from the API
+        const response = await fetch('/api/surveys');
+        if (!response.ok) {
+          throw new Error('Failed to fetch surveys');
+        }
+        const dbSurveys = await response.json();
+        setUploadedSurveys(dbSurveys);
+      } catch (error) {
+        console.error('Error loading surveys:', error);
+      }
+    };
+
+    loadSurveys();
   }, []);
 
   const formatVendorName = (vendor: string): string => {
@@ -107,7 +116,7 @@ export default function UploadHistoryPage() {
   const handleDelete = async (surveyId: string) => {
     if (window.confirm('Are you sure you want to delete this survey?')) {
       try {
-        // Delete from database first
+        // Delete from database
         const response = await fetch(`/api/surveys?id=${surveyId}`, {
           method: 'DELETE',
         });
@@ -116,27 +125,19 @@ export default function UploadHistoryPage() {
           throw new Error('Failed to delete survey from database');
         }
 
-        // If database deletion was successful, update localStorage
-        const storedSurveys = JSON.parse(localStorage.getItem('uploadedSurveys') || '[]');
-        const updatedSurveys = storedSurveys.filter((survey: SurveyUpload) => survey.id !== surveyId);
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-
         // Update the UI
-        setUploadedSurveys(updatedSurveys);
+        setUploadedSurveys(prev => prev.filter(survey => survey.id !== surveyId));
+        toast.success('Survey deleted successfully');
       } catch (error) {
         console.error('Error deleting survey:', error);
-        alert('Failed to delete survey. Please try again.');
+        toast.error('Failed to delete survey. Please try again.');
       }
     }
   };
 
   const handleExport = (surveyId: string) => {
     try {
-      const storedSurveys = localStorage.getItem('uploadedSurveys');
-      if (!storedSurveys) return;
-
-      const surveys = JSON.parse(storedSurveys);
-      const survey = surveys.find((s: any) => s.id === surveyId);
+      const survey = uploadedSurveys.find(s => s.id === surveyId);
       if (!survey) return;
 
       // Create CSV content
@@ -147,20 +148,20 @@ export default function UploadHistoryPage() {
         'CF P25', 'CF P50', 'CF P75', 'CF P90'
       ];
 
-      const rows = survey.data.map((row: SurveyRow) => [
-        row[survey.mappings.specialty],
-        row[survey.mappings.tcc.p25],
-        row[survey.mappings.tcc.p50],
-        row[survey.mappings.tcc.p75],
-        row[survey.mappings.tcc.p90],
-        row[survey.mappings.wrvu.p25],
-        row[survey.mappings.wrvu.p50],
-        row[survey.mappings.wrvu.p75],
-        row[survey.mappings.wrvu.p90],
-        row[survey.mappings.cf.p25],
-        row[survey.mappings.cf.p50],
-        row[survey.mappings.cf.p75],
-        row[survey.mappings.cf.p90]
+      const rows = survey.data.map((row: any) => [
+        row.specialty,
+        row.tccP25,
+        row.tccP50,
+        row.tccP75,
+        row.tccP90,
+        row.wrvuP25,
+        row.wrvuP50,
+        row.wrvuP75,
+        row.wrvuP90,
+        row.cfP25,
+        row.cfP50,
+        row.cfP75,
+        row.cfP90
       ]);
 
       const csvContent = [

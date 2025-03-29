@@ -56,10 +56,42 @@ export interface SurveyMapping {
 }
 
 export interface UploadedSurvey {
+  id: string;
   vendor: string;
   year: string;
-  data: SurveyData[];
-  mappings: SurveyMapping;
+  status: string;
+  uploadDate: string;
+  data: {
+    id: string;
+    surveyId: string;
+    specialty: string;
+    providerType: string | null;
+    region: string | null;
+    nOrgs: number | null;
+    nIncumbents: number | null;
+    tccP25: number | null;
+    tccP50: number | null;
+    tccP75: number | null;
+    tccP90: number | null;
+    wrvuP25: number | null;
+    wrvuP50: number | null;
+    wrvuP75: number | null;
+    wrvuP90: number | null;
+    cfP25: number | null;
+    cfP50: number | null;
+    cfP75: number | null;
+    cfP90: number | null;
+  }[];
+  specialtyMappings: {
+    id: string;
+    surveyId: string;
+    sourceSpecialty: string;
+    mappedSpecialty: string;
+    confidence: number;
+    notes: string | null;
+    isVerified: boolean;
+  }[];
+  columnMappings: Record<string, any>;
 }
 
 export interface CustomBlendSelection {

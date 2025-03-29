@@ -44,70 +44,73 @@ export default function ViewSurveysPage() {
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const loadSurveys = () => {
+    const loadSurveys = async () => {
       try {
         setLoading(true);
-        const storedSurveys = localStorage.getItem('uploadedSurveys');
-        if (storedSurveys) {
-          const parsedSurveys = JSON.parse(storedSurveys);
-          // Transform the data into the expected format
-          const transformedSurveys: UploadedSurvey[] = parsedSurveys.map((survey: any) => {
-            // Get all unique specialties from the survey data
-            const specialties = Array.from(new Set(
-              survey.data
-                .map((row: any) => String(row[survey.mappings.specialty] || ''))
-                .filter(Boolean)
-            )) as string[];
+        // Fetch surveys from the API
+        const response = await fetch('/api/surveys');
+        if (!response.ok) {
+          throw new Error('Failed to fetch surveys');
+        }
+        const dbSurveys = await response.json();
+        
+        // Transform the data into the expected format
+        const transformedSurveys: UploadedSurvey[] = dbSurveys.map((survey: any) => {
+          // Get all unique specialties from the survey data
+          const specialties = Array.from(new Set(
+            survey.data
+              .map((row: any) => String(row.specialty || ''))
+              .filter(Boolean)
+          )) as string[];
 
-            // Create the transformed survey data
-            return {
-              id: survey.id,
-              vendor: survey.vendor,
-              year: survey.year,
-              data: specialties.map((specialty) => {
-                // Find the row that matches this specialty
-                const row = survey.data.find((r: any) => 
-                  String(r[survey.mappings.specialty]) === specialty
-                );
+          // Create the transformed survey data
+          return {
+            id: survey.id,
+            vendor: survey.vendor,
+            year: survey.year,
+            data: specialties.map((specialty) => {
+              // Find the row that matches this specialty
+              const row = survey.data.find((r: any) => 
+                String(r.specialty) === specialty
+              );
 
-                if (!row) return { specialty };
+              if (!row) return { specialty };
 
-                // Transform the data using the column mappings
-                return {
-                  specialty,
-                  tcc: {
-                    p25: parseFloat(String(row[survey.mappings.tcc.p25] || '0')),
-                    p50: parseFloat(String(row[survey.mappings.tcc.p50] || '0')),
-                    p75: parseFloat(String(row[survey.mappings.tcc.p75] || '0')),
-                    p90: parseFloat(String(row[survey.mappings.tcc.p90] || '0'))
-                  },
-                  wrvu: {
-                    p25: parseFloat(String(row[survey.mappings.wrvu.p25] || '0')),
-                    p50: parseFloat(String(row[survey.mappings.wrvu.p50] || '0')),
-                    p75: parseFloat(String(row[survey.mappings.wrvu.p75] || '0')),
-                    p90: parseFloat(String(row[survey.mappings.wrvu.p90] || '0'))
-                  },
-                  cf: {
-                    p25: parseFloat(String(row[survey.mappings.cf.p25] || '0')),
-                    p50: parseFloat(String(row[survey.mappings.cf.p50] || '0')),
-                    p75: parseFloat(String(row[survey.mappings.cf.p75] || '0')),
-                    p90: parseFloat(String(row[survey.mappings.cf.p90] || '0'))
-                  }
-                };
-              })
-            };
-          });
+              // Transform the data using the database fields
+              return {
+                specialty,
+                tcc: {
+                  p25: row.tccP25 || 0,
+                  p50: row.tccP50 || 0,
+                  p75: row.tccP75 || 0,
+                  p90: row.tccP90 || 0
+                },
+                wrvu: {
+                  p25: row.wrvuP25 || 0,
+                  p50: row.wrvuP50 || 0,
+                  p75: row.wrvuP75 || 0,
+                  p90: row.wrvuP90 || 0
+                },
+                cf: {
+                  p25: row.cfP25 || 0,
+                  p50: row.cfP50 || 0,
+                  p75: row.cfP75 || 0,
+                  p90: row.cfP90 || 0
+                }
+              };
+            })
+          };
+        });
 
-          setSurveys(transformedSurveys);
-          
-          // Get surveyId from URL parameter
-          const surveyId = searchParams.get('surveyId');
-          if (surveyId) {
-            const selectedSurvey = transformedSurveys.find(s => s.id === surveyId);
-            setSelectedSurvey(selectedSurvey || transformedSurveys[0]);
-          } else if (transformedSurveys.length > 0) {
-            setSelectedSurvey(transformedSurveys[0]);
-          }
+        setSurveys(transformedSurveys);
+        
+        // Get surveyId from URL parameter
+        const surveyId = searchParams.get('surveyId');
+        if (surveyId) {
+          const selectedSurvey = transformedSurveys.find(s => s.id === surveyId);
+          setSelectedSurvey(selectedSurvey || transformedSurveys[0]);
+        } else if (transformedSurveys.length > 0) {
+          setSelectedSurvey(transformedSurveys[0]);
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
