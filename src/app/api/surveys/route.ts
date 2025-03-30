@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import Papa from 'papaparse';
 
 export async function GET() {
   try {
@@ -42,86 +43,160 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { vendor, year, data, specialtyMappings, columnMappings } = await request.json();
+    const formData = await req.formData();
+    const file = formData.get('file') as File;
+    const vendor = formData.get('vendor') as string;
+    const year = formData.get('year') as string;
 
-    if (!vendor || !year || !data || !columnMappings) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!file || !vendor || !year) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
     }
 
-    // Transform and validate the data
-    const transformedData = data.map((row: any) => {
-      // Convert numeric strings to numbers and handle empty values
-      const transformValue = (value: any) => {
-        if (value === undefined || value === null || value === '') return null;
-        // Remove any commas and dollar signs from the string
-        if (typeof value === 'string') {
-          value = value.replace(/[$,]/g, '');
-        }
-        const num = Number(value);
-        return isNaN(num) ? null : num;
-      };
-
-      // Create the transformed row with default field mappings
-      const transformedRow = {
-        specialty: row.specialty || '',
-        providerType: row.provider_type || null,
-        region: row.geographic_region || null,
-        nOrgs: transformValue(row.n_orgs),
-        nIncumbents: transformValue(row.n_incumbents),
-        tccP25: transformValue(row.tccP25),
-        tccP50: transformValue(row.tccP50),
-        tccP75: transformValue(row.tccP75),
-        tccP90: transformValue(row.tccP90),
-        wrvuP25: transformValue(row.wrvuP25),
-        wrvuP50: transformValue(row.wrvuP50),
-        wrvuP75: transformValue(row.wrvuP75),
-        wrvuP90: transformValue(row.wrvuP90),
-        cfP25: transformValue(row.cfP25),
-        cfP50: transformValue(row.cfP50),
-        cfP75: transformValue(row.cfP75),
-        cfP90: transformValue(row.cfP90)
-      };
-
-      // Log for debugging
-      console.log('Original row:', row);
-      console.log('Transformed row:', transformedRow);
-
-      return transformedRow;
+    const text = await file.text();
+    const { data, errors } = Papa.parse(text, {
+      header: true,
+      skipEmptyLines: true,
     });
 
-    // Create the survey with its data and mappings
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { error: 'Error parsing CSV file', details: errors },
+        { status: 400 }
+      );
+    }
+
+    // Auto-detect column mappings
+    const columns = Object.keys(data[0] || {});
+    const patterns = {
+      specialty: [/specialty/i, /provider.*type/i, /physician.*type/i],
+      providerType: [/provider.*type/i, /physician.*type/i, /role/i],
+      region: [/region/i, /geographic/i, /location/i],
+      nOrgs: [/n.*orgs/i, /num.*org/i, /organizations/i],
+      nIncumbents: [/n.*incumbents/i, /num.*incumbents/i, /incumbents/i],
+      tcc: {
+        p25: [/25.*(?:tcc|total.*cash|comp)/i, /tcc.*25/i],
+        p50: [/50.*(?:tcc|total.*cash|comp)/i, /tcc.*50/i],
+        p75: [/75.*(?:tcc|total.*cash|comp)/i, /tcc.*75/i],
+        p90: [/90.*(?:tcc|total.*cash|comp)/i, /tcc.*90/i]
+      },
+      wrvu: {
+        p25: [/25.*(?:wrvu|rvu)/i, /wrvu.*25/i],
+        p50: [/50.*(?:wrvu|rvu)/i, /wrvu.*50/i],
+        p75: [/75.*(?:wrvu|rvu)/i, /wrvu.*75/i],
+        p90: [/90.*(?:wrvu|rvu)/i, /wrvu.*90/i]
+      },
+      cf: {
+        p25: [/25.*(?:cf|conversion)/i, /cf.*25/i],
+        p50: [/50.*(?:cf|conversion)/i, /cf.*50/i],
+        p75: [/75.*(?:cf|conversion)/i, /cf.*75/i],
+        p90: [/90.*(?:cf|conversion)/i, /cf.*90/i]
+      }
+    };
+
+    const findMatchingColumn = (patterns: RegExp[], columns: string[]): string | null => {
+      for (const pattern of patterns) {
+        const match = columns.find(col => pattern.test(col));
+        if (match) return match;
+      }
+      return null;
+    };
+
+    const columnMappings = {
+      specialty: findMatchingColumn(patterns.specialty, columns) || '',
+      providerType: findMatchingColumn(patterns.providerType, columns),
+      region: findMatchingColumn(patterns.region, columns),
+      nOrgs: findMatchingColumn(patterns.nOrgs, columns),
+      nIncumbents: findMatchingColumn(patterns.nIncumbents, columns),
+      tcc: {
+        p25: findMatchingColumn(patterns.tcc.p25, columns),
+        p50: findMatchingColumn(patterns.tcc.p50, columns),
+        p75: findMatchingColumn(patterns.tcc.p75, columns),
+        p90: findMatchingColumn(patterns.tcc.p90, columns)
+      },
+      wrvu: {
+        p25: findMatchingColumn(patterns.wrvu.p25, columns),
+        p50: findMatchingColumn(patterns.wrvu.p50, columns),
+        p75: findMatchingColumn(patterns.wrvu.p75, columns),
+        p90: findMatchingColumn(patterns.wrvu.p90, columns)
+      },
+      cf: {
+        p25: findMatchingColumn(patterns.cf.p25, columns),
+        p50: findMatchingColumn(patterns.cf.p50, columns),
+        p75: findMatchingColumn(patterns.cf.p75, columns),
+        p90: findMatchingColumn(patterns.cf.p90, columns)
+      }
+    };
+
+    // Create survey record with column mappings
     const survey = await prisma.survey.create({
       data: {
         vendor,
         year,
+        status: 'PROCESSING',
         columnMappings,
-        status: 'READY',
         mappingProgress: 0,
-        data: {
-          create: transformedData
-        },
-        specialtyMappings: {
-          create: specialtyMappings?.map((mapping: { sourceSpecialty: string; mappedSpecialty: string }) => ({
-            sourceSpecialty: mapping.sourceSpecialty,
-            mappedSpecialty: mapping.mappedSpecialty,
-            isVerified: false,
-            confidence: 0,
-            notes: ''
-          })) || []
-        }
       },
-      include: {
-        specialtyMappings: true,
-        data: true
-      }
     });
 
-    return NextResponse.json(survey);
+    // Process and save survey data using the detected mappings
+    const surveyData = data.map((row: any) => {
+      const getValue = (mapping: string | null) => mapping ? row[mapping] : null;
+      const parseNumber = (value: string | null) => {
+        if (!value) return null;
+        const cleaned = value.replace(/[$,]/g, '');
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? null : num;
+      };
+
+      return {
+        surveyId: survey.id,
+        specialty: getValue(columnMappings.specialty) || '',
+        providerType: getValue(columnMappings.providerType),
+        region: getValue(columnMappings.region),
+        nOrgs: parseNumber(getValue(columnMappings.nOrgs)),
+        nIncumbents: parseNumber(getValue(columnMappings.nIncumbents)),
+        tccP25: parseNumber(getValue(columnMappings.tcc.p25)),
+        tccP50: parseNumber(getValue(columnMappings.tcc.p50)),
+        tccP75: parseNumber(getValue(columnMappings.tcc.p75)),
+        tccP90: parseNumber(getValue(columnMappings.tcc.p90)),
+        wrvuP25: parseNumber(getValue(columnMappings.wrvu.p25)),
+        wrvuP50: parseNumber(getValue(columnMappings.wrvu.p50)),
+        wrvuP75: parseNumber(getValue(columnMappings.wrvu.p75)),
+        wrvuP90: parseNumber(getValue(columnMappings.wrvu.p90)),
+        cfP25: parseNumber(getValue(columnMappings.cf.p25)),
+        cfP50: parseNumber(getValue(columnMappings.cf.p50)),
+        cfP75: parseNumber(getValue(columnMappings.cf.p75)),
+        cfP90: parseNumber(getValue(columnMappings.cf.p90)),
+      };
+    });
+
+    await prisma.surveyData.createMany({
+      data: surveyData,
+    });
+
+    // Update survey status to READY
+    await prisma.survey.update({
+      where: { id: survey.id },
+      data: { status: 'READY' },
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      surveyId: survey.id,
+      columnMappings,
+      message: 'Survey data uploaded successfully' 
+    });
   } catch (error) {
-    console.error('Error creating survey:', error);
-    return NextResponse.json({ error: 'Failed to create survey' }, { status: 500 });
+    console.error('Error uploading survey:', error);
+    return NextResponse.json(
+      { error: 'Error uploading survey data' },
+      { status: 500 }
+    );
   }
 }
 
