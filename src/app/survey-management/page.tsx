@@ -341,6 +341,7 @@ interface DBSurvey {
 export default function SurveyManagementPage(): JSX.Element {
   const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
   const [selectedVendor, setSelectedVendor] = useState<string>('');
+  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
   const [fileData, setFileData] = useState<PreviewRow[] | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
@@ -375,6 +376,7 @@ export default function SurveyManagementPage(): JSX.Element {
   const [isSurveySaved, setIsSurveySaved] = useState(false);
   const [specialtyProgress, setSpecialtyProgress] = useState(0);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
 
   // Add default survey data loading
   useEffect(() => {
@@ -934,134 +936,73 @@ export default function SurveyManagementPage(): JSX.Element {
       setIsUploading(true);
       setUploadError(null);
 
-      Papa.parse<Record<string, string>>(file, {
+      // Create FormData
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('vendor', selectedVendor === 'CUSTOM' ? customVendorName : selectedVendor);
+      formData.append('year', selectedYear);
+
+      // Upload to API
+      const response = await fetch('/api/surveys', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload survey');
+      }
+
+      const result = await response.json();
+      
+      // Parse the file for preview
+      Papa.parse<PreviewRow>(file, {
         header: true,
         skipEmptyLines: true,
-        complete: async (results: Papa.ParseResult<Record<string, string>>) => {
-          try {
-            if (results.errors.length > 0) {
-              throw new Error(`CSV parsing errors: ${results.errors.map(e => e.message).join(', ')}`);
-            }
-
-            // Get columns from the first row
-            const columns = Object.keys(results.data[0] || {});
-            setColumns(columns);
-
-            // Auto-detect mappings based on vendor
-            const detectedMappings = autoDetectMappings(columns, selectedVendor);
-            setColumnMapping(detectedMappings);
-
-            // Transform data to match database schema
-            const transformedData = results.data.map(row => {
-              const specialty = row[detectedMappings.specialty];
-              if (!specialty) return null;
-
-              return {
-                specialty: specialty.trim(),
-                provider_type: row[detectedMappings.provider_type]?.trim() || null,
-                geographic_region: row[detectedMappings.geographic_region]?.trim() || null,
-                n_orgs: parseInt(row[detectedMappings.n_orgs] || '0') || null,
-                n_incumbents: parseInt(row[detectedMappings.n_incumbents] || '0') || null,
-                tccP25: parseFloat(row[detectedMappings.tcc.p25] || '0') || null,
-                tccP50: parseFloat(row[detectedMappings.tcc.p50] || '0') || null,
-                tccP75: parseFloat(row[detectedMappings.tcc.p75] || '0') || null,
-                tccP90: parseFloat(row[detectedMappings.tcc.p90] || '0') || null,
-                wrvuP25: parseFloat(row[detectedMappings.wrvu.p25] || '0') || null,
-                wrvuP50: parseFloat(row[detectedMappings.wrvu.p50] || '0') || null,
-                wrvuP75: parseFloat(row[detectedMappings.wrvu.p75] || '0') || null,
-                wrvuP90: parseFloat(row[detectedMappings.wrvu.p90] || '0') || null,
-                cfP25: parseFloat(row[detectedMappings.cf.p25] || '0') || null,
-                cfP50: parseFloat(row[detectedMappings.cf.p50] || '0') || null,
-                cfP75: parseFloat(row[detectedMappings.cf.p75] || '0') || null,
-                cfP90: parseFloat(row[detectedMappings.cf.p90] || '0') || null,
-              };
-            }).filter((row): row is PreviewRow => row !== null);
-
-            // Create new survey in database
-            console.log('Uploading survey to database...');
-            
-            // Get unique specialties from transformed data
-            const uniqueSpecialties = transformedData
-              .map(row => row.specialty)
-              .filter((value, index, self) => self.indexOf(value) === index);
-
-            // Create specialty mappings for API
-            const apiSpecialtyMappings = uniqueSpecialties.map(specialty => ({
-              sourceSpecialty: specialty,
-              mappedSpecialty: specialty, // Initially map to itself
-              confidence: 1.0,
-              isVerified: false,
-              notes: 'Initial mapping'
-            }));
-
-            // Create specialty mappings for local state
-            const localSpecialtyMappings = uniqueSpecialties.reduce((acc, specialty) => ({
-              ...acc,
-              [specialty]: {
-                mappedSpecialties: [specialty],
-                notes: 'Initial mapping',
-                resolved: false
-              }
-            }), {} as Record<string, { mappedSpecialties: string[]; notes: string; resolved: boolean }>);
-
-            // Set local state
-            setSpecialtyMappings(localSpecialtyMappings);
-
-            const response = await fetch('/api/surveys', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                vendor: selectedVendor,
-                year: new Date().getFullYear().toString(),
-                columnMappings: detectedMappings,
-                data: transformedData,
-                specialtyMappings: apiSpecialtyMappings,
-              }),
-            });
-
-            if (!response.ok) {
-              throw new Error('Failed to upload survey');
-            }
-
-            const result = await response.json();
-            console.log('Survey uploaded successfully:', result);
-
-            // Refresh surveys list
-            const surveysResponse = await fetch('/api/surveys');
-            if (!surveysResponse.ok) {
-              throw new Error('Failed to fetch updated surveys');
-            }
-            const updatedSurveys = await surveysResponse.json();
-            setUploadedSurveys(updatedSurveys);
-
-            // Set up for mapping
-            setFileData(transformedData);
-            setSelectedMapping(result.surveyId);
-            setShowMappingInterface(true);
-            setActiveStep('mapping');
-            toast.success('Survey uploaded successfully!');
-          } catch (error) {
-            console.error('Error processing file:', error);
-            setUploadError(error instanceof Error ? error.message : 'Failed to process file');
-            toast.error('Failed to process file. Please try again.');
-          } finally {
-            setIsUploading(false);
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            console.warn('CSV parsing warnings:', results.errors);
           }
+
+          // Get columns from the first row
+          const columns = Object.keys(results.data[0] || {});
+          setColumns(columns);
+
+          // Auto-detect mappings based on vendor
+          const detectedMappings = autoDetectMappings(columns, selectedVendor);
+          setColumnMapping(detectedMappings);
+
+          // Store the parsed data and preview
+          const typedData = results.data as PreviewRow[];
+          setFileData(typedData);
+          setPreviewData(typedData.slice(0, 5));
+
+          // Add to uploaded surveys
+          const newSurvey: UploadedSurvey = {
+            id: result.surveyId,
+            vendor: selectedVendor === 'CUSTOM' ? customVendorName : selectedVendor,
+            year: selectedYear,
+            data: typedData,
+            columnMappings: detectedMappings,
+            specialtyMappings: {},
+            columns: columns,
+            mappingProgress: 0,
+          };
+
+          setUploadedSurveys(prev => [...prev, newSurvey]);
+          toast.success('Survey uploaded successfully!');
         },
-        error: (error: Error) => {
-          console.error('CSV parsing error:', error);
-          setUploadError(error.message);
-          setIsUploading(false);
-          toast.error('Failed to parse CSV file. Please check the file format.');
+        error: (error) => {
+          console.error('Error parsing file:', error);
+          setUploadError('Error parsing file');
         }
       });
     } catch (error) {
-      console.error('Error uploading file:', error);
-      setUploadError(error instanceof Error ? error.message : 'Failed to upload file');
+      console.error('Error uploading survey:', error);
+      setUploadError(error instanceof Error ? error.message : 'Error uploading survey');
+      toast.error(error instanceof Error ? error.message : 'Failed to upload survey');
+    } finally {
       setIsUploading(false);
-      toast.error('Failed to upload file. Please try again.');
     }
   };
 
@@ -2404,17 +2345,50 @@ export default function SurveyManagementPage(): JSX.Element {
     return Math.round((resolvedSpecialties / totalSpecialties) * 100);
   };
 
-  const handleSaveSurvey = () => {
-    // Save the current state to localStorage
-    const updatedSurveys = uploadedSurveys.map(survey => ({
-      ...survey,
-      specialtyMappings: specialtyMappings
-    }));
-    
-    localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-    setUploadedSurveys(updatedSurveys);
-    setIsSurveySaved(true);
-    toast.success('Survey mappings saved successfully!');
+  const handleSaveSurvey = async () => {
+    try {
+      if (!originalFile || !selectedVendor || !selectedYear) {
+        throw new Error('Missing required data for survey upload');
+      }
+
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', originalFile);
+      formData.append('vendor', selectedVendor);
+      formData.append('year', selectedYear);
+
+      // Upload to API
+      const response = await fetch('/api/surveys', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to upload survey');
+      }
+
+      const result = await response.json();
+      
+      // Update local state
+      const newSurvey = {
+        id: result.surveyId,
+        vendor: selectedVendor,
+        year: selectedYear,
+        data: fileData || [],
+        columnMappings: columnMapping,
+        specialtyMappings,
+        columns,
+        mappingProgress: 100,
+      };
+
+      setUploadedSurveys(prev => [...prev, newSurvey]);
+      setIsSurveySaved(true);
+      toast.success('Survey uploaded successfully!');
+    } catch (error) {
+      console.error('Error saving survey:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to upload survey');
+    }
   };
 
   const areAllStepsComplete = (): boolean => {
