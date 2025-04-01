@@ -8,7 +8,6 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   reactStrictMode: false, // Disable in development for better performance
-  swcMinify: false, // Disable in development for better debugging
   // Enable static exports for production
   images: {
     unoptimized: true

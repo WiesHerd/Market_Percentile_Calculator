@@ -7,9 +7,9 @@ services:
       dockerfile: Dockerfile
     container_name: percentile_app
     ports:
-      - "5558:3000"
+      - "3001:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@survey_db:5432/survey_db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/survey_db
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
@@ -41,11 +41,11 @@ services:
     command: >
       sh -c "npm install -g prisma@latest &&
              npx prisma generate &&
-             npx prisma studio --port 5555 --hostname 0.0.0.0"
+             npx prisma studio --port 5556 --hostname 0.0.0.0"
     ports:
-      - "5559:5555"
+      - "5556:5556"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@survey_db:5432/survey_db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/survey_db
       - NODE_OPTIONS="--max-old-space-size=4096"
     volumes:
       - .:/app:cached
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:latest
+    image: postgres:17.4-alpine
     container_name: survey_db
     environment:
       POSTGRES_USER: postgres
@@ -88,7 +88,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:latest
+    image: redis:7-alpine
     container_name: survey_cache
     command: redis-server --maxmemory 1024mb --maxmemory-policy allkeys-lru
     ports:

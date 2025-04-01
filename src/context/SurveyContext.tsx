@@ -70,7 +70,8 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update specialty mappings');
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update specialty mappings');
       }
 
       // Update state
@@ -85,12 +86,13 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
       toast.success('Specialty mapping updated successfully');
     } catch (error) {
       console.error('Error updating specialty mapping:', error);
-      toast.error('Failed to update specialty mapping');
+      toast.error(error instanceof Error ? error.message : 'Failed to update specialty mapping');
     }
   };
 
   const loadSurveyData = async (surveyId: string) => {
     try {
+      // Load survey data
       const response = await fetch(`/api/surveys/${surveyId}/data`);
       if (!response.ok) {
         throw new Error('Failed to fetch survey data');
@@ -103,7 +105,7 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Load associated specialty mappings
-      const mappingsResponse = await fetch(`/api/surveys/${surveyId}/specialty-mappings`);
+      const mappingsResponse = await fetch(`/api/specialty-mappings?surveyId=${surveyId}`);
       if (!mappingsResponse.ok) {
         throw new Error('Failed to fetch specialty mappings');
       }
@@ -124,7 +126,7 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
       setSpecialtyMappings(mappingState);
     } catch (error) {
       console.error('Error loading survey data:', error);
-      toast.error('Failed to load survey data');
+      toast.error(error instanceof Error ? error.message : 'Failed to load survey data');
     }
   };
 

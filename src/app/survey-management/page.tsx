@@ -122,9 +122,10 @@ interface SurveyData {
   vendor: string;
   year: string;
   data: PreviewRow[];
-  mappings?: ColumnMapping;
+  columnMappings?: ColumnMapping;
   columns?: string[];
   specialtyMappings?: MappingState;
+  mappingProgress?: number;
 }
 
 // Add new interface for select options
@@ -302,7 +303,7 @@ interface UploadedSurvey {
   columnMappings: ColumnMapping;
   specialtyMappings: MappingState;
   columns: string[];
-  mappingProgress?: number;
+  mappingProgress: number;
 }
 
 interface UnmappedSpecialty {
@@ -439,7 +440,7 @@ function YearPicker({ value, onChange }: { value: string, onChange: (year: strin
 type StepType = 'upload' | 'mapping' | 'specialties';
 
 export default function SurveyManagementPage(): JSX.Element {
-  const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
+  const [uploadedSurveys, setUploadedSurveys] = useState<SurveyData[]>([]);
   const [activeStep, setActiveStep] = useState<StepType>('upload');
   const [selectedVendor, setSelectedVendor] = useState('');
   const [selectedYear, setSelectedYear] = useState('');
@@ -477,34 +478,35 @@ export default function SurveyManagementPage(): JSX.Element {
   const [savedTemplates, setSavedTemplates] = useState<MappingTemplate[]>([]);
   const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
 
-  // Load surveys from API on mount
-  useEffect(() => {
+  // Add loadSurveys function outside useEffect so we can call it manually
     const loadSurveys = async () => {
       try {
         const response = await fetch('/api/surveys');
         if (!response.ok) {
           throw new Error('Failed to fetch surveys');
         }
-        const surveys = await response.json();
-        setUploadedSurveys(surveys);
+      const surveys = await response.json();
+      setUploadedSurveys(surveys);
 
-        // Set active step based on the most recent survey's progress
-        if (surveys.length > 0) {
-          const latestSurvey = surveys[0]; // Assuming surveys are ordered by uploadDate desc
-          if (!latestSurvey.columnMappings || Object.keys(latestSurvey.columnMappings).length === 0) {
-            setActiveStep('upload');
-          } else if (!latestSurvey.specialtyMappings || Object.keys(latestSurvey.specialtyMappings).length === 0) {
+      // Set active step based on the most recent survey's progress
+      if (surveys.length > 0) {
+        const latestSurvey = surveys[0]; // Assuming surveys are ordered by uploadDate desc
+        if (!latestSurvey.columnMappings || Object.keys(latestSurvey.columnMappings).length === 0) {
+          setActiveStep('upload');
+        } else if (!latestSurvey.specialtyMappings || Object.keys(latestSurvey.specialtyMappings).length === 0) {
             setActiveStep('mapping');
-          } else {
-            setActiveStep('specialties');
-          }
+        } else {
+          setActiveStep('specialties');
+        }
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
-        toast.error('Failed to load surveys');
+      toast.error('Failed to load surveys');
       }
     };
 
+  // Use loadSurveys in useEffect
+  useEffect(() => {
     loadSurveys();
   }, []);
 
@@ -663,277 +665,201 @@ export default function SurveyManagementPage(): JSX.Element {
     }
   }, []);
 
-  const autoDetectMappings = (columns: string[], vendor: string): ColumnMapping => {
-    console.log('Starting autoDetectMappings with:', {
-      fileData: fileData?.length,
-      columns,
-      selectedMapping,
-      selectedVendor,
-      uploadedSurveys: uploadedSurveys.map(s => ({
-        id: s.id,
-        vendor: s.vendor,
-        dataLength: s.data.length,
-        columns: s.columns
-      }))
-    });
-    
-    setAutoDetectStatus('detecting');
-
-    // Enhanced patterns for each field type
-    const patterns = {
-      specialty: [
-        /specialty/i,
-        /provider.*type/i,
-        /physician.*type/i,
-        /provider.*specialty/i,
-        /physician.*specialty/i,
-        /practice.*type/i,
-        /department/i,
-        /position/i
-      ],
-      provider_type: [
-        /provider.*type/i,
-        /physician.*type/i,
-        /role/i,
-        /position.*type/i,
-        /job.*title/i,
-        /title/i
-      ],
-      geographic_region: [
-        /region/i,
-        /geographic/i,
-        /geography/i,
-        /location/i,
-        /market/i,
-        /area/i,
-        /territory/i
-      ],
-      n_orgs: [
-        /n.*orgs/i,
-        /num.*org/i,
-        /organizations/i,
-        /org.*count/i,
-        /reporting.*orgs/i,
-        /participants/i
-      ],
-      n_incumbents: [
-        /n.*incumbents/i,
-        /num.*incumbents/i,
-        /incumbents/i,
-        /individuals/i,
-        /respondents/i,
-        /physicians/i,
-        /providers/i
-      ],
+  // Vendor patterns for column matching
+  const vendorPatterns = {
+    sullivancotter: {
+      patterns: {
+        specialty: ['specialty'],
+        provider_type: ['providerType', 'provider_type', 'provider type'],
+        geographic_region: ['region', 'geographic_region', 'geographic region'],
+        n_orgs: ['nOrgs', 'n_orgs', 'number of organizations'],
+        n_incumbents: ['nIncumbents', 'n_incumbents', 'number of incumbents'],
       tcc: {
-        p25: [
-          /25.*(?:tcc|total.*cash|total.*comp|compensation)/i,
-          /(?:tcc|total.*cash|total.*comp|compensation).*25/i,
-          /comp.*25/i,
-          /cash.*25/i,
-          /salary.*25/i
-        ],
-        p50: [
-          /50.*(?:tcc|total.*cash|total.*comp|compensation)/i,
-          /(?:tcc|total.*cash|total.*comp|compensation).*50/i,
-          /median.*(?:tcc|total.*cash|total.*comp|compensation)/i,
-          /(?:tcc|total.*cash|total.*comp|compensation).*median/i,
-          /comp.*50/i,
-          /cash.*50/i,
-          /salary.*50/i,
-          /comp.*median/i
-        ],
-        p75: [
-          /75.*(?:tcc|total.*cash|total.*comp|compensation)/i,
-          /(?:tcc|total.*cash|total.*comp|compensation).*75/i,
-          /comp.*75/i,
-          /cash.*75/i,
-          /salary.*75/i
-        ],
-        p90: [
-          /90.*(?:tcc|total.*cash|total.*comp|compensation)/i,
-          /(?:tcc|total.*cash|total.*comp|compensation).*90/i,
-          /comp.*90/i,
-          /cash.*90/i,
-          /salary.*90/i
-        ]
+          p25: ['tccP25', 'tcc_p25', 'tcc 25th'],
+          p50: ['tccP50', 'tcc_p50', 'tcc 50th'],
+          p75: ['tccP75', 'tcc_p75', 'tcc 75th'],
+          p90: ['tccP90', 'tcc_p90', 'tcc 90th']
       },
       wrvu: {
-        p25: [
-          /25.*(?:wrvu|work.*rvu|rvu)/i,
-          /(?:wrvu|work.*rvu|rvu).*25/i,
-          /productivity.*25/i,
-          /production.*25/i
-        ],
-        p50: [
-          /50.*(?:wrvu|work.*rvu|rvu)/i,
-          /(?:wrvu|work.*rvu|rvu).*50/i,
-          /median.*(?:wrvu|work.*rvu|rvu)/i,
-          /(?:wrvu|work.*rvu|rvu).*median/i,
-          /productivity.*50/i,
-          /production.*50/i,
-          /productivity.*median/i
-        ],
-        p75: [
-          /75.*(?:wrvu|work.*rvu|rvu)/i,
-          /(?:wrvu|work.*rvu|rvu).*75/i,
-          /productivity.*75/i,
-          /production.*75/i
-        ],
-        p90: [
-          /90.*(?:wrvu|work.*rvu|rvu)/i,
-          /(?:wrvu|work.*rvu|rvu).*90/i,
-          /productivity.*90/i,
-          /production.*90/i
-        ]
+          p25: ['wrvuP25', 'wrvu_p25', 'wrvu 25th'],
+          p50: ['wrvuP50', 'wrvu_p50', 'wrvu 50th'],
+          p75: ['wrvuP75', 'wrvu_p75', 'wrvu 75th'],
+          p90: ['wrvuP90', 'wrvu_p90', 'wrvu 90th']
       },
       cf: {
-        p25: [
-          /25.*(?:cf|conversion.*factor|comp.*per.*rvu)/i,
-          /(?:cf|conversion.*factor|comp.*per.*rvu).*25/i,
-          /rate.*per.*rvu.*25/i,
-          /dollars.*per.*rvu.*25/i
-        ],
-        p50: [
-          /50.*(?:cf|conversion.*factor|comp.*per.*rvu)/i,
-          /(?:cf|conversion.*factor|comp.*per.*rvu).*50/i,
-          /median.*(?:cf|conversion.*factor|comp.*per.*rvu)/i,
-          /(?:cf|conversion.*factor|comp.*per.*rvu).*median/i,
-          /rate.*per.*rvu.*50/i,
-          /dollars.*per.*rvu.*50/i,
-          /rate.*per.*rvu.*median/i
-        ],
-        p75: [
-          /75.*(?:cf|conversion.*factor|comp.*per.*rvu)/i,
-          /(?:cf|conversion.*factor|comp.*per.*rvu).*75/i,
-          /rate.*per.*rvu.*75/i,
-          /dollars.*per.*rvu.*75/i
-        ],
-        p90: [
-          /90.*(?:cf|conversion.*factor|comp.*per.*rvu)/i,
-          /(?:cf|conversion.*factor|comp.*per.*rvu).*90/i,
-          /rate.*per.*rvu.*90/i,
-          /dollars.*per.*rvu.*90/i
-        ]
+          p25: ['cfP25', 'cf_p25', 'cf 25th'],
+          p50: ['cfP50', 'cf_p50', 'cf 50th'],
+          p75: ['cfP75', 'cf_p75', 'cf 75th'],
+          p90: ['cfP90', 'cf_p90', 'cf 90th']
+        }
       }
-    };
+    },
+    mgma: {
+      patterns: {
+        specialty: ['specialty'],
+        provider_type: ['providerType', 'provider_type', 'provider type'],
+        geographic_region: ['region', 'geographic_region', 'geographic region'],
+        n_orgs: ['nOrgs', 'n_orgs', 'number of organizations'],
+        n_incumbents: ['nIncumbents', 'n_incumbents', 'number of incumbents'],
+        tcc: {
+          p25: ['tccP25', 'tcc_p25', 'tcc 25th'],
+          p50: ['tccP50', 'tcc_p50', 'tcc 50th'],
+          p75: ['tccP75', 'tcc_p75', 'tcc 75th'],
+          p90: ['tccP90', 'tcc_p90', 'tcc 90th']
+        },
+        wrvu: {
+          p25: ['wrvuP25', 'wrvu_p25', 'wrvu 25th'],
+          p50: ['wrvuP50', 'wrvu_p50', 'wrvu 50th'],
+          p75: ['wrvuP75', 'wrvu_p75', 'wrvu 75th'],
+          p90: ['wrvuP90', 'wrvu_p90', 'wrvu 90th']
+        },
+        cf: {
+          p25: ['cfP25', 'cf_p25', 'cf 25th'],
+          p50: ['cfP50', 'cf_p50', 'cf 50th'],
+          p75: ['cfP75', 'cf_p75', 'cf 75th'],
+          p90: ['cfP90', 'cf_p90', 'cf 90th']
+        }
+      }
+    },
+    gallagher: {
+      patterns: {
+        specialty: ['specialty'],
+        provider_type: ['providerType', 'provider_type', 'provider type'],
+        geographic_region: ['region', 'geographic_region', 'geographic region'],
+        n_orgs: ['nOrgs', 'n_orgs', 'number of organizations'],
+        n_incumbents: ['nIncumbents', 'n_incumbents', 'number of incumbents'],
+        tcc: {
+          p25: ['tccP25', 'tcc_p25', 'tcc 25th'],
+          p50: ['tccP50', 'tcc_p50', 'tcc 50th'],
+          p75: ['tccP75', 'tcc_p75', 'tcc 75th'],
+          p90: ['tccP90', 'tcc_p90', 'tcc 90th']
+        },
+        wrvu: {
+          p25: ['wrvuP25', 'wrvu_p25', 'wrvu 25th'],
+          p50: ['wrvuP50', 'wrvu_p50', 'wrvu 50th'],
+          p75: ['wrvuP75', 'wrvu_p75', 'wrvu 75th'],
+          p90: ['wrvuP90', 'wrvu_p90', 'wrvu 90th']
+        },
+        cf: {
+          p25: ['cfP25', 'cf_p25', 'cf 25th'],
+          p50: ['cfP50', 'cf_p50', 'cf 50th'],
+          p75: ['cfP75', 'cf_p75', 'cf 75th'],
+          p90: ['cfP90', 'cf_p90', 'cf 90th']
+        }
+      }
+    }
+  };
 
-    // Helper function to find best matching column using regex patterns
-    const findBestMatch = (patterns: RegExp[], columns: string[]): string => {
-      const normalizedColumns = columns.map(col => col.toLowerCase().replace(/[^a-z0-9]/g, '_'));
+  function autoDetectMappings(columns: string[], vendor: string): ColumnMapping {
+    console.log('Auto-detecting mappings for vendor:', vendor, 'columns:', columns);
+
+    // Helper function to find best match from patterns
+    function findBestMatch(columnNames: string[], pattern: RegExp): string | undefined {
+      // Normalize column names for comparison
+      const normalizedColumns = columnNames.map(col => col.toLowerCase().trim());
       
       // Try exact matches first
-      for (const pattern of patterns) {
-        const match = normalizedColumns.findIndex(col => pattern.test(col));
-        if (match !== -1) {
-          return columns[match];
+      for (const col of normalizedColumns) {
+        if (pattern.test(col)) {
+          const index = normalizedColumns.indexOf(col);
+          return columnNames[index];
         }
       }
-      
-      return '';
+
+      // If no exact match, try partial matches
+      for (const col of normalizedColumns) {
+        const words = col.split(/[\s_-]+/);
+        for (const word of words) {
+          if (pattern.test(word)) {
+            const index = normalizedColumns.indexOf(col);
+            return columnNames[index];
+          }
+        }
+      }
+
+      return undefined;
+    }
+
+    // Get vendor patterns
+    const vendorConfig = SURVEY_PATTERNS[vendor];
+    if (!vendorConfig) {
+      console.warn('No vendor patterns found for:', vendor);
+      return {
+        specialty: '',
+        provider_type: '',
+        geographic_region: '',
+        n_orgs: '',
+        n_incumbents: '',
+        tcc: { p25: '', p50: '', p75: '', p90: '' },
+        wrvu: { p25: '', p50: '', p75: '', p90: '' },
+        cf: { p25: '', p50: '', p75: '', p90: '' }
+      };
+    }
+
+    console.log('Using vendor patterns:', vendorConfig);
+
+    // Initialize mappings with empty strings
+    const mappings: ColumnMapping = {
+      specialty: '',
+      provider_type: '',
+      geographic_region: '',
+      n_orgs: '',
+      n_incumbents: '',
+      tcc: { p25: '', p50: '', p75: '', p90: '' },
+      wrvu: { p25: '', p50: '', p75: '', p90: '' },
+      cf: { p25: '', p50: '', p75: '', p90: '' }
     };
 
-    // Process each survey
-    uploadedSurveys.forEach(survey => {
-      const surveyColumns = survey.columns || Object.keys(survey.data[0] || {});
-      
-      // Create new mapping for this survey
-      const newMapping = {
-        specialty: findBestMatch(patterns.specialty, surveyColumns),
-        provider_type: findBestMatch(patterns.provider_type, surveyColumns),
-        geographic_region: findBestMatch(patterns.geographic_region, surveyColumns),
-        n_orgs: findBestMatch(patterns.n_orgs, surveyColumns),
-        n_incumbents: findBestMatch(patterns.n_incumbents, surveyColumns),
-      tcc: {
-          p25: findBestMatch(patterns.tcc.p25, surveyColumns),
-          p50: findBestMatch(patterns.tcc.p50, surveyColumns),
-          p75: findBestMatch(patterns.tcc.p75, surveyColumns),
-          p90: findBestMatch(patterns.tcc.p90, surveyColumns)
-      },
-      wrvu: {
-          p25: findBestMatch(patterns.wrvu.p25, surveyColumns),
-          p50: findBestMatch(patterns.wrvu.p50, surveyColumns),
-          p75: findBestMatch(patterns.wrvu.p75, surveyColumns),
-          p90: findBestMatch(patterns.wrvu.p90, surveyColumns)
-      },
-      cf: {
-          p25: findBestMatch(patterns.cf.p25, surveyColumns),
-          p50: findBestMatch(patterns.cf.p50, surveyColumns),
-          p75: findBestMatch(patterns.cf.p75, surveyColumns),
-          p90: findBestMatch(patterns.cf.p90, surveyColumns)
-        }
-      };
+    // Detect basic fields
+    mappings.specialty = findBestMatch(columns, vendorConfig.patterns.specialty) || '';
+    mappings.provider_type = findBestMatch(columns, vendorConfig.patterns.provider_type) || '';
+    mappings.geographic_region = findBestMatch(columns, vendorConfig.patterns.geographic_region) || '';
+    mappings.n_orgs = findBestMatch(columns, vendorConfig.patterns.n_orgs) || '';
+    mappings.n_incumbents = findBestMatch(columns, vendorConfig.patterns.n_incumbents) || '';
 
-      // Update the survey with new mappings
-      setUploadedSurveys(prev => {
-        const updatedSurveys = prev.map(s => {
-          if (s.id === survey.id) {
-            return {
-              ...s,
-              columnMappings: newMapping
-            };
-          }
-          return s;
-        });
-        
-        // Save to localStorage
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-        return updatedSurveys;
-      });
+    // Detect metrics
+    const metrics = ['tcc', 'wrvu', 'cf'] as const;
+    const percentiles = ['p25', 'p50', 'p75', 'p90'] as const;
 
-      // If this is the currently selected survey, update the column mapping state
-      if (survey.id === selectedMapping) {
-        setColumnMapping(newMapping);
-        
-        // Update validation status
-        const validations: {[key: string]: boolean} = {
-          specialty: !!newMapping.specialty,
-          provider_type: !!newMapping.provider_type,
-          geographic_region: !!newMapping.geographic_region,
-          n_orgs: !!newMapping.n_orgs,
-          n_incumbents: !!newMapping.n_incumbents
-        };
+    metrics.forEach(metric => {
+      // First find columns matching the base pattern
+      const baseMatches = columns.filter(col => 
+        vendorConfig.patterns[metric].base.test(col.toLowerCase())
+      );
 
-        ['tcc', 'wrvu', 'cf'].forEach(metric => {
-          ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
-            const key = `${metric}_${percentile}`;
-            validations[key] = !!(newMapping[metric as keyof typeof newMapping] as any)[percentile];
+      percentiles.forEach(percentile => {
+        // Look for percentile pattern within base matches first
+        let match = baseMatches.find(col => 
+          vendorConfig.patterns[metric][percentile].test(col.toLowerCase())
+        );
+
+        // If no match found in base matches, try all columns
+        if (!match) {
+          match = columns.find(col => {
+            const lowerCol = col.toLowerCase();
+            // Check if column contains both the base pattern and percentile pattern
+            return vendorConfig.patterns[metric].base.test(lowerCol) &&
+                   vendorConfig.patterns[metric][percentile].test(lowerCol);
           });
-        });
+        }
 
-        setMappingValidation(validations);
-        setShowMappingPreview(true);
-      }
+        // If still no match, try looking for just the percentile pattern in columns
+        // that might have a different base pattern format
+        if (!match) {
+          match = columns.find(col => 
+            vendorConfig.patterns[metric][percentile].test(col.toLowerCase())
+          );
+        }
+
+        if (match) {
+          mappings[metric][percentile] = match;
+        }
+      });
     });
 
-    setAutoDetectStatus('complete');
-
-    return {
-      specialty: findBestMatch(patterns.specialty, columns),
-      provider_type: findBestMatch(patterns.provider_type, columns),
-      geographic_region: findBestMatch(patterns.geographic_region, columns),
-      n_orgs: findBestMatch(patterns.n_orgs, columns),
-      n_incumbents: findBestMatch(patterns.n_incumbents, columns),
-      tcc: {
-        p25: findBestMatch(patterns.tcc.p25, columns),
-        p50: findBestMatch(patterns.tcc.p50, columns),
-        p75: findBestMatch(patterns.tcc.p75, columns),
-        p90: findBestMatch(patterns.tcc.p90, columns)
-      },
-      wrvu: {
-        p25: findBestMatch(patterns.wrvu.p25, columns),
-        p50: findBestMatch(patterns.wrvu.p50, columns),
-        p75: findBestMatch(patterns.wrvu.p75, columns),
-        p90: findBestMatch(patterns.wrvu.p90, columns)
-      },
-      cf: {
-        p25: findBestMatch(patterns.cf.p25, columns),
-        p50: findBestMatch(patterns.cf.p50, columns),
-        p75: findBestMatch(patterns.cf.p75, columns),
-        p90: findBestMatch(patterns.cf.p90, columns)
-      }
-    };
-  };
+    console.log('Detected mappings:', mappings);
+    return mappings;
+  }
 
   const findMatchingSpecialties = (sourceSpecialty: string): string[] => {
     if (!sourceSpecialty) return [];
@@ -1069,25 +995,44 @@ export default function SurveyManagementPage(): JSX.Element {
     subcategory: keyof ColumnMappingMetric | null,
     value: string
   ) => {
-    setColumnMapping(prev => {
-      if (subcategory === null) {
-        return {
-          ...prev,
-          [category]: value
-        };
+    setColumnMapping(prevMapping => {
+      if (!prevMapping) return prevMapping;
+
+      const newMapping = { ...prevMapping };
+      if (subcategory && (category === 'tcc' || category === 'wrvu' || category === 'cf')) {
+        const metricMapping = { ...(newMapping[category] as ColumnMappingMetric) };
+        metricMapping[subcategory] = value;
+        newMapping[category] = metricMapping;
+      } else if (!subcategory && category !== 'tcc' && category !== 'wrvu' && category !== 'cf') {
+        newMapping[category] = value;
       }
-
-      const metricData = prev[category] as ColumnMappingMetric;
-      const updatedMetric = {
-        ...metricData,
-        [subcategory]: value
-      };
-
-      return {
-        ...prev,
-        [category]: updatedMetric
-      };
+      return newMapping;
     });
+
+    // Update the selected survey's mappings
+    if (selectedMapping) {
+      setUploadedSurveys(prevSurveys => {
+        return prevSurveys.map(survey => {
+          if (survey.id === selectedMapping) {
+            const updatedSurvey: SurveyData = {
+              ...survey,
+              columnMappings: columnMapping ? {
+                ...columnMapping,
+                [category]: subcategory && (category === 'tcc' || category === 'wrvu' || category === 'cf')
+                  ? {
+                      ...(columnMapping[category] as ColumnMappingMetric),
+        [subcategory]: value
+                    }
+                  : value
+              } : undefined,
+              mappingProgress: columnMapping ? calculateProgress(columnMapping) : 0
+            };
+            return updatedSurvey;
+          }
+          return survey;
+        });
+      });
+    }
   };
 
   const saveTemplate = () => {
@@ -1128,27 +1073,55 @@ export default function SurveyManagementPage(): JSX.Element {
     notes?: string,
     resolved?: boolean
   ) => {
-    // Preserve the full specialty name without any splitting or modification
-    const updatedMappings = {
-      ...specialtyMappings,
-      [sourceSpecialty]: {
-        mappedSpecialties: mappedSpecialties || [],
-        notes,
-        resolved: resolved ?? specialtyMappings[sourceSpecialty]?.resolved
-      }
+    if (!selectedMapping) return;
+
+    const newMapping: SpecialtyMapping = {
+      mappedSpecialties,
+      notes: notes || '',
+      resolved: resolved || false,
+      confidence: calculateMappingConfidence(sourceSpecialty, mappedSpecialties)
     };
 
-    // Update state
+    const updatedMappings = {
+      ...specialtyMappings,
+      [sourceSpecialty]: newMapping
+    };
+
     setSpecialtyMappings(updatedMappings);
     
-    // Update all surveys with the new mappings
-    const updatedSurveys = uploadedSurveys.map(survey => ({
-      ...survey,
-      specialtyMappings: updatedMappings
-    }));
-    
-    setUploadedSurveys(updatedSurveys);
-    localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+    // Calculate new progress
+    const progress = calculateSpecialtyProgress();
+    setSpecialtyProgress(progress);
+
+    // Update the survey in the database
+    fetch(`/api/surveys/${selectedMapping}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        columnMappings: columnMapping,
+        specialtyMappings: updatedMappings,
+        mappingProgress: progress
+      }),
+    }).catch(error => {
+      console.error('Error saving specialty mappings:', error);
+      toast.error('Failed to save specialty mappings');
+    });
+
+    // Update local state
+    setUploadedSurveys(prevSurveys =>
+      prevSurveys.map(survey => {
+        if (survey.id === selectedMapping) {
+          return {
+            ...survey,
+            specialtyMappings: updatedMappings,
+            mappingProgress: progress
+          };
+        }
+        return survey;
+      })
+    );
   };
 
   const handleDrop = (sourceSpecialty: string, targetSpecialty: string) => {
@@ -1274,59 +1247,48 @@ export default function SurveyManagementPage(): JSX.Element {
 
   // Update handleSaveMappings to use the API
   const handleSaveMappings = async () => {
+    if (!selectedMapping) {
+      toast.error('No survey selected');
+      return;
+    }
+
     try {
-      // Get current specialty progress
-      const currentProgress = calculateSpecialtyProgress();
-      
-      console.log('Current specialty mappings before save:', specialtyMappings);
-      
-      // Create a copy of the current mappings to ensure we preserve all flags
-      const updatedMappings = { ...specialtyMappings };
-      
-      // Ensure single source specialties are properly marked
-      Object.entries(updatedMappings).forEach(([specialty, mapping]) => {
-        if (mapping.isSingleSource) {
-          updatedMappings[specialty] = {
-            ...mapping,
-            resolved: true,
-            mappedSpecialties: [specialty], // Map to itself
-            isSingleSource: true // Ensure flag is set
-          };
-        }
-      });
-      
-      console.log('Updated mappings after processing:', updatedMappings);
-      
-      // Update the survey in the database
       const response = await fetch(`/api/surveys/${selectedMapping}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          specialtyMappings: Object.entries(updatedMappings).map(([sourceSpecialty, mapping]) => ({
-            sourceSpecialty,
-            mappedSpecialty: mapping.mappedSpecialties[0], // Take first mapping for now
-            notes: mapping.notes,
-            isVerified: mapping.resolved,
-            confidence: mapping.confidence || 0
-          })),
-          mappingProgress: currentProgress
+          columnMappings: columnMapping,
+          specialtyMappings: specialtyMappings,
+          mappingProgress: calculateProgress(columnMapping)
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update survey mappings');
+        throw new Error('Failed to save mappings');
       }
 
-      // Update local state
-      setSpecialtyMappings(updatedMappings);
-      setSpecialtyProgress(currentProgress);
-      setIsSurveySaved(true);
-      toast.success('Survey mappings saved successfully!');
+      // Update local state only
+      setUploadedSurveys(prevSurveys =>
+        prevSurveys.map(survey => {
+          if (survey.id === selectedMapping) {
+            return {
+              ...survey,
+              columnMappings: columnMapping,
+              specialtyMappings: specialtyMappings,
+              mappingProgress: calculateProgress(columnMapping)
+            };
+          }
+          return survey;
+        })
+      );
+
+      toast.success('Mappings saved successfully');
+      setActiveStep('specialties');
     } catch (error) {
       console.error('Error saving mappings:', error);
-      toast.error('Failed to save mappings. Please try again.');
+      toast.error('Failed to save mappings');
     }
   };
 
@@ -1411,92 +1373,54 @@ export default function SurveyManagementPage(): JSX.Element {
     </div>
   );
 
-  const autoArrangeSpecialties = () => {
-    // Get all unmapped specialties (excluding single source)
-    const unmappedList: UnmappedSpecialty[] = uploadedSurveys.reduce((acc: UnmappedSpecialty[], survey) => {
-      const specialties = survey.data
-        .map(row => ({
-          specialty: String(row[survey.columnMappings.specialty] || '').trim(),
-          vendor: survey.vendor
-        }))
-        .filter(s => {
-          const mapping = specialtyMappings[s.specialty];
-          return s.specialty && 
-            !mapping?.resolved && 
-            !mapping?.isSingleSource && // Explicitly check for single source
-            !mapping?.mappedSpecialties?.length;
-        });
-      return [...acc, ...specialties];
-    }, []);
-    
-    // Process each unmapped specialty
-    unmappedList.forEach(source => {
-      // Skip if already mapped
-      if (specialtyMappings[source.specialty]) return;
-
-      // Find potential matches from other vendors
-      const potentialMatches: SpecialtyMatch[] = uploadedSurveys
-        .flatMap(survey => 
-          survey.data
-            .map(row => ({
-              specialty: String(row[survey.columnMappings.specialty] || '').trim(),
-              vendor: survey.vendor,
-              confidence: calculateStringSimilarity(source.specialty, String(row[survey.columnMappings.specialty] || '').trim())
-            }))
-            .filter(match => 
-              match.specialty &&
-              match.vendor !== source.vendor &&
-              !Object.values(specialtyMappings).flatMap(m => m.mappedSpecialties).includes(match.specialty)
-            )
-        )
-        .filter(match => match.confidence > 0.8)
-        .sort((a, b) => b.confidence - a.confidence);
-
-      // If we found good matches, create the mapping
-      if (potentialMatches.length > 0) {
-        const matchedSpecialties = potentialMatches.map(m => m.specialty);
-        
-        // Update both local state and parent component
-        handleSpecialtyMappingChange(
-          source.specialty,
-          matchedSpecialties,
-          'Auto-mapped specialty',
-          true
-        );
-
-        // Save to localStorage
-        const updatedSurveys = uploadedSurveys.map(survey => ({
-          ...survey,
-          specialtyMappings: {
-            ...survey.specialtyMappings,
-            [source.specialty]: {
-              mappedSpecialties: matchedSpecialties,
-              notes: 'Auto-mapped specialty',
-              resolved: true
-            }
-          }
-        }));
-        
-        setUploadedSurveys(updatedSurveys);
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-      }
-    });
-
-    // After processing specialties, calculate and save progress
-    const progress = calculateSpecialtyProgress();
+  const autoArrangeSpecialties = async (): Promise<void> => {
+    // After processing specialties, calculate progress
+    const progress = calculateProgress(columnMapping);
     setSpecialtyProgress(progress);
     
     // Update surveys with new progress
     const updatedSurveys = uploadedSurveys.map(survey => ({
       ...survey,
-      specialtyMappings: specialtyMappings,
-      mappingProgress: progress
+      specialtyMappings,
+      mappingProgress: progress,
+      columnMappings: survey.columnMappings || {
+        specialty: '',
+        provider_type: '',
+        geographic_region: '',
+        n_orgs: '',
+        n_incumbents: '',
+        tcc: { p25: '', p50: '', p75: '', p90: '' },
+        wrvu: { p25: '', p50: '', p75: '', p90: '' },
+        cf: { p25: '', p50: '', p75: '', p90: '' }
+      }
     }));
     
     setUploadedSurveys(updatedSurveys);
-    localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
+
+    // Save the updated surveys to the database
+    try {
+      await Promise.all(updatedSurveys.map(async (survey) => {
+        const response = await fetch(`/api/surveys/${survey.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            columnMappings: survey.columnMappings,
+            specialtyMappings: survey.specialtyMappings
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save survey updates');
+        }
+      }));
     
-    toast.success('Auto-arrangement complete! Mappings have been saved.');
+      toast.success('Auto-arrangement complete! Mappings have been saved.');
+    } catch (err) {
+      console.error('Error saving survey updates:', err);
+      toast.error('Failed to save some mappings. Please try again.');
+    }
   };
 
   const renderSpecialtyCard = (sourceSpecialty: string, mapping: SpecialtyMapping, survey: any) => {
@@ -1638,7 +1562,7 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   const getSpecialtyMetrics = (specialty: string, survey: any) => {
-    const data = survey.data.find((d: any) => d[survey.columnMappings.specialty] === specialty);
+    const data = survey.data.find((d: any) => d[survey.columnMappings?.specialty] === specialty);
     return {
       tcc: data?.tcc?.p50 || 0,
       wrvu: data?.wrvu?.p50 || 0,
@@ -1756,26 +1680,26 @@ export default function SurveyManagementPage(): JSX.Element {
                   <label htmlFor="vendor-select" className="text-sm font-medium text-gray-700">
                     Survey Vendor
                   </label>
-                  <select
-                    id="vendor-select"
-                    value={selectedVendor}
-                    onChange={(e) => {
-                      setSelectedVendor(e.target.value);
-                      if (e.target.value !== 'CUSTOM') {
-                        setCustomVendorName('');
-                      }
-                    }}
+                <select
+                  id="vendor-select"
+                  value={selectedVendor}
+                  onChange={(e) => {
+                    setSelectedVendor(e.target.value);
+                    if (e.target.value !== 'CUSTOM') {
+                      setCustomVendorName('');
+                    }
+                  }}
                     className="block w-full h-[38px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                  >
+                >
                     <option value="" disabled>Select Vendor</option>
-                    <option value="MGMA">MGMA</option>
-                    <option value="SULLIVANCOTTER">SullivanCotter</option>
-                    <option value="GALLAGHER">Gallagher</option>
-                    <option value="ECG">ECG Management</option>
-                    <option value="AAMGA">AAMGA</option>
-                    <option value="MERRIT_HAWKINS">Merrit Hawkins</option>
-                    <option value="CUSTOM">Custom Survey</option>
-                  </select>
+                  <option value="MGMA">MGMA</option>
+                  <option value="SULLIVANCOTTER">SullivanCotter</option>
+                  <option value="GALLAGHER">Gallagher</option>
+                  <option value="ECG">ECG Management</option>
+                  <option value="AAMGA">AAMGA</option>
+                  <option value="MERRIT_HAWKINS">Merrit Hawkins</option>
+                  <option value="CUSTOM">Custom Survey</option>
+                </select>
                 </div>
                 
                 {selectedVendor === 'CUSTOM' && (
@@ -1783,14 +1707,14 @@ export default function SurveyManagementPage(): JSX.Element {
                     <label htmlFor="custom-vendor" className="text-sm font-medium text-gray-700">
                       Custom Vendor Name
                     </label>
-                    <input
+                  <input
                       id="custom-vendor"
-                      type="text"
-                      value={customVendorName}
-                      onChange={(e) => setCustomVendorName(e.target.value)}
+                    type="text"
+                    value={customVendorName}
+                    onChange={(e) => setCustomVendorName(e.target.value)}
                       placeholder="Enter vendor name"
                       className="block w-full h-[38px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                    />
+                  />
                   </div>
                 )}
                 
@@ -2014,9 +1938,63 @@ export default function SurveyManagementPage(): JSX.Element {
                 ))}
               </select>
               <button
-                onClick={() => autoDetectMappings()}
-                disabled={!selectedMapping}
-                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${!selectedMapping ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+                onClick={async () => {
+                  if (!selectedVendor || columns.length === 0) {
+                    toast.error('Please select a survey first');
+                    return;
+                  }
+
+                  try {
+                    // Detect mappings
+                    const detectedMappings = autoDetectMappings(columns, selectedVendor);
+                    console.log('Auto-detected mappings:', detectedMappings);
+
+                    // Update local state
+                    setColumnMapping(detectedMappings);
+
+                    // Save to database if we have a selected survey
+                    if (selectedMapping) {
+                      const response = await fetch(`/api/surveys/${selectedMapping}`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          columnMappings: detectedMappings,
+                          specialtyMappings: specialtyMappings || {},
+                          mappingProgress: calculateProgress(detectedMappings)
+                        }),
+                      });
+
+                      if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || 'Failed to save mappings');
+                      }
+
+                      // Update the selected survey in the list with new mappings
+                      setUploadedSurveys((prevSurveys) => {
+                        return prevSurveys.map((survey) => {
+                          if (survey.id === selectedMapping) {
+                            return {
+                              ...survey,
+                              columnMappings: detectedMappings,
+                              specialtyMappings: specialtyMappings || {},
+                              mappingProgress: calculateProgress(detectedMappings)
+                            };
+                          }
+                          return survey;
+                        });
+                      });
+
+                      toast.success('Columns mapped successfully');
+                    }
+                  } catch (error) {
+                    console.error('Error in auto-mapping:', error);
+                    toast.error(error instanceof Error ? error.message : 'Failed to auto-map columns');
+                  }
+                }}
+                disabled={!selectedVendor || columns.length === 0}
+                className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${!selectedVendor || columns.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -2031,12 +2009,12 @@ export default function SurveyManagementPage(): JSX.Element {
         <div className="px-6 pb-6">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">Mapping Progress</span>
-            <span className="text-sm font-medium text-gray-900">{calculateProgress()}%</span>
+            <span className="text-sm font-medium text-gray-900">{calculateProgress(columnMapping)}%</span>
           </div>
           <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
             <div 
               className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500 ease-out"
-              style={{ width: `${calculateProgress()}%` }}
+              style={{ width: `${calculateProgress(columnMapping)}%` }}
             />
           </div>
         </div>
@@ -2133,32 +2111,33 @@ export default function SurveyManagementPage(): JSX.Element {
     </div>
   );
 
-  const calculateProgress = (): number => {
-    if (!columnMapping) return 0;
+  // Calculate mapping progress
+  function calculateProgress(mapping: ColumnMapping | undefined): number {
+    if (!mapping) return 0;
     
     let totalPoints = 0;
     let mappedPoints = 0;
     
-    // Required fields (1 point each)
+    // Required fields
     const requiredFields = ['specialty', 'provider_type', 'geographic_region', 'n_orgs', 'n_incumbents'];
-    requiredFields.forEach(field => {
-      totalPoints += 1;
-      if (columnMapping[field as keyof ColumnMapping]) mappedPoints += 1;
-    });
+    totalPoints += requiredFields.length;
+    mappedPoints += requiredFields.filter(field => mapping[field as keyof ColumnMapping] && mapping[field as keyof ColumnMapping] !== '').length;
+
+    // Percentile metrics (tcc, wrvu, cf)
+    const metrics = ['tcc', 'wrvu', 'cf'];
+    const percentiles = ['p25', 'p50', 'p75', 'p90'];
     
-    // TCC, WRVU, CF percentiles (4 points each = 12 points total)
-    ['tcc', 'wrvu', 'cf'].forEach((metric) => {
-      ['p25', 'p50', 'p75', 'p90'].forEach((percentile) => {
+    // Each metric with all percentiles counts as one point
+    metrics.forEach(metric => {
         totalPoints += 1;
-        const metricMapping = columnMapping[metric as keyof ColumnMapping] as ColumnMappingMetric;
-        if (metricMapping[percentile as keyof ColumnMappingMetric]) {
+      const metricMapping = mapping[metric as keyof ColumnMapping] as ColumnMappingMetric;
+      if (metricMapping && percentiles.some(p => metricMapping[p as keyof ColumnMappingMetric] !== '')) {
           mappedPoints += 1;
         }
-      });
     });
     
     return Math.round((mappedPoints / totalPoints) * 100);
-  };
+  }
 
   const renderTemplateSaveModal = () => (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
@@ -2200,53 +2179,102 @@ export default function SurveyManagementPage(): JSX.Element {
 
   const handleSurveySelect = async (surveyId: string): Promise<void> => {
     try {
+      console.log('Fetching survey:', surveyId);
       const response = await fetch(`/api/surveys/${surveyId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch survey');
+      console.log('Response status:', response.status);
+      
+      const responseText = await response.text();
+      console.log('Raw response text:', responseText);
+      
+      const surveyData = JSON.parse(responseText);
+      console.log('Parsed survey data:', surveyData);
+
+      if (!surveyData) {
+        throw new Error('No survey data found');
       }
-      const survey = await response.json();
+
+      // Set selected mapping first
+      setSelectedMapping(surveyId);
+
+      // Set file data
+      console.log('Setting file data:', surveyData.data.length, 'rows');
+      setFileData(surveyData.data);
+
+      // Extract columns from the first row of data if not provided
+      const columnsFromData = surveyData.data.length > 0 ? Object.keys(surveyData.data[0]) : [];
+      const availableColumns = surveyData.columns?.length > 0 ? surveyData.columns : columnsFromData;
       
-      setFileData(survey.data);
-      setColumns(survey.columns || []);
-      setColumnMapping(survey.columnMappings || {
-        specialty: '',
-        provider_type: '',
-        geographic_region: '',
-        n_orgs: '',
-        n_incumbents: '',
-        tcc: { p25: '', p50: '', p75: '', p90: '' },
-        wrvu: { p25: '', p50: '', p75: '', p90: '' },
-        cf: { p25: '', p50: '', p75: '', p90: '' }
-      });
-      setSpecialtyMappings(survey.specialtyMappings || {});
-      
-      if (!survey.columnMappings || Object.keys(survey.columnMappings).length === 0) {
-        console.log('No existing mappings found, triggering auto-detect');
-        const columns = survey.columns || [];
-        const vendor = survey.vendor;
-        // Small delay to ensure state is updated before running auto-detect
-        setTimeout(() => {
-          const detectedMappings = autoDetectMappings(columns, vendor);
-          setColumnMapping(detectedMappings);
-        }, 100);
+      console.log('Setting columns:', availableColumns);
+      setColumns(availableColumns);
+
+      // Set vendor
+      console.log('Setting vendor:', surveyData.vendor);
+      setSelectedVendor(surveyData.vendor);
+
+      // If no column mappings exist or they're empty, trigger auto-detection
+      const hasValidMappings = surveyData.columnMappings && 
+        Object.keys(surveyData.columnMappings).length > 0 &&
+        calculateProgress(surveyData.columnMappings) > 0;
+
+      if (!hasValidMappings && availableColumns.length > 0) {
+        console.log('No valid mappings found, auto-detecting...');
+        const detectedMappings = autoDetectMappings(availableColumns, surveyData.vendor);
+        console.log('Auto-detected mappings:', detectedMappings);
+        
+        // Set the mappings immediately
+        setColumnMapping(detectedMappings);
+        
+        // Save detected mappings
+        const updateResponse = await fetch(`/api/surveys/${surveyId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            columnMappings: detectedMappings,
+            specialtyMappings: surveyData.specialtyMappings || {},
+            mappingProgress: calculateProgress(detectedMappings)
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          throw new Error('Failed to save auto-detected mappings');
+        }
+
+        // Update uploaded surveys list
+        setUploadedSurveys(prev => prev.map(survey => {
+          if (survey.id === surveyId) {
+            return {
+              ...survey,
+              columnMappings: detectedMappings,
+              mappingProgress: calculateProgress(detectedMappings)
+            };
+          }
+          return survey;
+        }));
+
+        toast.success('Columns auto-mapped successfully');
+      } else {
+        // Set existing mappings
+        console.log('Setting existing column mappings:', surveyData.columnMappings);
+        setColumnMapping(surveyData.columnMappings || {
+          specialty: '',
+          provider_type: '',
+          geographic_region: '',
+          n_orgs: '',
+          n_incumbents: '',
+          tcc: { p25: '', p50: '', p75: '', p90: '' },
+          wrvu: { p25: '', p50: '', p75: '', p90: '' },
+          cf: { p25: '', p50: '', p75: '', p90: '' }
+        });
       }
-      
-      // Set the specialty mappings if they exist
-      if (survey.specialtyMappings) {
-        setSpecialtyMappings(survey.specialtyMappings);
-      }
-      
-      // Ensure we're in mapping step
-      setActiveStep('mapping');
-      setShowMappingInterface(true);
-      
-      console.log('Survey data loaded:', {
-        columns: survey.columns,
-        mappings: survey.columnMappings,
-        specialtyMappings: survey.specialtyMappings
-      });
+
+      // Set specialty mappings
+      console.log('Setting specialty mappings:', Object.keys(surveyData.specialtyMappings || {}).length, 'specialties');
+      setSpecialtyMappings(surveyData.specialtyMappings || {});
+
     } catch (error) {
-      console.error('Error loading survey:', error);
+      console.error('Error selecting survey:', error);
       toast.error('Failed to load survey');
     }
   };
@@ -2447,7 +2475,7 @@ export default function SurveyManagementPage(): JSX.Element {
     if (uploadedSurveys.length === 0) return false;
 
     // Check if column mapping is complete
-    if (calculateProgress() !== 100) return false;
+    if (calculateProgress(columnMapping) !== 100) return false;
 
     // Check if specialty mapping is complete
     if (calculateSpecialtyProgress() !== 100) return false;
@@ -2507,6 +2535,36 @@ export default function SurveyManagementPage(): JSX.Element {
       console.error('Error accepting single source:', error);
       toast.error('Failed to accept single source. Please try again.');
     }
+  };
+
+  // Add reload button in the UI near the survey selection
+  const renderSurveySelection = () => {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          <select
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+            onChange={(e) => handleSurveySelect(e.target.value)}
+            value=""
+          >
+            <option value="">Select a survey to map</option>
+            {uploadedSurveys.map((survey) => (
+              <option key={survey.id} value={survey.id}>
+                {formatVendorName(survey.vendor)} ({survey.year})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={loadSurveys}
+            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <ArrowPathIcon className="h-4 w-4 mr-1" />
+            Reload
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (

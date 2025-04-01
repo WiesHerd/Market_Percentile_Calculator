@@ -1,15 +1,22 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
-
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Get surveyId from query params
+    const { searchParams } = new URL(request.url);
+    const surveyId = searchParams.get('surveyId');
+
     const dbMappings = await prisma.specialtyMapping.findMany({
+      where: surveyId ? { surveyId } : undefined,
       select: {
+        id: true,
+        surveyId: true,
         sourceSpecialty: true,
         mappedSpecialty: true,
-        notes: true
+        notes: true,
+        confidence: true,
+        isVerified: true
       }
     });
 
@@ -24,11 +31,17 @@ export async function POST(request: Request) {
   try {
     const { surveyId, sourceSpecialty, mappedSpecialties, notes } = await request.json();
 
-    // Delete existing mappings for this source specialty
+    if (!surveyId || !sourceSpecialty || !Array.isArray(mappedSpecialties)) {
+      return NextResponse.json({ 
+        error: 'Missing required fields: surveyId, sourceSpecialty, or mappedSpecialties' 
+      }, { status: 400 });
+    }
+
+    // Delete existing mappings for this source specialty in this survey
     await prisma.specialtyMapping.deleteMany({
       where: {
-        surveyId: surveyId,
-        sourceSpecialty: sourceSpecialty
+        surveyId,
+        sourceSpecialty
       }
     });
 
@@ -36,15 +49,12 @@ export async function POST(request: Request) {
     const newMappings = await Promise.all(mappedSpecialties.map(mappedSpecialty =>
       prisma.specialtyMapping.create({
         data: {
+          surveyId,
           sourceSpecialty,
           mappedSpecialty,
-          notes: notes,
+          notes: notes || '',
           confidence: 1.0, // Default confidence for manual mappings
-          survey: {
-            connect: {
-              id: surveyId
-            }
-          }
+          isVerified: true // Manual mappings are considered verified
         }
       })
     ));
