@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon, UserGroupIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import Papa, { ParseResult, ParseError as PapaParseError } from 'papaparse';
 import Select, { MultiValue, StylesConfig } from 'react-select';
@@ -71,6 +71,7 @@ interface SpecialtyMapping {
   notes?: string;
   resolved?: boolean;
   isSingleSource?: boolean;
+  confidence?: number;
 }
 
 interface MappingState {
@@ -338,11 +339,112 @@ interface DBSurvey {
   updatedAt: string;
 }
 
+// Add YearPicker component
+function YearPicker({ value, onChange }: { value: string, onChange: (year: string) => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [decade, setDecade] = useState(Math.floor(new Date().getFullYear() / 10) * 10);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const years = Array.from({ length: 12 }, (_, i) => decade + i - 1);
+
+  return (
+    <div className="relative" ref={pickerRef}>
+      <div className="flex flex-col space-y-1">
+        <label htmlFor="year-select" className="text-sm font-medium text-gray-700">
+          Survey Year
+        </label>
+        <button
+          type="button"
+          id="year-select"
+          onClick={() => setIsOpen(!isOpen)}
+          className={`
+            w-full h-[38px] px-3 py-2
+            text-left text-sm
+            rounded-lg border border-gray-300
+            focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600
+            ${value ? 'text-gray-900 bg-white' : 'text-gray-500 bg-white'}
+          `}
+        >
+          {value || 'Select Year'}
+        </button>
+      </div>
+      
+      {isOpen && (
+        <div className="absolute z-10 mt-1 w-full bg-white rounded-lg shadow-lg border border-gray-200">
+          <div className="p-2">
+            {/* Decade navigation */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <button
+                type="button"
+                onClick={() => setDecade(decade - 10)}
+                className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+              </button>
+              <span className="text-sm font-medium text-gray-900">
+                {decade} - {decade + 11}
+              </span>
+              <button
+                type="button"
+                onClick={() => setDecade(decade + 10)}
+                className="p-1 hover:bg-gray-100 rounded-full text-gray-600"
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Year grid */}
+            <div className="grid grid-cols-3 gap-1">
+              {years.map((year) => (
+                <button
+                  key={year}
+                  onClick={() => {
+                    onChange(year.toString());
+                    setIsOpen(false);
+                  }}
+                  className={`
+                    p-2 text-sm rounded-lg transition-colors
+                    ${value === year.toString()
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                    }
+                    ${year === new Date().getFullYear()
+                      ? 'font-semibold'
+                      : 'font-normal'
+                    }
+                  `}
+                >
+                  {year}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Update the type of activeStep
+type StepType = 'upload' | 'mapping' | 'specialties';
+
 export default function SurveyManagementPage(): JSX.Element {
-  const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
-  const [selectedVendor, setSelectedVendor] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
-  const [fileData, setFileData] = useState<PreviewRow[] | null>(null);
+  const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
+  const [activeStep, setActiveStep] = useState<StepType>('upload');
+  const [selectedVendor, setSelectedVendor] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [fileData, setFileData] = useState<any[]>([]);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     specialty: '',
@@ -354,110 +456,52 @@ export default function SurveyManagementPage(): JSX.Element {
     wrvu: { p25: '', p50: '', p75: '', p90: '' },
     cf: { p25: '', p50: '', p75: '', p90: '' }
   });
-  const [savedTemplates, setSavedTemplates] = useState<MappingTemplate[]>([]);
-  const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
   const [specialtyMappings, setSpecialtyMappings] = useState<MappingState>({});
-  const [selectedMapping, setSelectedMapping] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [editingNotes, setEditingNotes] = useState<string | null>(null);
+  const [isSurveySaved, setIsSurveySaved] = useState(false);
+  const [specialtyProgress, setSpecialtyProgress] = useState(0);
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
+  const [templateName, setTemplateName] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [aggregatedData, setAggregatedData] = useState<AggregatedData[]>([]);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
-  const [templateName, setTemplateName] = useState('');
-  const [showTemplateSaveModal, setShowTemplateSaveModal] = useState(false);
+  const [selectedMapping, setSelectedMapping] = useState<string | null>(null);
+  const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [autoDetectStatus, setAutoDetectStatus] = useState<'idle' | 'detecting' | 'complete'>('idle');
   const [mappingValidation, setMappingValidation] = useState<{[key: string]: boolean}>({});
   const [showMappingPreview, setShowMappingPreview] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [showMappingInterface, setShowMappingInterface] = useState(false);
   const [customVendorName, setCustomVendorName] = useState<string>('');
-  const [isSurveySaved, setIsSurveySaved] = useState(false);
-  const [specialtyProgress, setSpecialtyProgress] = useState(0);
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
-  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [savedTemplates, setSavedTemplates] = useState<MappingTemplate[]>([]);
+  const [previewData, setPreviewData] = useState<PreviewRow[]>([]);
 
-  // Add default survey data loading
+  // Load surveys from API on mount
   useEffect(() => {
     const loadSurveys = async () => {
       try {
-        // Fetch surveys from the database
         const response = await fetch('/api/surveys');
         if (!response.ok) {
           throw new Error('Failed to fetch surveys');
         }
-        const dbSurveys = await response.json();
-        
-        if (dbSurveys.length > 0) {
-          // Sort surveys by upload date
-          const sortedSurveys = [...dbSurveys].sort((a, b) => 
-            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-          );
-          
-          // Get the most recent survey
-          const mostRecentSurvey = sortedSurveys[0];
-          
-          // Load specialty mappings if they exist
-          if (mostRecentSurvey.specialtyMappings && mostRecentSurvey.specialtyMappings.length > 0) {
-            interface SpecialtyMapping {
-              sourceSpecialty: string;
-              mappedSpecialties: string[];
-              notes: string;
-              resolved: boolean;
-              confidence?: number;
-            }
+        const surveys = await response.json();
+        setUploadedSurveys(surveys);
 
-            const mappings = mostRecentSurvey.specialtyMappings.reduce<Record<string, SpecialtyMapping>>((acc, mapping) => ({
-              ...acc,
-              [mapping.sourceSpecialty]: {
-                mappedSpecialties: [mapping.mappedSpecialty],
-                notes: mapping.notes || '',
-                resolved: mapping.isVerified,
-                confidence: mapping.confidence
-              }
-            }), {});
-            
-            setSpecialtyMappings(mappings);
-            
-            // Calculate and set progress
-            const currentProgress = calculateSpecialtyProgress();
-            setSpecialtyProgress(currentProgress);
-            
-            console.log('Loaded mappings:', {
-              mappingsCount: Object.keys(mappings).length,
-              progress: currentProgress
-            });
-
-            // If there are specialty mappings, go to specialties screen
-            setActiveStep('specialties');
-          } else if (mostRecentSurvey.columnMappings && Object.keys(mostRecentSurvey.columnMappings).length > 0) {
-            // If columns are mapped but no specialty mappings, go to specialty mapping
-            setActiveStep('specialties');
-          } else {
-            // If no mappings at all, go to column mapping
+        // Set active step based on the most recent survey's progress
+        if (surveys.length > 0) {
+          const latestSurvey = surveys[0]; // Assuming surveys are ordered by uploadDate desc
+          if (!latestSurvey.columnMappings || Object.keys(latestSurvey.columnMappings).length === 0) {
+            setActiveStep('upload');
+          } else if (!latestSurvey.specialtyMappings || Object.keys(latestSurvey.specialtyMappings).length === 0) {
             setActiveStep('mapping');
+          } else {
+            setActiveStep('specialties');
           }
-          
-          // Set other survey data
-          setSelectedMapping(mostRecentSurvey.id);
-          if (mostRecentSurvey.columnMappings) {
-            setColumnMapping(mostRecentSurvey.columnMappings);
-            setColumns(Object.keys(mostRecentSurvey.columnMappings));
-            setFileData(mostRecentSurvey.data);
-          }
-          
-          setShowMappingInterface(true);
-          setUploadedSurveys(sortedSurveys);
-        } else {
-          // No surveys uploaded, go to upload screen
-          setActiveStep('upload');
         }
       } catch (error) {
         console.error('Error loading surveys:', error);
-        toast.error('Error loading saved surveys');
-        // On error, default to upload screen
-        setActiveStep('upload');
+        toast.error('Failed to load surveys');
       }
     };
 
@@ -935,6 +979,20 @@ export default function SurveyManagementPage(): JSX.Element {
     try {
       setIsUploading(true);
       setUploadError(null);
+
+      // Validate required fields
+      if (!file) {
+        throw new Error('Please select a file to upload');
+      }
+      if (!selectedVendor) {
+        throw new Error('Please select a vendor');
+      }
+      if (!selectedYear) {
+        throw new Error('Please select a year');
+      }
+      if (selectedVendor === 'CUSTOM' && !customVendorName) {
+        throw new Error('Please enter a custom vendor name');
+      }
 
       // Create FormData
       const formData = new FormData();
@@ -1693,36 +1751,53 @@ export default function SurveyManagementPage(): JSX.Element {
                   </a>
                 </div>
               </div>
-              <div className="flex-shrink-0 w-64 space-y-2">
-                <select
-                  id="vendor-select"
-                  value={selectedVendor}
-                  onChange={(e) => {
-                    setSelectedVendor(e.target.value);
-                    if (e.target.value !== 'CUSTOM') {
-                      setCustomVendorName('');
-                    }
-                  }}
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                >
-                  <option value="" disabled>Select Survey Vendor</option>
-                  <option value="MGMA">MGMA</option>
-                  <option value="SULLIVANCOTTER">SullivanCotter</option>
-                  <option value="GALLAGHER">Gallagher</option>
-                  <option value="ECG">ECG Management</option>
-                  <option value="AAMGA">AAMGA</option>
-                  <option value="MERRIT_HAWKINS">Merrit Hawkins</option>
-                  <option value="CUSTOM">Custom Survey</option>
-                </select>
+              <div className="flex-shrink-0 w-64 space-y-4">
+                <div className="flex flex-col space-y-1">
+                  <label htmlFor="vendor-select" className="text-sm font-medium text-gray-700">
+                    Survey Vendor
+                  </label>
+                  <select
+                    id="vendor-select"
+                    value={selectedVendor}
+                    onChange={(e) => {
+                      setSelectedVendor(e.target.value);
+                      if (e.target.value !== 'CUSTOM') {
+                        setCustomVendorName('');
+                      }
+                    }}
+                    className="block w-full h-[38px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  >
+                    <option value="" disabled>Select Vendor</option>
+                    <option value="MGMA">MGMA</option>
+                    <option value="SULLIVANCOTTER">SullivanCotter</option>
+                    <option value="GALLAGHER">Gallagher</option>
+                    <option value="ECG">ECG Management</option>
+                    <option value="AAMGA">AAMGA</option>
+                    <option value="MERRIT_HAWKINS">Merrit Hawkins</option>
+                    <option value="CUSTOM">Custom Survey</option>
+                  </select>
+                </div>
+                
                 {selectedVendor === 'CUSTOM' && (
-                  <input
-                    type="text"
-                    value={customVendorName}
-                    onChange={(e) => setCustomVendorName(e.target.value)}
-                    placeholder="Enter custom survey name"
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                  />
+                  <div className="flex flex-col space-y-1">
+                    <label htmlFor="custom-vendor" className="text-sm font-medium text-gray-700">
+                      Custom Vendor Name
+                    </label>
+                    <input
+                      id="custom-vendor"
+                      type="text"
+                      value={customVendorName}
+                      onChange={(e) => setCustomVendorName(e.target.value)}
+                      placeholder="Enter vendor name"
+                      className="block w-full h-[38px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                    />
+                  </div>
                 )}
+                
+                <YearPicker
+                  value={selectedYear}
+                  onChange={setSelectedYear}
+                />
               </div>
             </div>
 
@@ -2123,68 +2198,42 @@ export default function SurveyManagementPage(): JSX.Element {
     </div>
   );
 
-  const handleSurveySelect = (surveyId: string): void => {
-    console.log('Selecting survey:', surveyId);
-    setSelectedMapping(surveyId);
-    
-    // Get the selected survey
-    const selectedSurvey = uploadedSurveys.find(s => s.id === surveyId);
-    if (selectedSurvey) {
-      console.log('Found survey:', selectedSurvey);
-      
-      // Reset auto-detect status
-      setAutoDetectStatus('idle');
-      
-      // Set the file data and columns from the selected survey
-      if (selectedSurvey.data && selectedSurvey.data.length > 0) {
-        setFileData(selectedSurvey.data);
-        setColumns(selectedSurvey.columns || Object.keys(selectedSurvey.data[0] || {}));
-        console.log('Loaded data:', {
-          dataLength: selectedSurvey.data.length,
-          columns: selectedSurvey.columns || Object.keys(selectedSurvey.data[0] || {})
-        });
+  const handleSurveySelect = async (surveyId: string): Promise<void> => {
+    try {
+      const response = await fetch(`/api/surveys/${surveyId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch survey');
       }
+      const survey = await response.json();
       
-      // Load existing mappings if they exist
-      if (selectedSurvey.columnMappings && Object.keys(selectedSurvey.columnMappings).length > 0) {
-        console.log('Loading saved mappings:', selectedSurvey.columnMappings);
-        setColumnMapping(selectedSurvey.columnMappings);
-        
-        // Update validation status for saved mappings
-        const validations: {[key: string]: boolean} = {
-          specialty: !!selectedSurvey.columnMappings.specialty
-        };
-
-        ['tcc', 'wrvu', 'cf'].forEach(metric => {
-          ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
-            const key = `${metric}_${percentile}`;
-            validations[key] = !!(selectedSurvey.columnMappings[metric as keyof typeof selectedSurvey.columnMappings] as any)[percentile];
-          });
-        });
-
-        setMappingValidation(validations);
-        setShowMappingPreview(true);
-        
-        // Save the current state to localStorage to ensure persistence
-        const updatedSurveys = uploadedSurveys.map(s => 
-          s.id === surveyId ? {
-            ...s,
-            columnMappings: selectedSurvey.columnMappings,
-            columns: selectedSurvey.columns,
-            specialtyMappings: selectedSurvey.specialtyMappings
-          } : s
-        );
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-        setUploadedSurveys(updatedSurveys);
-      } else {
+      setFileData(survey.data);
+      setColumns(survey.columns || []);
+      setColumnMapping(survey.columnMappings || {
+        specialty: '',
+        provider_type: '',
+        geographic_region: '',
+        n_orgs: '',
+        n_incumbents: '',
+        tcc: { p25: '', p50: '', p75: '', p90: '' },
+        wrvu: { p25: '', p50: '', p75: '', p90: '' },
+        cf: { p25: '', p50: '', p75: '', p90: '' }
+      });
+      setSpecialtyMappings(survey.specialtyMappings || {});
+      
+      if (!survey.columnMappings || Object.keys(survey.columnMappings).length === 0) {
         console.log('No existing mappings found, triggering auto-detect');
+        const columns = survey.columns || [];
+        const vendor = survey.vendor;
         // Small delay to ensure state is updated before running auto-detect
-        setTimeout(() => autoDetectMappings(), 100);
+        setTimeout(() => {
+          const detectedMappings = autoDetectMappings(columns, vendor);
+          setColumnMapping(detectedMappings);
+        }, 100);
       }
       
       // Set the specialty mappings if they exist
-      if (selectedSurvey.specialtyMappings) {
-        setSpecialtyMappings(selectedSurvey.specialtyMappings);
+      if (survey.specialtyMappings) {
+        setSpecialtyMappings(survey.specialtyMappings);
       }
       
       // Ensure we're in mapping step
@@ -2192,11 +2241,13 @@ export default function SurveyManagementPage(): JSX.Element {
       setShowMappingInterface(true);
       
       console.log('Survey data loaded:', {
-        dataLength: selectedSurvey.data.length,
-        columns: selectedSurvey.columns || Object.keys(selectedSurvey.data[0] || {}),
-        columnMappings: selectedSurvey.columnMappings,
-        specialtyMappings: selectedSurvey.specialtyMappings
+        columns: survey.columns,
+        mappings: survey.columnMappings,
+        specialtyMappings: survey.specialtyMappings
       });
+    } catch (error) {
+      console.error('Error loading survey:', error);
+      toast.error('Failed to load survey');
     }
   };
 
@@ -2379,7 +2430,7 @@ export default function SurveyManagementPage(): JSX.Element {
         columnMappings: columnMapping,
         specialtyMappings,
         columns,
-        mappingProgress: 100,
+        mappingProgress: 0,
       };
 
       setUploadedSurveys(prev => [...prev, newSurvey]);
@@ -2405,14 +2456,15 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   // Update the handleAcceptSingleSource function to properly persist mappings
-  const handleAcceptSingleSource = (specialty: string, vendor: string) => {
+  const handleAcceptSingleSource = async (specialty: string, vendor: string) => {
     try {
       // Create the mapping for the single source specialty
       const newMapping: SpecialtyMapping = {
         mappedSpecialties: [specialty], // Map to itself
         notes: `Accepted as single source from ${vendor}`,
         resolved: true,
-        isSingleSource: true // Explicitly set single source flag
+        isSingleSource: true,
+        confidence: 1.0
       };
 
       // Update local state with the new mapping
@@ -2426,7 +2478,23 @@ export default function SurveyManagementPage(): JSX.Element {
       const progress = calculateSpecialtyProgress();
       setSpecialtyProgress(progress);
 
-      // Update all surveys with new mappings and progress
+      // Update the survey in the database
+      const response = await fetch(`/api/surveys/${uploadedSurveys[0].id}/mappings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          specialtyMappings: updatedMappings,
+          mappingProgress: progress
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update survey mappings');
+      }
+
+      // Update local state
       const updatedSurveys = uploadedSurveys.map(survey => ({
         ...survey,
         specialtyMappings: updatedMappings,
@@ -2434,34 +2502,12 @@ export default function SurveyManagementPage(): JSX.Element {
       }));
       setUploadedSurveys(updatedSurveys);
 
-      // Save to localStorage immediately
-      localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-
-      // Show success message
       toast.success(`Accepted ${specialty} as single source`);
-
-      // Log the operation for debugging
-      console.log('Single source accepted:', {
-        specialty,
-        mapping: newMapping,
-        progress,
-        totalMappings: Object.keys(updatedMappings).length
-      });
     } catch (error) {
       console.error('Error accepting single source:', error);
       toast.error('Failed to accept single source. Please try again.');
     }
   };
-
-  // Add this effect after other useEffects
-  useEffect(() => {
-    const size = getLocalStorageSize();
-    console.log(`Total localStorage size: ${size}MB`);
-    
-    // Log size of uploadedSurveys specifically
-    const surveysSize = (localStorage.getItem('uploadedSurveys')?.length || 0) * 2 / 1024 / 1024;
-    console.log(`Uploaded surveys size: ${surveysSize.toFixed(2)}MB`);
-  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
