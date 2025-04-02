@@ -1,0 +1,5 @@
+[33mcommit 0206890915991b83e3b0602a9b7c441400b82214[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: WiesHerd <wherdzik@gmail.com>
+Date:   Wed Mar 26 14:39:12 2025 -0700
+
+    fix: preserve full specialty names with colons in selection panel

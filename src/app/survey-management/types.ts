@@ -1,3 +1,5 @@
+export type StepType = 'upload' | 'column-mapping' | 'specialty-mapping' | 'preview';
+
 export interface ColumnMappingMetric {
   p25: string;
   p50: string;
@@ -8,7 +10,7 @@ export interface ColumnMappingMetric {
 export interface ColumnMapping {
   specialty: string;
   providerType: string;
-  region: string;
+  geographicRegion: string;
   nOrgs: string;
   nIncumbents: string;
   tcc: ColumnMappingMetric;
@@ -17,11 +19,13 @@ export interface ColumnMapping {
 }
 
 export interface SpecialtyMapping {
-  mappedSpecialties: string[];
-  notes: string;
-  resolved: boolean;
-  isSingleSource: boolean;
+  id: string;
+  surveyId: string;
+  sourceSpecialty: string;
+  mappedSpecialty: string;
   confidence: number;
+  isVerified: boolean;
+  notes?: string;
 }
 
 export interface MappingState {
@@ -57,12 +61,43 @@ export interface SurveyDataRow {
 export interface SurveyData {
   id: string;
   vendor: string;
-  year: number;
+  year: string;
+  data: any[];
   columnMappings: ColumnMapping;
-  specialtyMappings: MappingState;
-  data: SurveyDataRow[];
+  specialtyMappings: Record<string, SpecialtyMapping>;
+  columns: string[];
+  mappingProgress: number;
 }
 
 export interface UploadedSurvey extends Omit<SurveyData, 'year'> {
   year: string;
+}
+
+export interface MappingTemplate {
+  id: string;
+  name: string;
+  vendor: string;
+  columnMappings: ColumnMapping;
+}
+
+export interface PreviewRow {
+  [key: string]: string | number;
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export interface AggregatedData {
+  specialty: string;
+  providerType: string;
+  geographicRegion: string;
+  metrics: {
+    tcc: { [key: string]: number };
+    wrvu: { [key: string]: number };
+    cf: { [key: string]: number };
+  };
+  nOrgs: number;
+  nIncumbents: number;
 } 

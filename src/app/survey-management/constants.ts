@@ -1,0 +1,91 @@
+export interface VendorPatterns {
+  specialty: RegExp;
+  providerType: RegExp;
+  geographicRegion: RegExp;
+  nOrgs: RegExp;
+  nIncumbents: RegExp;
+  tcc: RegExp;
+  wrvu: RegExp;
+  cf: RegExp;
+  tcc_p25: RegExp;
+  tcc_p50: RegExp;
+  tcc_p75: RegExp;
+  tcc_p90: RegExp;
+  wrvu_p25: RegExp;
+  wrvu_p50: RegExp;
+  wrvu_p75: RegExp;
+  wrvu_p90: RegExp;
+  cf_p25: RegExp;
+  cf_p50: RegExp;
+  cf_p75: RegExp;
+  cf_p90: RegExp;
+}
+
+export const SURVEY_PATTERNS: Record<string, VendorPatterns> = {
+  GALLAGHER: {
+    specialty: /specialty|practice/i,
+    providerType: /provider.*type|position/i,
+    geographicRegion: /region|geography|location/i,
+    nOrgs: /n.*orgs|number.*organizations|reporting.*orgs/i,
+    nIncumbents: /n.*incumbents|number.*incumbents|reporting.*positions/i,
+    tcc: /total.*cash.*comp|tcc|total.*comp/i,
+    wrvu: /wrvu|rvu|work.*rvu/i,
+    cf: /collections|cf|collection.*factor/i,
+    tcc_p25: /tcc.*25|total.*comp.*25|p25.*tcc/i,
+    tcc_p50: /tcc.*50|total.*comp.*50|p50.*tcc/i,
+    tcc_p75: /tcc.*75|total.*comp.*75|p75.*tcc/i,
+    tcc_p90: /tcc.*90|total.*comp.*90|p90.*tcc/i,
+    wrvu_p25: /wrvu.*25|rvu.*25|p25.*wrvu/i,
+    wrvu_p50: /wrvu.*50|rvu.*50|p50.*wrvu/i,
+    wrvu_p75: /wrvu.*75|rvu.*75|p75.*wrvu/i,
+    wrvu_p90: /wrvu.*90|rvu.*90|p90.*wrvu/i,
+    cf_p25: /cf.*25|collections.*25|p25.*cf/i,
+    cf_p50: /cf.*50|collections.*50|p50.*cf/i,
+    cf_p75: /cf.*75|collections.*75|p75.*cf/i,
+    cf_p90: /cf.*90|collections.*90|p90.*cf/i
+  },
+  SULLIVANCOTTER: {
+    specialty: /specialty|practice/i,
+    providerType: /provider.*type|position/i,
+    geographicRegion: /region|geography|location/i,
+    nOrgs: /n.*orgs|number.*organizations|reporting.*orgs/i,
+    nIncumbents: /n.*incumbents|number.*incumbents|reporting.*positions/i,
+    tcc: /total.*cash.*comp|tcc|total.*comp/i,
+    wrvu: /wrvu|rvu|work.*rvu/i,
+    cf: /collections|cf|collection.*factor/i,
+    tcc_p25: /tcc.*25|total.*comp.*25|p25.*tcc/i,
+    tcc_p50: /tcc.*50|total.*comp.*50|p50.*tcc/i,
+    tcc_p75: /tcc.*75|total.*comp.*75|p75.*tcc/i,
+    tcc_p90: /tcc.*90|total.*comp.*90|p90.*tcc/i,
+    wrvu_p25: /wrvu.*25|rvu.*25|p25.*wrvu/i,
+    wrvu_p50: /wrvu.*50|rvu.*50|p50.*wrvu/i,
+    wrvu_p75: /wrvu.*75|rvu.*75|p75.*wrvu/i,
+    wrvu_p90: /wrvu.*90|rvu.*90|p90.*wrvu/i,
+    cf_p25: /cf.*25|collections.*25|p25.*cf/i,
+    cf_p50: /cf.*50|collections.*50|p50.*cf/i,
+    cf_p75: /cf.*75|collections.*75|p75.*cf/i,
+    cf_p90: /cf.*90|collections.*90|p90.*cf/i
+  },
+  MGMA: {
+    specialty: /specialty|practice/i,
+    providerType: /provider.*type|position/i,
+    geographicRegion: /region|geography|location/i,
+    nOrgs: /n.*orgs|number.*organizations|reporting.*orgs/i,
+    nIncumbents: /n.*incumbents|number.*incumbents|reporting.*positions/i,
+    tcc: /total.*cash.*comp|tcc|total.*comp/i,
+    wrvu: /wrvu|rvu|work.*rvu/i,
+    cf: /collections|cf|collection.*factor/i,
+    tcc_p25: /tcc.*25|total.*comp.*25|p25.*tcc/i,
+    tcc_p50: /tcc.*50|total.*comp.*50|p50.*tcc/i,
+    tcc_p75: /tcc.*75|total.*comp.*75|p75.*tcc/i,
+    tcc_p90: /tcc.*90|total.*comp.*90|p90.*tcc/i,
+    wrvu_p25: /wrvu.*25|rvu.*25|p25.*wrvu/i,
+    wrvu_p50: /wrvu.*50|rvu.*50|p50.*wrvu/i,
+    wrvu_p75: /wrvu.*75|rvu.*75|p75.*wrvu/i,
+    wrvu_p90: /wrvu.*90|rvu.*90|p90.*wrvu/i,
+    cf_p25: /cf.*25|collections.*25|p25.*cf/i,
+    cf_p50: /cf.*50|collections.*50|p50.*cf/i,
+    cf_p75: /cf.*75|collections.*75|p75.*cf/i,
+    cf_p90: /cf.*90|collections.*90|p90.*cf/i
+  }
+}; 

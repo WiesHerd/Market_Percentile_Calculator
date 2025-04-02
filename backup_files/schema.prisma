@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Survey {
+  id         String       @id @default(uuid())
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  vendor     String
+  year      String
+  data      Json?
+  surveyData SurveyData[]
+}
+
+model SurveyData {
+  id                String   @id @default(uuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  surveyId          String
+  specialty         String
+  provider_type     String?
+  geographic_region String?
+  n_orgs           Int?
+  n_incumbents     Int?
+  tcc_p25          Float?
+  tcc_p50          Float?
+  tcc_p75          Float?
+  tcc_p90          Float?
+  wrvu_p25         Float?
+  wrvu_p50         Float?
+  wrvu_p75         Float?
+  wrvu_p90         Float?
+  cf_p25           Float?
+  cf_p50           Float?
+  cf_p75           Float?
+  cf_p90           Float?
+  survey           Survey   @relation(fields: [surveyId], references: [id])
+
+  @@map("survey_data")
+} 

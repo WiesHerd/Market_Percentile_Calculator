@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { validateColumnMappings } from "@/app/survey-management/utils/validation";
 
 interface SpecialtyMapping {
   mappedSpecialties: string[];
@@ -176,60 +177,75 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { id } = params;
     const body = await request.json();
-    const { columnMappings, specialtyMappings } = body;
+    const { columnMappings, mappingProgress } = body;
 
-    // Update the survey with optimistic locking
-    const survey = await prisma.$transaction(async (tx) => {
-      // Get current version
-      const current = await tx.survey.findUnique({
-        where: { id: params.id },
-        select: { id: true }
+    // Validate the request body
+    const validation = validateColumnMappings(columnMappings);
+    if (!validation.isValid) {
+      return NextResponse.json(
+        {
+          error: "Invalid column mappings",
+          details: validation,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Use a transaction to ensure atomicity
+    const updatedSurvey = await prisma.$transaction(async (tx) => {
+      // Lock the survey record for update
+      const currentSurvey = await tx.survey.findUnique({
+        where: { id },
+        select: { id: true },
       });
 
-      if (!current) {
-        throw new Error('Survey not found');
+      if (!currentSurvey) {
+        throw new Error("Survey not found");
       }
 
-      // Update survey
+      // Update the survey with new mappings
       return tx.survey.update({
-        where: { id: params.id },
+        where: { id },
         data: {
-          columnMappings,
-          specialtyMappings: {
-            deleteMany: { surveyId: params.id },
-            create: Object.entries(specialtyMappings).flatMap(([sourceSpecialty, mapping]: [string, any]) =>
-              mapping.mappedSpecialties.map((mappedSpecialty: string) => ({
-                sourceSpecialty,
-                mappedSpecialty,
-                notes: mapping.notes || '',
-                isVerified: mapping.resolved || false,
-                confidence: mapping.confidence || 1
-              }))
-            )
-          }
+          columnMappings: columnMappings as Prisma.JsonObject,
+          mappingProgress,
+          updatedAt: new Date(),
         },
-        select: {
-          id: true,
-          columnMappings: true,
-          specialtyMappings: {
-            select: {
-              sourceSpecialty: true,
-              mappedSpecialty: true,
-              notes: true,
-              isVerified: true,
-              confidence: true
-            }
-          }
-        }
+        include: {
+          specialtyMappings: true,
+        },
       });
     });
 
-    return NextResponse.json(survey);
+    return NextResponse.json(updatedSurvey);
   } catch (error) {
-    console.error('Error updating survey:', error);
+    console.error("Error updating survey:", error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      // Handle specific Prisma errors
+      switch (error.code) {
+        case "P2025":
+          return NextResponse.json(
+            { error: "Survey not found" },
+            { status: 404 }
+          );
+        case "P2002":
+          return NextResponse.json(
+            { error: "Unique constraint violation" },
+            { status: 409 }
+          );
+        default:
+          return NextResponse.json(
+            { error: "Database error" },
+            { status: 500 }
+          );
+      }
+    }
+
     return NextResponse.json(
-      { error: 'Failed to update survey' },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
