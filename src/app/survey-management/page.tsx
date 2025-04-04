@@ -340,8 +340,9 @@ interface DBSurvey {
 
 export default function SurveyManagementPage(): JSX.Element {
   const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
-  const [selectedVendor, setSelectedVendor] = useState<string>('');
-  const [selectedYear, setSelectedYear] = useState<string>(new Date().getFullYear().toString());
+  const [selectedVendor, setSelectedVendor] = useState('');
+  const [customVendorName, setCustomVendorName] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
   const [fileData, setFileData] = useState<PreviewRow[] | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
@@ -372,11 +373,13 @@ export default function SurveyManagementPage(): JSX.Element {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedSurveys, setUploadedSurveys] = useState<UploadedSurvey[]>([]);
   const [showMappingInterface, setShowMappingInterface] = useState(false);
-  const [customVendorName, setCustomVendorName] = useState<string>('');
   const [isSurveySaved, setIsSurveySaved] = useState(false);
   const [specialtyProgress, setSpecialtyProgress] = useState(0);
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [currentDecade, setCurrentDecade] = useState<number>(Math.floor(new Date().getFullYear() / 10) * 10);
+  const [viewDecade, setViewDecade] = useState(Math.floor(new Date().getFullYear() / 10) * 10);
 
   // Add default survey data loading
   useEffect(() => {
@@ -1703,7 +1706,7 @@ export default function SurveyManagementPage(): JSX.Element {
                       setCustomVendorName('');
                     }
                   }}
-                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                  className="block w-full rounded-md border-0 py-2 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6"
                 >
                   <option value="" disabled>Select Survey Vendor</option>
                   <option value="MGMA">MGMA</option>
@@ -1720,8 +1723,87 @@ export default function SurveyManagementPage(): JSX.Element {
                     value={customVendorName}
                     onChange={(e) => setCustomVendorName(e.target.value)}
                     placeholder="Enter custom survey name"
-                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
+                    className="mt-2 block w-full rounded-md border-0 py-2 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6"
                   />
+                )}
+                
+                {/* Year Input */}
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    value={selectedYear || ''}
+                    placeholder="Select Year"
+                    onClick={() => setShowYearPicker(true)}
+                    readOnly
+                    className="block w-full rounded-md border-0 py-2 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6 cursor-pointer"
+                  />
+                </div>
+
+                {/* Year Picker Calendar */}
+                {showYearPicker && (
+                  <div 
+                    className="absolute mt-1 w-64 bg-white rounded-lg shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+                  >
+                    {/* Calendar Header */}
+                    <div className="flex items-center justify-between p-2 border-b border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => setViewDecade(prev => prev - 10)}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-600"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <span className="text-sm font-medium text-gray-900">
+                        {viewDecade} - {viewDecade + 9}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setViewDecade(prev => prev + 10)}
+                        className="p-1 hover:bg-gray-100 rounded text-gray-600"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    {/* Years Grid */}
+                    <div className="grid grid-cols-4 p-2 gap-1">
+                      {Array.from({ length: 16 }, (_, i) => {
+                        const year = viewDecade + i;
+                        const isCurrentYear = year === new Date().getFullYear();
+                        const isSelected = year.toString() === selectedYear;
+                        const isFutureYear = year > new Date().getFullYear() + 1;
+                        
+                        return (
+                          <button
+                            key={year}
+                            type="button"
+                            disabled={isFutureYear}
+                            onClick={() => {
+                              setSelectedYear(year.toString());
+                              setShowYearPicker(false);
+                            }}
+                            className={`
+                              p-2 text-sm font-medium rounded transition-colors
+                              ${isSelected 
+                                ? 'bg-blue-600 text-white' 
+                                : isCurrentYear
+                                  ? 'bg-blue-50 text-blue-600'
+                                  : isFutureYear
+                                    ? 'text-gray-300 cursor-not-allowed'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                              }
+                            `}
+                          >
+                            {year}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>

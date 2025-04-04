@@ -280,6 +280,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const [showNewSpecialtyDialog, setShowNewSpecialtyDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [specialtyToDelete, setSpecialtyToDelete] = useState<SpecialtyWithStats | null>(null);
+  const [specialtyMappings, setSpecialtyMappings] = useState<Record<string, SpecialtyMapping>>({});
 
   // Add debounced search query state
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
@@ -1542,6 +1543,37 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const handleDeleteClick = (specialty: SpecialtyWithStats) => {
     setSpecialtyToDelete(specialty);
     setShowDeleteDialog(true);
+  };
+
+  const loadMappings = async (surveys: Survey[]) => {
+    try {
+      // Get all survey IDs
+      const surveyIds = surveys.map(s => s.id);
+      
+      // Fetch mappings from API
+      const response = await fetch(`/api/specialty-mappings?surveyIds=${surveyIds.join(',')}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch specialty mappings');
+      }
+      
+      const { mappings } = await response.json();
+      
+      // Process mappings as before
+      const processedMappings = mappings.reduce<Record<string, SpecialtyMapping>>((acc, mapping) => ({
+        ...acc,
+        [mapping.sourceSpecialty]: {
+          mappedSpecialties: [mapping.mappedSpecialty],
+          notes: mapping.notes || '',
+          resolved: mapping.isVerified,
+          confidence: mapping.confidence || 0
+        }
+      }), {});
+
+      setSpecialtyMappings(processedMappings);
+    } catch (error) {
+      console.error('Error loading specialty mappings:', error);
+      toast.error('Failed to load specialty mappings');
+    }
   };
 
   return (

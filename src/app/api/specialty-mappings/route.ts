@@ -1,19 +1,20 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const surveyIds = searchParams.get('surveyIds')?.split(',') || [];
 
-export async function GET() {
   try {
     const dbMappings = await prisma.specialtyMapping.findMany({
-      select: {
-        sourceSpecialty: true,
-        mappedSpecialty: true,
-        notes: true
+      where: {
+        surveyId: {
+          in: surveyIds
+        }
       }
     });
 
-    return NextResponse.json(dbMappings);
+    return NextResponse.json({ mappings: dbMappings });
   } catch (error) {
     console.error('Error fetching specialty mappings:', error);
     return NextResponse.json({ error: 'Failed to fetch specialty mappings' }, { status: 500 });
