@@ -12,32 +12,10 @@ import { calculateStringSimilarity } from '@/utils/string';
 import SpecialtyMappingStudio from '@/components/SpecialtyMappingStudio';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Link from 'next/link';
-import { Dialog } from '@headlessui/react';
+import { Dialog, Transition } from '@headlessui/react';
 import { SpecialtyProgressDisplay } from '@/components/SpecialtyProgressDisplay';
 import { SpecialtyMappingTest } from '@/components/SpecialtyMappingTest';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-// Utility function to format vendor names with vendor map
-const formatVendorName = (vendor: string): string => {
-  const vendorMap: Record<string, string> = {
-    'MGMA': 'MGMA',
-    'GALLAGHER': 'Gallagher',
-    'SULLIVANCOTTER': 'SullivanCotter',
-    'SULLIVAN': 'SullivanCotter',
-    'SULLIVAN COTTER': 'SullivanCotter',
-    'SULLIVAN-COTTER': 'SullivanCotter',
-    'ECG': 'ECG Management',
-    'AAMGA': 'AAMGA',
-    'MERRIT_HAWKINS': 'Merrit Hawkins'
-  };
-  // If it's a custom survey, return the custom name
-  if (vendor.startsWith('CUSTOM:')) {
-    return vendor.replace('CUSTOM:', '');
-  }
-  return vendorMap[vendor.toUpperCase()] || vendor.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-};
+import { v4 as uuidv4 } from 'uuid';
 
 interface ColumnMappingMetric {
   p25: string;
@@ -315,17 +293,6 @@ interface SpecialtyMatch {
   confidence: number;
 }
 
-// Add this function before the SurveyManagementPage component
-function getLocalStorageSize() {
-  let totalSize = 0;
-  for (let key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
-      totalSize += (localStorage[key].length * 2) / 1024 / 1024; // Size in MB
-    }
-  }
-  return totalSize.toFixed(2);
-}
-
 interface DBSurvey {
   id: string;
   vendor: string;
@@ -338,12 +305,42 @@ interface DBSurvey {
   updatedAt: string;
 }
 
+interface Survey {
+  id: string;
+  vendor: string;
+  year: string;
+  data: any[];
+  mappings: ColumnMapping;
+  specialtyMappings: MappingState;
+  columns: string[];
+}
+
+// Utility function to format vendor names with vendor map
+const formatVendorName = (vendor: string): string => {
+  const vendorMap: Record<string, string> = {
+    'MGMA': 'MGMA',
+    'GALLAGHER': 'Gallagher',
+    'SULLIVANCOTTER': 'SullivanCotter',
+    'SULLIVAN': 'SullivanCotter',
+    'SULLIVAN COTTER': 'SullivanCotter',
+    'SULLIVAN-COTTER': 'SullivanCotter',
+    'ECG': 'ECG Management',
+    'AAMGA': 'AAMGA',
+    'MERRIT_HAWKINS': 'Merrit Hawkins'
+  };
+  // If it's a custom survey, return the custom name
+  if (vendor.startsWith('CUSTOM:')) {
+    return vendor.replace('CUSTOM:', '');
+  }
+  return vendorMap[vendor.toUpperCase()] || vendor.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+};
+
 export default function SurveyManagementPage(): JSX.Element {
   const [activeStep, setActiveStep] = useState<'upload' | 'mapping' | 'specialties' | 'preview'>('upload');
-  const [selectedVendor, setSelectedVendor] = useState('');
+  const [selectedVendor, setSelectedVendor] = useState<string>('');
   const [customVendorName, setCustomVendorName] = useState('');
-  const [selectedYear, setSelectedYear] = useState('');
-  const [fileData, setFileData] = useState<PreviewRow[] | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string>('');
+  const [fileData, setFileData] = useState<PreviewRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [columnMapping, setColumnMapping] = useState<ColumnMapping>({
     specialty: '',
@@ -380,92 +377,62 @@ export default function SurveyManagementPage(): JSX.Element {
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [currentDecade, setCurrentDecade] = useState<number>(Math.floor(new Date().getFullYear() / 10) * 10);
   const [viewDecade, setViewDecade] = useState(Math.floor(new Date().getFullYear() / 10) * 10);
+  const [surveys, setSurveys] = useState<DBSurvey[]>([]);
+  const [currentSurvey, setCurrentSurvey] = useState<Survey | null>(null);
+  const [progress, setProgress] = useState<number>(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [columnMappings, setColumnMappings] = useState<ColumnMapping | null>(null);
+  const [templates, setTemplates] = useState<MappingTemplate[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [showTemplateLoadModal, setShowTemplateLoadModal] = useState(false);
 
-  // Add default survey data loading
-  useEffect(() => {
-    const loadSurveys = async () => {
-      try {
-        // Fetch surveys from the database
-        const response = await fetch('/api/surveys');
-        if (!response.ok) {
-          throw new Error('Failed to fetch surveys');
-        }
-        const dbSurveys = await response.json();
-        
-        if (dbSurveys.length > 0) {
-          // Sort surveys by upload date
-          const sortedSurveys = [...dbSurveys].sort((a, b) => 
-            new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-          );
-          
-          // Get the most recent survey
-          const mostRecentSurvey = sortedSurveys[0];
-          
-          // Load specialty mappings if they exist
-          if (mostRecentSurvey.specialtyMappings && mostRecentSurvey.specialtyMappings.length > 0) {
-            interface SpecialtyMapping {
-              sourceSpecialty: string;
-              mappedSpecialties: string[];
-              notes: string;
-              resolved: boolean;
-              confidence?: number;
-            }
-
-            const mappings = mostRecentSurvey.specialtyMappings.reduce<Record<string, SpecialtyMapping>>((acc, mapping) => ({
-              ...acc,
-              [mapping.sourceSpecialty]: {
-                mappedSpecialties: [mapping.mappedSpecialty],
-                notes: mapping.notes || '',
-                resolved: mapping.isVerified,
-                confidence: mapping.confidence
-              }
-            }), {});
-            
-            setSpecialtyMappings(mappings);
-            
-            // Calculate and set progress
-            const currentProgress = calculateSpecialtyProgress();
-            setSpecialtyProgress(currentProgress);
-            
-            console.log('Loaded mappings:', {
-              mappingsCount: Object.keys(mappings).length,
-              progress: currentProgress
-            });
-
-            // If there are specialty mappings, go to specialties screen
-            setActiveStep('specialties');
-          } else if (mostRecentSurvey.columnMappings && Object.keys(mostRecentSurvey.columnMappings).length > 0) {
-            // If columns are mapped but no specialty mappings, go to specialty mapping
-            setActiveStep('specialties');
-          } else {
-            // If no mappings at all, go to column mapping
-            setActiveStep('mapping');
-          }
-          
-          // Set other survey data
-          setSelectedMapping(mostRecentSurvey.id);
-          if (mostRecentSurvey.columnMappings) {
-            setColumnMapping(mostRecentSurvey.columnMappings);
-            setColumns(Object.keys(mostRecentSurvey.columnMappings));
-            setFileData(mostRecentSurvey.data);
-          }
-          
-          setShowMappingInterface(true);
-          setUploadedSurveys(sortedSurveys);
-        } else {
-          // No surveys uploaded, go to upload screen
-          setActiveStep('upload');
-        }
-      } catch (error) {
-        console.error('Error loading surveys:', error);
-        toast.error('Error loading saved surveys');
-        // On error, default to upload screen
-        setActiveStep('upload');
+  const loadTemplates = async () => {
+    try {
+      setIsLoadingTemplates(true);
+      const response = await fetch('/api/templates');
+      if (!response.ok) {
+        throw new Error('Failed to fetch templates');
       }
-    };
+      const data = await response.json();
+      setTemplates(data);
+    } catch (error) {
+      console.error('Error loading templates:', error);
+      toast.error('Failed to load templates');
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  };
 
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  // Load surveys only from Prisma
+  useEffect(() => {
     loadSurveys();
   }, []);
+
+  // Move loadSurveys outside of useEffect
+  const loadSurveys = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/surveys');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch surveys');
+      }
+      
+      const data = await response.json();
+      setSurveys(data);
+      setUploadedSurveys(data); // Update the uploadedSurveys state with database data
+    } catch (error) {
+      console.error('Error loading surveys:', error);
+      toast.error('Failed to load surveys');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Mock data for existing specialties (in a real app, this would come from your database)
   const existingSpecialties: string[] = [
@@ -621,6 +588,12 @@ export default function SurveyManagementPage(): JSX.Element {
       }
     }
   }, []);
+
+  // Fix autoDetectMappings calls
+  const handleAutoDetectMappings = () => {
+    if (!selectedMapping || !columns) return;
+    autoDetectMappings(columns, selectedVendor);
+  };
 
   const autoDetectMappings = (columns: string[], vendor: string): ColumnMapping => {
     console.log('Starting autoDetectMappings with:', {
@@ -935,75 +908,39 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   const handleFileUpload = async (file: File) => {
+    if (!selectedVendor || !selectedYear) {
+      toast.error('Please select a vendor and year');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('vendor', selectedVendor === 'custom' ? customVendorName : selectedVendor);
+    formData.append('year', selectedYear);
+
     try {
-      setIsUploading(true);
-      setUploadError(null);
-
-      // Create FormData
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('vendor', selectedVendor === 'CUSTOM' ? customVendorName : selectedVendor);
-      formData.append('year', selectedYear);
-
-      // Upload to API
       const response = await fetch('/api/surveys', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload survey');
+        throw new Error('Upload failed');
       }
 
       const result = await response.json();
-      
-      // Parse the file for preview
-      Papa.parse<PreviewRow>(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          if (results.errors.length > 0) {
-            console.warn('CSV parsing warnings:', results.errors);
-          }
-
-          // Get columns from the first row
-          const columns = Object.keys(results.data[0] || {});
-          setColumns(columns);
-
-          // Auto-detect mappings based on vendor
-          const detectedMappings = autoDetectMappings(columns, selectedVendor);
-          setColumnMapping(detectedMappings);
-
-          // Store the parsed data and preview
-          const typedData = results.data as PreviewRow[];
-          setFileData(typedData);
-          setPreviewData(typedData.slice(0, 5));
-
-          // Add to uploaded surveys
-          const newSurvey: UploadedSurvey = {
-            id: result.surveyId,
-            vendor: selectedVendor === 'CUSTOM' ? customVendorName : selectedVendor,
-            year: selectedYear,
-            data: typedData,
-            columnMappings: detectedMappings,
-            specialtyMappings: {},
-            columns: columns,
-            mappingProgress: 0,
-          };
-
-          setUploadedSurveys(prev => [...prev, newSurvey]);
-          toast.success('Survey uploaded successfully!');
-        },
-        error: (error) => {
-          console.error('Error parsing file:', error);
-          setUploadError('Error parsing file');
-        }
-      });
+      setCurrentSurvey(result);
+      await loadSurveys(); // Refresh surveys from the database
+      toast.success('Survey uploaded successfully');
+      setIsSurveySaved(true);
+      setActiveStep('mapping');
     } catch (error) {
-      console.error('Error uploading survey:', error);
-      setUploadError(error instanceof Error ? error.message : 'Error uploading survey');
-      toast.error(error instanceof Error ? error.message : 'Failed to upload survey');
+      console.error('Error uploading file:', error);
+      setUploadError('Failed to upload file');
+      toast.error('Failed to upload survey');
     } finally {
       setIsUploading(false);
     }
@@ -1035,24 +972,58 @@ export default function SurveyManagementPage(): JSX.Element {
     });
   };
 
-  const saveTemplate = () => {
-    // TODO: Implement template saving logic
+  const saveTemplate = async () => {
+    try {
+      if (!currentSurvey || !columnMappings) {
+        toast.error('No survey or column mappings to save');
+        return;
+      }
+
+      const template: MappingTemplate = {
+        id: uuidv4(),
+        name: templateName,
+        vendor: currentSurvey.vendor,
+        year: currentSurvey.year,
+        mapping: columnMappings,
+        lastUsed: new Date().toISOString(),
+      };
+
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(template),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save template');
+      }
+
+      toast.success('Template saved successfully');
+      setShowTemplateSaveModal(false);
+      setTemplateName('');
+    } catch (error) {
+      console.error('Error saving template:', error);
+      toast.error('Failed to save template');
+    }
   };
 
-  const loadTemplate = (template: MappingTemplate) => {
-    setColumnMapping(template.mapping);
-    
-    // Update last used timestamp
-    const updatedTemplates = savedTemplates.map(t => 
-      t.id === template.id 
-        ? { ...t, lastUsed: new Date().toISOString() }
-        : t
-    );
-    localStorage.setItem('surveyMappingTemplates', JSON.stringify(updatedTemplates));
-    setSavedTemplates(updatedTemplates);
+  const loadTemplate = async (template: MappingTemplate) => {
+    try {
+      const response = await fetch(`/api/templates/${template.id}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to load template');
+      }
 
-    // Show preview after loading template
-    setShowMappingPreview(true);
+      const loadedTemplate = await response.json();
+      setColumnMappings(loadedTemplate.mapping);
+      toast.success('Template loaded successfully');
+    } catch (error) {
+      console.error('Error loading template:', error);
+      toast.error('Failed to load template');
+    }
   };
 
   // Helper function to extract vendor and specialty
@@ -1201,77 +1172,59 @@ export default function SurveyManagementPage(): JSX.Element {
     return Object.values(aggregated);
   };
 
-  const saveTemplateToStorage = (name: string) => {
-    const template: MappingTemplate = {
-      id: Date.now().toString(),
-      name,
-      vendor: selectedVendor,
-      year: new Date().getFullYear().toString(),
-      mapping: columnMapping,
-      lastUsed: new Date().toISOString()
-    };
+  const saveTemplateToStorage = async (name: string) => {
+    try {
+      if (!currentSurvey) return;
 
-    const updatedTemplates = [...savedTemplates, template];
-    localStorage.setItem('surveyMappingTemplates', JSON.stringify(updatedTemplates));
-    setSavedTemplates(updatedTemplates);
-    setShowTemplateSaveModal(false);
+      const template = {
+        id: uuidv4(),
+        name,
+        vendor: currentSurvey.vendor,
+        year: currentSurvey.year,
+        mapping: columnMapping,
+        lastUsed: new Date().toISOString(),
+      };
+
+      await fetch("/api/surveys/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(template),
+      });
+
+      toast.success("Template saved successfully");
+    } catch (error) {
+      console.error("Error saving template:", error);
+      toast.error("Failed to save template");
+    }
   };
 
   // Update handleSaveMappings to use the API
   const handleSaveMappings = async () => {
     try {
-      // Get current specialty progress
-      const currentProgress = calculateSpecialtyProgress();
-      
-      console.log('Current specialty mappings before save:', specialtyMappings);
-      
-      // Create a copy of the current mappings to ensure we preserve all flags
-      const updatedMappings = { ...specialtyMappings };
-      
-      // Ensure single source specialties are properly marked
-      Object.entries(updatedMappings).forEach(([specialty, mapping]) => {
-        if (mapping.isSingleSource) {
-          updatedMappings[specialty] = {
-            ...mapping,
-            resolved: true,
-            mappedSpecialties: [specialty], // Map to itself
-            isSingleSource: true // Ensure flag is set
-          };
-        }
-      });
-      
-      console.log('Updated mappings after processing:', updatedMappings);
-      
-      // Update the survey in the database
-      const response = await fetch(`/api/surveys/${selectedMapping}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          specialtyMappings: Object.entries(updatedMappings).map(([sourceSpecialty, mapping]) => ({
-            sourceSpecialty,
-            mappedSpecialty: mapping.mappedSpecialties[0], // Take first mapping for now
-            notes: mapping.notes,
-            isVerified: mapping.resolved,
-            confidence: mapping.confidence || 0
-          })),
-          mappingProgress: currentProgress
-        }),
+      if (!currentSurvey) return;
+
+      const updatedSurvey = {
+        ...currentSurvey,
+        columnMappings: columnMapping,
+        specialtyMappings,
+      };
+
+      const response = await fetch("/api/surveys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedSurvey),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update survey mappings');
+        throw new Error("Failed to save survey");
       }
 
-      // Update local state
-      setSpecialtyMappings(updatedMappings);
-      setSpecialtyProgress(currentProgress);
-      setIsSurveySaved(true);
-      toast.success('Survey mappings saved successfully!');
+      const savedSurvey = await response.json();
+      setCurrentSurvey(savedSurvey);
+      toast.success("Mappings saved successfully");
     } catch (error) {
-      console.error('Error saving mappings:', error);
-      toast.error('Failed to save mappings. Please try again.');
+      console.error("Error saving mappings:", error);
+      toast.error("Failed to save mappings");
     }
   };
 
@@ -1925,7 +1878,7 @@ export default function SurveyManagementPage(): JSX.Element {
                             return;
                           }
                           try {
-                            const response = await fetch(`/api/surveys?id=${survey.id}`, {
+                            const response = await fetch(`/api/surveys/${survey.id}`, {
                               method: 'DELETE',
                             });
                             
@@ -2021,14 +1974,14 @@ export default function SurveyManagementPage(): JSX.Element {
                 ))}
               </select>
               <button
-                onClick={() => autoDetectMappings()}
+                onClick={handleAutoDetectMappings}
                 disabled={!selectedMapping}
                 className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white ${!selectedMapping ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
               >
                 <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                 </svg>
-                Auto-map Columns
+                Auto-Detect Mappings
               </button>
             </div>
           </div>
@@ -2168,117 +2121,167 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   const renderTemplateSaveModal = () => (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Save Mapping Template</h3>
-        <div className="space-y-6">
-          <div>
-            <label htmlFor="templateName" className="block text-sm font-medium text-gray-700">
-              Template Name
-            </label>
-            <input
-              type="text"
-              id="templateName"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500"
-              placeholder="Enter template name..."
-            />
-          </div>
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              onClick={() => setShowTemplateSaveModal(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => saveTemplateToStorage(templateName)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
-              disabled={!templateName}
-            >
-              Save Template
-            </button>
-          </div>
+    <Transition show={showTemplateSaveModal} as={React.Fragment}>
+      <Dialog
+        as="div"
+        className="fixed inset-0 z-50 overflow-y-auto"
+        onClose={() => setShowTemplateSaveModal(false)}
+      >
+        <div className="flex min-h-screen items-center justify-center">
+          <Transition.Child
+            as={React.Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-30" />
+          </Transition.Child>
+
+          <Transition.Child
+            as={React.Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+          >
+            <Dialog.Panel className="relative mx-auto max-w-md rounded-lg bg-white p-6 shadow-lg">
+              <Dialog.Title className="text-lg font-medium">Save Template</Dialog.Title>
+              <div className="mt-4">
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="Template name"
+                  className="w-full rounded-md border border-gray-300 p-2"
+                />
+              </div>
+              <div className="mt-4 flex justify-end space-x-2">
+                <button
+                  onClick={() => setShowTemplateSaveModal(false)}
+                  className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveTemplate}
+                  disabled={!templateName}
+                  className={`rounded-md px-4 py-2 text-sm font-medium text-white ${
+                    templateName ? 'bg-blue-600 hover:bg-blue-700' : 'bg-blue-400 cursor-not-allowed'
+                  }`}
+                >
+                  Save
+                </button>
+              </div>
+            </Dialog.Panel>
+          </Transition.Child>
         </div>
-      </div>
-    </div>
+      </Dialog>
+    </Transition>
   );
 
-  const handleSurveySelect = (surveyId: string): void => {
-    console.log('Selecting survey:', surveyId);
-    setSelectedMapping(surveyId);
-    
-    // Get the selected survey
-    const selectedSurvey = uploadedSurveys.find(s => s.id === surveyId);
-    if (selectedSurvey) {
-      console.log('Found survey:', selectedSurvey);
-      
-      // Reset auto-detect status
-      setAutoDetectStatus('idle');
-      
-      // Set the file data and columns from the selected survey
-      if (selectedSurvey.data && selectedSurvey.data.length > 0) {
-        setFileData(selectedSurvey.data);
-        setColumns(selectedSurvey.columns || Object.keys(selectedSurvey.data[0] || {}));
-        console.log('Loaded data:', {
-          dataLength: selectedSurvey.data.length,
-          columns: selectedSurvey.columns || Object.keys(selectedSurvey.data[0] || {})
-        });
-      }
-      
-      // Load existing mappings if they exist
-      if (selectedSurvey.columnMappings && Object.keys(selectedSurvey.columnMappings).length > 0) {
-        console.log('Loading saved mappings:', selectedSurvey.columnMappings);
-        setColumnMapping(selectedSurvey.columnMappings);
-        
-        // Update validation status for saved mappings
-        const validations: {[key: string]: boolean} = {
-          specialty: !!selectedSurvey.columnMappings.specialty
-        };
+  const renderTemplateLoadModal = () => (
+    <Transition show={showTemplateLoadModal} as={React.Fragment}>
+      <Dialog
+        as="div"
+        className="fixed inset-0 z-50 overflow-y-auto"
+        onClose={() => setShowTemplateLoadModal(false)}
+      >
+        <div className="flex min-h-screen items-center justify-center">
+          <Transition.Child
+            as={React.Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-black bg-opacity-30" />
+          </Transition.Child>
 
-        ['tcc', 'wrvu', 'cf'].forEach(metric => {
-          ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
-            const key = `${metric}_${percentile}`;
-            validations[key] = !!(selectedSurvey.columnMappings[metric as keyof typeof selectedSurvey.columnMappings] as any)[percentile];
-          });
-        });
+          <Transition.Child
+            as={React.Fragment}
+            enter="ease-out duration-300"
+            enterFrom="opacity-0 scale-95"
+            enterTo="opacity-100 scale-100"
+            leave="ease-in duration-200"
+            leaveFrom="opacity-100 scale-100"
+            leaveTo="opacity-0 scale-95"
+          >
+            <Dialog.Panel className="relative mx-auto max-w-md rounded-lg bg-white p-6 shadow-lg">
+              <Dialog.Title className="text-lg font-medium">Load Template</Dialog.Title>
+              <div className="mt-4 space-y-4">
+                {isLoadingTemplates ? (
+                  <div className="flex items-center justify-center">
+                    <ArrowPathIcon className="h-6 w-6 animate-spin text-blue-600" />
+                  </div>
+                ) : templates.length === 0 ? (
+                  <p className="text-center text-gray-500">No templates found</p>
+                ) : (
+                  templates.map((template) => (
+                    <button
+                      key={template.id}
+                      onClick={() => {
+                        loadTemplate(template);
+                        setShowTemplateLoadModal(false);
+                      }}
+                      className="flex w-full items-center justify-between rounded-md border border-gray-300 p-4 hover:bg-gray-50"
+                    >
+                      <div>
+                        <h3 className="font-medium">{template.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          {formatVendorName(template.vendor)} - {template.year}
+                        </p>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        Last used: {new Date(template.lastUsed).toLocaleDateString()}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setShowTemplateLoadModal(false)}
+                  className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300"
+                >
+                  Close
+                </button>
+              </div>
+            </Dialog.Panel>
+          </Transition.Child>
+        </div>
+      </Dialog>
+    </Transition>
+  );
 
-        setMappingValidation(validations);
-        setShowMappingPreview(true);
-        
-        // Save the current state to localStorage to ensure persistence
-        const updatedSurveys = uploadedSurveys.map(s => 
-          s.id === surveyId ? {
-            ...s,
-            columnMappings: selectedSurvey.columnMappings,
-            columns: selectedSurvey.columns,
-            specialtyMappings: selectedSurvey.specialtyMappings
-          } : s
-        );
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-        setUploadedSurveys(updatedSurveys);
-      } else {
-        console.log('No existing mappings found, triggering auto-detect');
-        // Small delay to ensure state is updated before running auto-detect
-        setTimeout(() => autoDetectMappings(), 100);
+  const handleSurveySelect = async (surveyId: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/surveys/${surveyId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch survey');
       }
-      
-      // Set the specialty mappings if they exist
-      if (selectedSurvey.specialtyMappings) {
-        setSpecialtyMappings(selectedSurvey.specialtyMappings);
-      }
-      
-      // Ensure we're in mapping step
-      setActiveStep('mapping');
-      setShowMappingInterface(true);
-      
-      console.log('Survey data loaded:', {
-        dataLength: selectedSurvey.data.length,
-        columns: selectedSurvey.columns || Object.keys(selectedSurvey.data[0] || {}),
-        columnMappings: selectedSurvey.columnMappings,
-        specialtyMappings: selectedSurvey.specialtyMappings
-      });
+
+      const survey = await response.json();
+      setCurrentSurvey(survey);
+      setColumnMappings(survey.columnMappings);
+      setSpecialtyMappings(survey.specialtyMappings);
+      setSelectedVendor(survey.vendor);
+      setSelectedYear(survey.year);
+      setColumns(survey.columns);
+      setFileData(survey.data);
+    } catch (error) {
+      console.error('Error loading survey:', error);
+      toast.error('Failed to load survey');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2417,59 +2420,65 @@ export default function SurveyManagementPage(): JSX.Element {
   }, []);
 
   const calculateSpecialtyProgress = (): number => {
-    const totalSpecialties = Object.keys(specialtyMappings).length;
-    if (totalSpecialties === 0) return 0;
+    if (!specialtyMappings || Object.keys(specialtyMappings).length === 0) {
+      return 0;
+    }
 
-    const resolvedSpecialties = Object.values(specialtyMappings).filter(
-      mapping => mapping.resolved || mapping.isSingleSource
+    const totalSpecialties = Object.keys(specialtyMappings).length;
+    const mappedSpecialties = Object.values(specialtyMappings).filter(
+      (mapping) => mapping.resolved
     ).length;
 
-    return Math.round((resolvedSpecialties / totalSpecialties) * 100);
+    return (mappedSpecialties / totalSpecialties) * 100;
   };
 
   const handleSaveSurvey = async () => {
     try {
-      if (!originalFile || !selectedVendor || !selectedYear) {
-        throw new Error('Missing required data for survey upload');
+      setIsSaving(true);
+
+      if (!currentSurvey) {
+        toast.error('No survey to save');
+        return;
       }
 
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('file', originalFile);
-      formData.append('vendor', selectedVendor);
-      formData.append('year', selectedYear);
+      const surveyData = {
+        id: currentSurvey.id,
+        vendor: currentSurvey.vendor,
+        year: currentSurvey.year,
+        data: currentSurvey.data,
+        columnMappings: columnMapping,
+        specialtyMappings,
+        columns: currentSurvey.columns,
+      };
 
-      // Upload to API
-      const response = await fetch('/api/surveys', {
-        method: 'POST',
-        body: formData,
+      const method = currentSurvey.id ? 'PUT' : 'POST';
+      const url = currentSurvey.id ? `/api/surveys/${currentSurvey.id}` : '/api/surveys';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(surveyData),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to upload survey');
+        throw new Error('Failed to save survey');
       }
 
-      const result = await response.json();
+      const savedSurvey = await response.json();
+      toast.success('Survey saved successfully');
       
-      // Update local state
-      const newSurvey = {
-        id: result.surveyId,
-        vendor: selectedVendor,
-        year: selectedYear,
-        data: fileData || [],
-        columnMappings: columnMapping,
-        specialtyMappings,
-        columns,
-        mappingProgress: 100,
-      };
-
-      setUploadedSurveys(prev => [...prev, newSurvey]);
-      setIsSurveySaved(true);
-      toast.success('Survey uploaded successfully!');
+      // Update the surveys list
+      await loadSurveys();
+      
+      // Update current survey with saved data
+      setCurrentSurvey(savedSurvey);
     } catch (error) {
       console.error('Error saving survey:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to upload survey');
+      toast.error('Failed to save survey');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -2487,63 +2496,72 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   // Update the handleAcceptSingleSource function to properly persist mappings
-  const handleAcceptSingleSource = (specialty: string, vendor: string) => {
+  const handleAcceptSingleSource = async (specialty: string, source: string) => {
     try {
-      // Create the mapping for the single source specialty
-      const newMapping: SpecialtyMapping = {
-        mappedSpecialties: [specialty], // Map to itself
-        notes: `Accepted as single source from ${vendor}`,
-        resolved: true,
-        isSingleSource: true // Explicitly set single source flag
-      };
-
-      // Update local state with the new mapping
-      const updatedMappings = {
-        ...specialtyMappings,
-        [specialty]: newMapping
-      };
-      setSpecialtyMappings(updatedMappings);
-
-      // Calculate new progress
-      const progress = calculateSpecialtyProgress();
-      setSpecialtyProgress(progress);
-
-      // Update all surveys with new mappings and progress
-      const updatedSurveys = uploadedSurveys.map(survey => ({
-        ...survey,
-        specialtyMappings: updatedMappings,
-        mappingProgress: progress
+      // Update the mapping state
+      setSpecialtyMappings((prevMappings) => ({
+        ...prevMappings,
+        [specialty]: {
+          ...prevMappings[specialty],
+          accepted: source,
+          status: 'complete'
+        }
       }));
-      setUploadedSurveys(updatedSurveys);
-
-      // Save to localStorage immediately
-      localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-
-      // Show success message
-      toast.success(`Accepted ${specialty} as single source`);
-
-      // Log the operation for debugging
-      console.log('Single source accepted:', {
-        specialty,
-        mapping: newMapping,
-        progress,
-        totalMappings: Object.keys(updatedMappings).length
-      });
     } catch (error) {
       console.error('Error accepting single source:', error);
       toast.error('Failed to accept single source. Please try again.');
     }
   };
 
-  // Add this effect after other useEffects
+  // Add useEffect for loading surveys
   useEffect(() => {
-    const size = getLocalStorageSize();
-    console.log(`Total localStorage size: ${size}MB`);
-    
-    // Log size of uploadedSurveys specifically
-    const surveysSize = (localStorage.getItem('uploadedSurveys')?.length || 0) * 2 / 1024 / 1024;
-    console.log(`Uploaded surveys size: ${surveysSize.toFixed(2)}MB`);
-  }, []);
+    loadSurveys();
+  }, []); // Empty dependency array since loadSurveys is defined outside useEffect
+
+  // Add useEffect for calculating progress
+  useEffect(() => {
+    const progress = calculateProgress();
+    setProgress(progress);
+  }, [columnMapping]); // Recalculate when columnMapping changes
+
+  // Add useEffect for calculating specialty progress
+  useEffect(() => {
+    const progress = calculateSpecialtyProgress();
+    setSpecialtyProgress(progress);
+  }, [specialtyMappings]); // Recalculate when specialtyMappings changes
+
+  const handleSaveTemplate = async () => {
+    if (!templateName.trim()) {
+      toast.error('Please enter a template name');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: templateName,
+          mapping: columnMapping,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save template');
+      }
+
+      const savedTemplate = await response.json();
+      setTemplates([...templates, savedTemplate]);
+      setShowTemplateSaveModal(false);
+      setTemplateName('');
+      toast.success('Template saved successfully');
+    } catch (error) {
+      console.error('Error saving template:', error);
+      toast.error('Failed to save template');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white py-8">
@@ -2596,6 +2614,7 @@ export default function SurveyManagementPage(): JSX.Element {
           </div>
 
           {showTemplateSaveModal && renderTemplateSaveModal()}
+          {showTemplateLoadModal && renderTemplateLoadModal()}
 
           {/* Save Confirmation Dialog */}
           <Dialog 

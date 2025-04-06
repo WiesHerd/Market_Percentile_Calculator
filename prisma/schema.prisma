@@ -8,13 +8,15 @@ datasource db {
 }
 
 model Survey {
-  id                String             @id @default(uuid())
+  id                String             @id @default(cuid())
   vendor            String
   year              String
-  uploadDate        DateTime           @default(now())
-  status            SurveyStatus       @default(PROCESSING)
   columnMappings    Json
-  mappingProgress   Float              @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  mappingProgress   Int                @default(0)
+  status            String             @default("PROCESSING")
+  uploadDate        DateTime           @default(now())
   specialtyMappings SpecialtyMapping[]
   data              SurveyData[]
 
@@ -22,13 +24,13 @@ model Survey {
 }
 
 model SurveyData {
-  id           String  @id @default(uuid())
+  id           String   @id @default(cuid())
   surveyId     String
   specialty    String
   providerType String?
   region       String?
-  nOrgs        Int?
-  nIncumbents  Int?
+  nOrgs        Float?
+  nIncumbents  Float?
   tccP25       Float?
   tccP50       Float?
   tccP75       Float?
@@ -41,75 +43,36 @@ model SurveyData {
   cfP50        Float?
   cfP75        Float?
   cfP90        Float?
-  survey       Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  survey       Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
 
   @@map("survey_data")
 }
 
 model SpecialtyMapping {
-  id              String  @id @default(uuid())
+  id              String   @id @default(cuid())
   surveyId        String
   sourceSpecialty String
   mappedSpecialty String
-  confidence      Float
-  isVerified      Boolean @default(false)
+  confidence      Float    @default(0)
+  isVerified      Boolean  @default(false)
   notes           String?
-  survey          Survey  @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  survey          Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
 
   @@map("specialty_mappings")
 }
 
-model LearningEvent {
-  id                 String   @id @default(uuid())
-  type               String
-  sourceSpecialty    String
-  targetSpecialty    String?
-  confidence         Float
-  reason             String
-  timestamp          DateTime @default(now())
-  vendor             String?
-  patterns           Json?
-  chainedSpecialties Json?
-
-  @@map("learning_events")
-}
-
-model MatchingRule {
-  id            String    @id @default(uuid())
-  pattern       String
-  confidence    Float
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  lastApplied   DateTime?
-  successCount  Int       @default(0)
-  failureCount  Int       @default(0)
-  matchType     String
-  examples      Json
-  vendorContext Json?
-
-  @@map("matching_rules")
-}
-
-model MappedGroup {
-  id             String   @id @default(uuid())
-  specialties    Json
-  createdAt      DateTime @default(now())
-  isSingleSource Boolean?
-
-  @@map("mapped_groups")
-}
-
-model UnmappedSpecialty {
-  id        String   @id @default(uuid())
-  specialty String
+model SurveyTemplate {
+  id        String   @id @default(cuid())
+  name      String
   vendor    String
+  year      String
+  mapping   Json
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("unmapped_specialties")
-}
-
-enum SurveyStatus {
-  PROCESSING
-  READY
-  ERROR
+  @@map("survey_templates")
 }
