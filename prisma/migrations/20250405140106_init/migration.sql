@@ -2,15 +2,32 @@
 CREATE TYPE "SurveyStatus" AS ENUM ('PROCESSING', 'READY', 'ERROR');
 
 -- CreateTable
-CREATE TABLE "surveys" (
+CREATE TABLE "Survey" (
     "id" TEXT NOT NULL,
     "vendor" TEXT NOT NULL,
     "year" TEXT NOT NULL,
-    "uploadDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "status" "SurveyStatus" NOT NULL DEFAULT 'PROCESSING',
+    "data" JSONB NOT NULL,
     "columnMappings" JSONB NOT NULL,
+    "specialtyMappings" JSONB NOT NULL,
+    "columns" TEXT[],
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "surveys_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Survey_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SurveyTemplate" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "vendor" TEXT NOT NULL,
+    "year" TEXT NOT NULL,
+    "mapping" JSONB NOT NULL,
+    "lastUsed" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SurveyTemplate_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -105,7 +122,7 @@ CREATE TABLE "unmapped_specialties" (
 );
 
 -- AddForeignKey
-ALTER TABLE "survey_data" ADD CONSTRAINT "survey_data_surveyId_fkey" FOREIGN KEY ("surveyId") REFERENCES "surveys"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "survey_data" ADD CONSTRAINT "survey_data_surveyId_fkey" FOREIGN KEY ("surveyId") REFERENCES "Survey"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "specialty_mappings" ADD CONSTRAINT "specialty_mappings_surveyId_fkey" FOREIGN KEY ("surveyId") REFERENCES "surveys"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "specialty_mappings" ADD CONSTRAINT "specialty_mappings_surveyId_fkey" FOREIGN KEY ("surveyId") REFERENCES "Survey"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -11,6 +11,16 @@ interface MappingState {
   };
 }
 
+interface SpecialtyMapping {
+  sourceSpecialty: string;
+  mappedSpecialty: string;
+  notes?: string;
+  confidence: number;
+  surveyId: string;
+  surveyVendor: string;
+  surveyYear: string;
+}
+
 interface SurveyContextType {
   specialtyMappings: MappingState;
   updateSpecialtyMapping: (surveyId: string, sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => Promise<void>;
@@ -30,11 +40,11 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
         if (!response.ok) {
           throw new Error('Failed to fetch specialty mappings');
         }
-        const dbMappings = await response.json();
+        const { mappings: dbMappings } = await response.json();
 
         // Convert API response to MappingState format
         const mappingState: MappingState = {};
-        dbMappings.forEach((mapping: { sourceSpecialty: string; mappedSpecialty: string; notes?: string }) => {
+        (dbMappings as SpecialtyMapping[]).forEach(mapping => {
           if (!mappingState[mapping.sourceSpecialty]) {
             mappingState[mapping.sourceSpecialty] = {
               mappedSpecialties: [],
@@ -91,27 +101,27 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
 
   const loadSurveyData = async (surveyId: string) => {
     try {
-      const response = await fetch(`/api/surveys/${surveyId}/data`);
+      const response = await fetch(`/api/surveys/${surveyId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch survey data');
       }
       const data = await response.json();
 
-      if (!data.surveyData?.length) {
+      if (!data) {
         toast.error('No survey data found');
         return;
       }
 
       // Load associated specialty mappings
-      const mappingsResponse = await fetch(`/api/surveys/${surveyId}/specialty-mappings`);
+      const mappingsResponse = await fetch(`/api/specialty-mappings?surveyIds=${surveyId}`);
       if (!mappingsResponse.ok) {
         throw new Error('Failed to fetch specialty mappings');
       }
-      const mappings = await mappingsResponse.json();
+      const { mappings } = await mappingsResponse.json();
 
       // Convert to MappingState format
       const mappingState: MappingState = {};
-      mappings.forEach((mapping: { sourceSpecialty: string; mappedSpecialty: string; notes?: string }) => {
+      (mappings as SpecialtyMapping[]).forEach(mapping => {
         if (!mappingState[mapping.sourceSpecialty]) {
           mappingState[mapping.sourceSpecialty] = {
             mappedSpecialties: [],

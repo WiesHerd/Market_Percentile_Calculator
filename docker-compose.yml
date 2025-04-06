@@ -9,7 +9,7 @@ services:
     ports:
       - "5558:3000"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@survey_db:5432/survey_db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/survey_db
       - REDIS_URL=redis://redis:6379
       - NODE_ENV=development
       - NEXT_TELEMETRY_DISABLED=1
@@ -45,7 +45,7 @@ services:
     ports:
       - "5559:5555"
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@survey_db:5432/survey_db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/survey_db
       - NODE_OPTIONS="--max-old-space-size=4096"
     volumes:
       - .:/app:cached

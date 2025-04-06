@@ -277,9 +277,8 @@ interface UploadedSurvey {
   year: string;
   data: PreviewRow[];
   columnMappings: ColumnMapping;
-  specialtyMappings: MappingState;
-  columns: string[];
-  mappingProgress?: number;
+  columns?: string[];
+  specialtyMappings?: MappingState;
 }
 
 interface UnmappedSpecialty {
@@ -590,26 +589,50 @@ export default function SurveyManagementPage(): JSX.Element {
   }, []);
 
   // Fix autoDetectMappings calls
-  const handleAutoDetectMappings = () => {
+  const handleAutoDetectMappings = (): void => {
     if (!selectedMapping || !columns) return;
-    autoDetectMappings(columns, selectedVendor);
+    
+    setAutoDetectStatus('detecting');
+    const detectedMappings = autoDetectMappings(columns, selectedVendor);
+    
+    // Update the column mappings for the selected survey while preserving the survey list
+    setUploadedSurveys((prevSurveys: UploadedSurvey[]) => 
+      prevSurveys.map(survey => 
+        survey.id === selectedMapping
+          ? { ...survey, columnMappings: detectedMappings }
+          : survey
+      )
+    );
+    
+    setColumnMapping(detectedMappings);
+    setAutoDetectStatus('complete');
+    
+    // Update validation status
+    const validations: {[key: string]: boolean} = {
+      specialty: !!detectedMappings.specialty,
+      provider_type: !!detectedMappings.provider_type,
+      geographic_region: !!detectedMappings.geographic_region,
+      n_orgs: !!detectedMappings.n_orgs,
+      n_incumbents: !!detectedMappings.n_incumbents
+    };
+
+    ['tcc', 'wrvu', 'cf'].forEach(metric => {
+      ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
+        const key = `${metric}_${percentile}`;
+        validations[key] = !!(detectedMappings[metric as keyof typeof detectedMappings] as any)[percentile];
+      });
+    });
+
+    setMappingValidation(validations);
+    setShowMappingPreview(true);
   };
 
   const autoDetectMappings = (columns: string[], vendor: string): ColumnMapping => {
     console.log('Starting autoDetectMappings with:', {
-      fileData: fileData?.length,
       columns,
       selectedMapping,
-      selectedVendor,
-      uploadedSurveys: uploadedSurveys.map(s => ({
-        id: s.id,
-        vendor: s.vendor,
-        dataLength: s.data.length,
-        columns: s.columns
-      }))
+      selectedVendor
     });
-    
-    setAutoDetectStatus('detecting');
 
     // Enhanced patterns for each field type
     const patterns = {
@@ -765,82 +788,8 @@ export default function SurveyManagementPage(): JSX.Element {
       return '';
     };
 
-    // Process each survey
-    uploadedSurveys.forEach(survey => {
-      const surveyColumns = survey.columns || Object.keys(survey.data[0] || {});
-      
-      // Create new mapping for this survey
-      const newMapping = {
-        specialty: findBestMatch(patterns.specialty, surveyColumns),
-        provider_type: findBestMatch(patterns.provider_type, surveyColumns),
-        geographic_region: findBestMatch(patterns.geographic_region, surveyColumns),
-        n_orgs: findBestMatch(patterns.n_orgs, surveyColumns),
-        n_incumbents: findBestMatch(patterns.n_incumbents, surveyColumns),
-      tcc: {
-          p25: findBestMatch(patterns.tcc.p25, surveyColumns),
-          p50: findBestMatch(patterns.tcc.p50, surveyColumns),
-          p75: findBestMatch(patterns.tcc.p75, surveyColumns),
-          p90: findBestMatch(patterns.tcc.p90, surveyColumns)
-      },
-      wrvu: {
-          p25: findBestMatch(patterns.wrvu.p25, surveyColumns),
-          p50: findBestMatch(patterns.wrvu.p50, surveyColumns),
-          p75: findBestMatch(patterns.wrvu.p75, surveyColumns),
-          p90: findBestMatch(patterns.wrvu.p90, surveyColumns)
-      },
-      cf: {
-          p25: findBestMatch(patterns.cf.p25, surveyColumns),
-          p50: findBestMatch(patterns.cf.p50, surveyColumns),
-          p75: findBestMatch(patterns.cf.p75, surveyColumns),
-          p90: findBestMatch(patterns.cf.p90, surveyColumns)
-        }
-      };
-
-      // Update the survey with new mappings
-      setUploadedSurveys(prev => {
-        const updatedSurveys = prev.map(s => {
-          if (s.id === survey.id) {
-            return {
-              ...s,
-              columnMappings: newMapping
-            };
-          }
-          return s;
-        });
-        
-        // Save to localStorage
-        localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-        return updatedSurveys;
-      });
-
-      // If this is the currently selected survey, update the column mapping state
-      if (survey.id === selectedMapping) {
-        setColumnMapping(newMapping);
-        
-        // Update validation status
-        const validations: {[key: string]: boolean} = {
-          specialty: !!newMapping.specialty,
-          provider_type: !!newMapping.provider_type,
-          geographic_region: !!newMapping.geographic_region,
-          n_orgs: !!newMapping.n_orgs,
-          n_incumbents: !!newMapping.n_incumbents
-        };
-
-        ['tcc', 'wrvu', 'cf'].forEach(metric => {
-          ['p25', 'p50', 'p75', 'p90'].forEach(percentile => {
-            const key = `${metric}_${percentile}`;
-            validations[key] = !!(newMapping[metric as keyof typeof newMapping] as any)[percentile];
-          });
-        });
-
-        setMappingValidation(validations);
-        setShowMappingPreview(true);
-      }
-    });
-
-    setAutoDetectStatus('complete');
-
-    return {
+    // Create new mapping for the selected survey
+    const newMapping: ColumnMapping = {
       specialty: findBestMatch(patterns.specialty, columns),
       provider_type: findBestMatch(patterns.provider_type, columns),
       geographic_region: findBestMatch(patterns.geographic_region, columns),
@@ -865,6 +814,17 @@ export default function SurveyManagementPage(): JSX.Element {
         p90: findBestMatch(patterns.cf.p90, columns)
       }
     };
+
+    // Update the survey with new mappings
+    setUploadedSurveys(prevSurveys => 
+      prevSurveys.map(survey => 
+        survey.id === selectedMapping 
+          ? { ...survey, columnMappings: newMapping }
+          : survey
+      )
+    );
+
+    return newMapping;
   };
 
   const findMatchingSpecialties = (sourceSpecialty: string): string[] => {
@@ -2262,26 +2222,39 @@ export default function SurveyManagementPage(): JSX.Element {
 
   const handleSurveySelect = async (surveyId: string): Promise<void> => {
     try {
-      setIsLoading(true);
       const response = await fetch(`/api/surveys/${surveyId}`);
-      
       if (!response.ok) {
         throw new Error('Failed to fetch survey');
       }
-
       const survey = await response.json();
-      setCurrentSurvey(survey);
-      setColumnMappings(survey.columnMappings);
-      setSpecialtyMappings(survey.specialtyMappings);
+      
+      setSelectedMapping(surveyId);
+      setColumns(survey.columns || []);
       setSelectedVendor(survey.vendor);
       setSelectedYear(survey.year);
-      setColumns(survey.columns);
-      setFileData(survey.data);
-    } catch (error) {
-      console.error('Error loading survey:', error);
-      toast.error('Failed to load survey');
-    } finally {
-      setIsLoading(false);
+      
+      // Set column mappings if they exist, otherwise use empty defaults
+      const defaultMapping: ColumnMapping = {
+        specialty: '',
+        provider_type: '',
+        geographic_region: '',
+        n_orgs: '',
+        n_incumbents: '',
+        tcc: { p25: '', p50: '', p75: '', p90: '' },
+        wrvu: { p25: '', p50: '', p75: '', p90: '' },
+        cf: { p25: '', p50: '', p75: '', p90: '' }
+      };
+      
+      setColumnMapping(survey.columnMappings || defaultMapping);
+      
+      // Reset validation status
+      setMappingValidation({});
+      setShowMappingPreview(false);
+      setAutoDetectStatus('idle');
+      
+    } catch (err) {
+      console.error('Error fetching survey:', err);
+      toast.error('Failed to fetch survey details');
     }
   };
 

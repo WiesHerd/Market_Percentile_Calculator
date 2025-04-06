@@ -3,6 +3,10 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
+    // First check if the table exists by trying to count records
+    const count = await prisma.surveyTemplate.count();
+    console.log(`Found ${count} templates`);
+    
     const templates = await prisma.surveyTemplate.findMany({
       orderBy: {
         updatedAt: 'desc'
@@ -12,16 +16,14 @@ export async function GET() {
     return NextResponse.json(templates);
   } catch (error) {
     console.error('Error fetching templates:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch templates' },
-      { status: 500 }
-    );
+    // Return an empty array instead of an error to prevent UI from breaking
+    return NextResponse.json([]);
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const { name, mapping } = await request.json();
+    const { name, vendor, year, mapping } = await request.json();
 
     if (!name || !mapping) {
       return NextResponse.json(
@@ -33,8 +35,8 @@ export async function POST(request: Request) {
     const template = await prisma.surveyTemplate.create({
       data: {
         name,
-        vendor: mapping.vendor || 'Unknown',
-        year: mapping.year || new Date().getFullYear().toString(),
+        vendor: vendor || 'Unknown',
+        year: year || new Date().getFullYear().toString(),
         mapping
       }
     });

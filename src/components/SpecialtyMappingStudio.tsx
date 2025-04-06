@@ -1,15 +1,45 @@
 "use client";
 
-import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AnimatePresence, motion } from 'framer-motion';
-import { MagnifyingGlassIcon, ArrowsRightLeftIcon, XMarkIcon, CheckIcon, CheckCircleIcon, ArrowPathIcon, PlusIcon, InformationCircleIcon, ChevronDownIcon, ChevronUpIcon, ChevronRightIcon, ComputerDesktopIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
-import { calculateStringSimilarity } from '@/utils/string';
-import { findMatchingSpecialties } from '@/utils/surveySpecialtyMapping';
-import type { SurveyVendor, SpecialtyMapping } from '@/utils/surveySpecialtyMapping';
-import { toast } from 'react-hot-toast';
-import { specialtyManager } from '@/utils/specialtyManager';
-import { formatCurrency, formatNumber } from '@/utils/formatting';
+import React, {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+  useRef,
+} from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  MagnifyingGlassIcon,
+  ArrowsRightLeftIcon,
+  XMarkIcon,
+  CheckIcon,
+  CheckCircleIcon,
+  ArrowPathIcon,
+  PlusIcon,
+  InformationCircleIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronRightIcon,
+  ComputerDesktopIcon,
+  Cog6ToothIcon,
+} from "@heroicons/react/24/outline";
+import { calculateStringSimilarity } from "@/utils/string";
+import { findMatchingSpecialties } from "@/utils/surveySpecialtyMapping";
+import type {
+  SurveyVendor,
+  SpecialtyMapping,
+} from "@/utils/surveySpecialtyMapping";
+import { toast } from "react-hot-toast";
+import { specialtyManager } from "@/utils/specialtyManager";
+import { formatCurrency, formatNumber } from "@/utils/formatting";
 import { cn } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,9 +50,14 @@ import { Label } from "@/components/ui/label";
 import { Trash2 } from "lucide-react";
 import type { SpecialtyMetadata } from "@/types/specialty";
 import type { Specialty } from "@/types/specialty";
-import { useDebounce } from 'use-debounce';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { PrismaClient } from '@prisma/client';
+import { useDebounce } from "use-debounce";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -59,7 +94,7 @@ interface SuggestedMapping {
   confidence: number;
   vendor: string;
   metrics?: SpecialtyMetrics;
-  matchType: 'exact' | 'synonym' | 'similar' | 'category';
+  matchType: "exact" | "synonym" | "similar" | "category";
   matchReason: string;
 }
 
@@ -83,7 +118,11 @@ interface SpecialtyMappingStudioProps {
     vendor: string;
     data: any[];
   }>;
-  onMappingChange?: (sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => void;
+  onMappingChange?: (
+    sourceSpecialty: string,
+    mappedSpecialties: string[],
+    notes?: string
+  ) => void;
   onSave?: (mappings: Record<string, string[]>) => void;
   initialMappings?: Record<string, string[]>;
 }
@@ -103,7 +142,7 @@ interface MappingTableRow {
     specialty: SpecialtyData;
     confidence: number;
     reason: string;
-    status?: 'approved' | 'rejected';
+    status?: "approved" | "rejected";
   }>;
 }
 
@@ -125,7 +164,7 @@ interface SimilarSpecialty {
   specialty: string;
   vendor: string;
   confidence: number;
-  matchType: 'exact' | 'synonym' | 'fuzzy';
+  matchType: "exact" | "synonym" | "fuzzy";
   synonyms?: string[];
 }
 
@@ -185,17 +224,18 @@ interface AvailableSpecialty extends SpecialtyData {
 }
 
 // Update the storage key to be more specific
-const STORAGE_KEY = 'specialty-mappings-v1';
+const STORAGE_KEY = "specialty-mappings-v1";
 
 // Helper function to convert BaseSpecialty to SpecialtyWithStats
 function convertToSpecialtyWithStats(specialty: Specialty): SpecialtyWithStats {
   return {
     ...specialty,
     stats: {
-      synonymCount: specialty.synonyms.predefined.length + specialty.synonyms.custom.length,
+      synonymCount:
+        specialty.synonyms.predefined.length + specialty.synonyms.custom.length,
       predefinedCount: specialty.synonyms.predefined.length,
-      customCount: specialty.synonyms.custom.length
-    }
+      customCount: specialty.synonyms.custom.length,
+    },
   };
 }
 
@@ -203,14 +243,14 @@ function convertToSpecialtyWithStats(specialty: Specialty): SpecialtyWithStats {
 const formatVendorName = (vendor: string): string => {
   // Normalize the input first
   const normalized = vendor.toLowerCase().trim();
-  
+
   const vendorMap: Record<string, string> = {
-    'mgma': 'MGMA',
-    'gallagher': 'GALLAGHER',
-    'sullivan': 'SULLIVANCOTTER',
-    'sullivancotter': 'SULLIVANCOTTER',
-    'sullivan cotter': 'SULLIVANCOTTER',
-    'sullivan-cotter': 'SULLIVANCOTTER'
+    mgma: "MGMA",
+    gallagher: "GALLAGHER",
+    sullivan: "SULLIVANCOTTER",
+    sullivancotter: "SULLIVANCOTTER",
+    "sullivan cotter": "SULLIVANCOTTER",
+    "sullivan-cotter": "SULLIVANCOTTER",
   };
 
   return vendorMap[normalized] || vendor.toUpperCase();
@@ -222,7 +262,7 @@ interface AutoMapping {
     specialty: SpecialtyData;
     confidence: number;
     reason: string;
-    status?: 'approved' | 'rejected';
+    status?: "approved" | "rejected";
   }>;
 }
 
@@ -232,65 +272,84 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   onSave,
   initialMappings,
 }: SpecialtyMappingStudioProps): JSX.Element => {
-  console.log('🚀 SpecialtyMappingStudio initializing with:', {
+  console.log("🚀 SpecialtyMappingStudio initializing with:", {
     surveyCount: surveys.length,
-    initialMappings: initialMappings ? Object.keys(initialMappings).length : 0
+    initialMappings: initialMappings ? Object.keys(initialMappings).length : 0,
   });
 
   // State declarations
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedSpecialties, setSelectedSpecialties] = useState<Set<string>>(
+    new Set()
+  );
   const [mappedGroups, setMappedGroups] = useState<MappedGroup[]>([]);
-  const [autoMapSuggestions, setAutoMapSuggestions] = useState<AutoMapSuggestion | null>(null);
-  const [viewMode, setViewMode] = useState<'auto' | 'manual' | 'mapped'>('auto');
-  const [allAutoMappings, setAllAutoMappings] = useState<Array<{
-    sourceSpecialty: SpecialtyData;
-    matches: Array<{
-      specialty: SpecialtyData;
-      confidence: number;
-      reason: string;
-      status?: 'approved' | 'rejected';
-    }>;
-  }>>([]);
+  const [autoMapSuggestions, setAutoMapSuggestions] =
+    useState<AutoMapSuggestion | null>(null);
+  const [viewMode, setViewMode] = useState<"auto" | "manual" | "mapped">(
+    "auto"
+  );
+  const [allAutoMappings, setAllAutoMappings] = useState<
+    Array<{
+      sourceSpecialty: SpecialtyData;
+      matches: Array<{
+        specialty: SpecialtyData;
+        confidence: number;
+        reason: string;
+        status?: "approved" | "rejected";
+      }>;
+    }>
+  >([]);
   const [manualMappingMode, setManualMappingMode] = useState(false);
   const [showAddMore, setShowAddMore] = useState(false);
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [openSearchDropdowns, setOpenSearchDropdowns] = useState<Set<string>>(new Set());
-  const [localSearchQueries, setLocalSearchQueries] = useState<Map<string, string>>(new Map());
+  const [openSearchDropdowns, setOpenSearchDropdowns] = useState<Set<string>>(
+    new Set()
+  );
+  const [localSearchQueries, setLocalSearchQueries] = useState<
+    Map<string, string>
+  >(new Map());
   const [showSynonymModal, setShowSynonymModal] = useState(false);
-  const [selectedSpecialtyForSynonyms, setSelectedSpecialtyForSynonyms] = useState<string | null>(null);
+  const [selectedSpecialtyForSynonyms, setSelectedSpecialtyForSynonyms] =
+    useState<string | null>(null);
   const [editingSynonyms, setEditingSynonyms] = useState<string[]>([]);
   const [newSynonym, setNewSynonym] = useState("");
   const [specialtySearch, setSpecialtySearch] = useState("");
-  const [allSpecialties, setAllSpecialties] = useState<SpecialtyWithStats[]>([]);
+  const [allSpecialties, setAllSpecialties] = useState<SpecialtyWithStats[]>(
+    []
+  );
   const [specialties, setSpecialties] = useState<Specialty[]>([]);
-  const [selectedSpecialty, setSelectedSpecialty] = useState<SpecialtyWithStats | null>(null);
-  const [editingSpecialty, setEditingSpecialty] = useState<SpecialtyWithStats | null>(null);
+  const [selectedSpecialty, setSelectedSpecialty] =
+    useState<SpecialtyWithStats | null>(null);
+  const [editingSpecialty, setEditingSpecialty] =
+    useState<SpecialtyWithStats | null>(null);
   const [specialtyStats, setSpecialtyStats] = useState<SpecialtyStats>({});
-  const [newSpecialtyName, setNewSpecialtyName] = useState('');
+  const [newSpecialtyName, setNewSpecialtyName] = useState("");
   const [searchResults, setSearchResults] = useState<SpecialtyWithStats[]>([]);
   const [currentSynonyms, setCurrentSynonyms] = useState<CurrentSynonyms>({
     predefined: [],
-    custom: []
+    custom: [],
   });
   const [showUnmapped, setShowUnmapped] = useState(false);
   // Add new state for pending synonym
   const [pendingSynonym, setPendingSynonym] = useState<string>("");
   const [showNewSpecialtyDialog, setShowNewSpecialtyDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [specialtyToDelete, setSpecialtyToDelete] = useState<SpecialtyWithStats | null>(null);
-  const [specialtyMappings, setSpecialtyMappings] = useState<Record<string, SpecialtyMapping>>({});
+  const [specialtyToDelete, setSpecialtyToDelete] =
+    useState<SpecialtyWithStats | null>(null);
+  const [specialtyMappings, setSpecialtyMappings] = useState<
+    Record<string, SpecialtyMapping>
+  >({});
 
   // Add debounced search query state
   const [debouncedSearchQuery] = useDebounce(searchQuery, 300);
 
   // Create a set of already mapped specialties
   const mappedSpecialtySet = useMemo(() => {
-    console.log('Computing mapped specialty set');
+    console.log("Computing mapped specialty set");
     return new Set(
-      mappedGroups.flatMap(group => 
-        group.specialties.map(s => `${s.specialty}:${s.vendor}`)
+      mappedGroups.flatMap((group) =>
+        group.specialties.map((s) => `${s.specialty}:${s.vendor}`)
       )
     );
   }, [mappedGroups]);
@@ -298,144 +357,163 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Load all specialties and their synonyms on mount
   useEffect(() => {
     // Only refresh predefined synonyms on initial mount
-    const hasInitialized = localStorage.getItem('synonyms_initialized');
+    const hasInitialized = localStorage.getItem("synonyms_initialized");
     if (!hasInitialized) {
       specialtyManager.refreshPredefinedSynonyms();
-      localStorage.setItem('synonyms_initialized', 'true');
+      localStorage.setItem("synonyms_initialized", "true");
     }
-    
+
     // Load all specialties with stats
-    const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
-    
+    const loadedSpecialties = specialtyManager
+      .getAllSpecialties()
+      .map(convertToSpecialtyWithStats);
+
     // Update state with properly typed specialties
     setAllSpecialties(loadedSpecialties);
     setSearchResults(loadedSpecialties);
-    
+
     // Initialize specialty stats
     getSpecialtyStats();
   }, []); // Empty dependency array since this should only run once on mount
 
   // Organize specialties by vendor
   const specialtiesByVendor = useMemo(() => {
-    console.log('📊 Computing specialtiesByVendor');
+    console.log("📊 Computing specialtiesByVendor");
     const result: Record<string, SpecialtyData[]> = {};
-    
-    surveys.forEach(survey => {
-      const vendorSpecialties = survey.data.map(item => ({
+
+    surveys.forEach((survey) => {
+      const vendorSpecialties = survey.data.map((item) => ({
         specialty: item.specialty,
         vendor: survey.vendor,
-              metrics: {
-                tcc: item.tcc,
-                wrvu: item.wrvu,
-                cf: item.cf
-              }
+        metrics: {
+          tcc: item.tcc,
+          wrvu: item.wrvu,
+          cf: item.cf,
+        },
       }));
 
       result[survey.vendor] = vendorSpecialties;
     });
 
     // Sort specialties alphabetically within each vendor
-    Object.keys(result).forEach(vendor => {
+    Object.keys(result).forEach((vendor) => {
       result[vendor].sort((a, b) => a.specialty.localeCompare(b.specialty));
     });
 
-    console.log('📊 Loaded specialties by vendor:', result);
+    console.log("📊 Loaded specialties by vendor:", result);
     return result;
   }, [surveys]);
 
   // Filter specialties based on search
   const filteredSpecialties = useMemo(() => {
-    console.log('🔍 Filtering specialties with search:', searchQuery);
+    console.log("🔍 Filtering specialties with search:", searchQuery);
     const result: Record<string, SpecialtyData[]> = {};
     const searchTerm = searchQuery.toLowerCase();
 
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
-      result[vendor] = specialties.filter(item =>
+      result[vendor] = specialties.filter((item) =>
         item.specialty.toLowerCase().includes(searchTerm)
       );
     });
 
-    console.log('🔍 Filtered specialties result:', result);
+    console.log("🔍 Filtered specialties result:", result);
     return result;
   }, [specialtiesByVendor, searchQuery]);
 
   // New enhanced function to find potential matches for a specialty
-  const findPotentialMatches = (specialty: SpecialtyData): AutoMapSuggestion => {
-    console.log('🔍 findPotentialMatches called for:', specialty);
-    
+  const findPotentialMatches = (
+    specialty: SpecialtyData
+  ): AutoMapSuggestion => {
+    console.log("🔍 findPotentialMatches called for:", specialty);
+
     const suggestions: AutoMapSuggestion = {
       sourceSpecialty: specialty,
-      suggestedMatches: []
+      suggestedMatches: [],
     };
 
     // Look through all vendors except the source vendor
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
-      console.log(`\n📊 Checking vendor: ${vendor} with ${specialties.length} specialties`);
-      
-      if (vendor !== specialty.vendor) {
-        specialties.forEach(targetSpecialty => {
-          console.log(`\n🎯 Evaluating target specialty: ${targetSpecialty.specialty}`);
-          
-          // STEP 1: Check for exact matches and synonyms first
-          const sourceSpecialtyObj = specialtyManager.searchSpecialties(specialty.specialty)[0];
-          const targetSpecialtyObj = specialtyManager.searchSpecialties(targetSpecialty.specialty)[0];
+      console.log(
+        `\n📊 Checking vendor: ${vendor} with ${specialties.length} specialties`
+      );
 
-          console.log('Source specialty object:', sourceSpecialtyObj);
-          console.log('Target specialty object:', targetSpecialtyObj);
+      if (vendor !== specialty.vendor) {
+        specialties.forEach((targetSpecialty) => {
+          console.log(
+            `\n🎯 Evaluating target specialty: ${targetSpecialty.specialty}`
+          );
+
+          // STEP 1: Check for exact matches and synonyms first
+          const sourceSpecialtyObj = specialtyManager.searchSpecialties(
+            specialty.specialty
+          )[0];
+          const targetSpecialtyObj = specialtyManager.searchSpecialties(
+            targetSpecialty.specialty
+          )[0];
+
+          console.log("Source specialty object:", sourceSpecialtyObj);
+          console.log("Target specialty object:", targetSpecialtyObj);
 
           if (sourceSpecialtyObj && targetSpecialtyObj) {
             // Get all synonyms including predefined and custom
             const sourceSynonyms = [
               sourceSpecialtyObj.name,
               ...sourceSpecialtyObj.synonyms.predefined,
-              ...sourceSpecialtyObj.synonyms.custom
-            ].map(s => s.toLowerCase().trim());
+              ...sourceSpecialtyObj.synonyms.custom,
+            ].map((s) => s.toLowerCase().trim());
 
             const targetSynonyms = [
               targetSpecialtyObj.name,
               ...targetSpecialtyObj.synonyms.predefined,
-              ...targetSpecialtyObj.synonyms.custom
-            ].map(s => s.toLowerCase().trim());
+              ...targetSpecialtyObj.synonyms.custom,
+            ].map((s) => s.toLowerCase().trim());
 
-            console.log('Source synonyms:', sourceSynonyms);
-            console.log('Target synonyms:', targetSynonyms);
+            console.log("Source synonyms:", sourceSynonyms);
+            console.log("Target synonyms:", targetSynonyms);
 
             // Check for exact matches or synonym matches
             const normalizedSource = specialty.specialty.toLowerCase().trim();
-            const normalizedTarget = targetSpecialty.specialty.toLowerCase().trim();
+            const normalizedTarget = targetSpecialty.specialty
+              .toLowerCase()
+              .trim();
 
-            console.log('Normalized source:', normalizedSource);
-            console.log('Normalized target:', normalizedTarget);
+            console.log("Normalized source:", normalizedSource);
+            console.log("Normalized target:", normalizedTarget);
 
             if (normalizedSource === normalizedTarget) {
-              console.log('✅ Found exact match!');
+              console.log("✅ Found exact match!");
               suggestions.suggestedMatches.push({
                 specialty: targetSpecialty,
                 confidence: 1.0,
-                reason: 'Exact match'
+                reason: "Exact match",
               });
               return; // Skip further checks for this specialty
             }
 
             // Check if either specialty is in the other's synonym list
-            if (sourceSynonyms.includes(normalizedTarget) || targetSynonyms.includes(normalizedSource)) {
-              console.log('✅ Found synonym match!');
+            if (
+              sourceSynonyms.includes(normalizedTarget) ||
+              targetSynonyms.includes(normalizedSource)
+            ) {
+              console.log("✅ Found synonym match!");
               suggestions.suggestedMatches.push({
                 specialty: targetSpecialty,
                 confidence: 1.0,
-                reason: 'Synonym match'
+                reason: "Synonym match",
               });
               return; // Skip further checks for this specialty
             }
 
             // Check for shared synonyms
-            const hasSharedSynonym = sourceSynonyms.some(s => targetSynonyms.includes(s));
+            const hasSharedSynonym = sourceSynonyms.some((s) =>
+              targetSynonyms.includes(s)
+            );
             if (hasSharedSynonym) {
-              console.log('✅ Found shared synonym!');
+              console.log("✅ Found shared synonym!");
               suggestions.suggestedMatches.push({
                 specialty: targetSpecialty,
                 confidence: 1.0,
-                reason: 'Shared synonym'
+                reason: "Shared synonym",
               });
               return; // Skip further checks for this specialty
             }
@@ -445,23 +523,23 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               specialty.specialty,
               targetSpecialty.specialty
             );
-            
-            console.log('String similarity score:', similarity);
-            
+
+            console.log("String similarity score:", similarity);
+
             if (similarity >= 0.8) {
-              console.log('✅ Found similar name match!');
-            suggestions.suggestedMatches.push({
-              specialty: targetSpecialty,
+              console.log("✅ Found similar name match!");
+              suggestions.suggestedMatches.push({
+                specialty: targetSpecialty,
                 confidence: similarity,
-                reason: 'Similar name'
-            });
+                reason: "Similar name",
+              });
             }
           }
         });
       }
     });
 
-    console.log('📝 Final suggestions:', suggestions);
+    console.log("📝 Final suggestions:", suggestions);
     // Sort by confidence and return
     suggestions.suggestedMatches.sort((a, b) => b.confidence - a.confidence);
     return suggestions;
@@ -472,16 +550,16 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     sourceSpecialty: SpecialtyData,
     targetSpecialty: SpecialtyData
   ): { isMatch: boolean; reason: string; confidence: number } => {
-    const result = { isMatch: false, reason: '', confidence: 0 };
-    
+    const result = { isMatch: false, reason: "", confidence: 0 };
+
     // Normalize specialty names for comparison
     const sourceName = sourceSpecialty.specialty.toLowerCase().trim();
     const targetName = targetSpecialty.specialty.toLowerCase().trim();
-    
+
     // Normalize vendor names
     const sourceVendor = formatVendorName(sourceSpecialty.vendor);
     const targetVendor = formatVendorName(targetSpecialty.vendor);
-    
+
     // Define vendor-specific matching rules
     const vendorSpecificRules: Array<{
       source: { name: string; vendor?: string };
@@ -491,151 +569,156 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     }> = [
       // Adolescent Medicine rules
       {
-        source: { name: 'adolescent medicine' },
-        target: { name: 'adolescent medicine' },
+        source: { name: "adolescent medicine" },
+        target: { name: "adolescent medicine" },
         confidence: 0.95,
-        reason: 'Exact specialty match'
+        reason: "Exact specialty match",
       },
       // Child and Adolescent Psychiatry rules
       {
-        source: { name: 'child and adolescent psychiatry' },
-        target: { name: 'child and adolescent psychiatry' },
+        source: { name: "child and adolescent psychiatry" },
+        target: { name: "child and adolescent psychiatry" },
         confidence: 0.95,
-        reason: 'Exact specialty match'
+        reason: "Exact specialty match",
       },
       // Add specific rules for Psychiatry and Child/Adolescent Psychiatry
       {
-        source: { name: 'psychiatry' },
-        target: { name: 'child and adolescent psychiatry' },
+        source: { name: "psychiatry" },
+        target: { name: "child and adolescent psychiatry" },
         confidence: 0.85,
-        reason: 'Psychiatry specialty family'
+        reason: "Psychiatry specialty family",
       },
       {
-        source: { name: 'child and adolescent psychiatry' },
-        target: { name: 'psychiatry' },
+        source: { name: "child and adolescent psychiatry" },
+        target: { name: "psychiatry" },
         confidence: 0.85,
-        reason: 'Psychiatry specialty family'
+        reason: "Psychiatry specialty family",
       },
       {
-        source: { name: 'psychiatry' },
-        target: { name: 'psychiatry' },
+        source: { name: "psychiatry" },
+        target: { name: "psychiatry" },
         confidence: 0.95,
-        reason: 'Exact psychiatry match'
+        reason: "Exact psychiatry match",
       },
       // Child Development rules
       {
-        source: { name: 'child development' },
-        target: { name: 'child development' },
+        source: { name: "child development" },
+        target: { name: "child development" },
         confidence: 0.95,
-        reason: 'Exact specialty match'
+        reason: "Exact specialty match",
       },
       {
-        source: { name: 'child development' },
-        target: { name: 'developmental-behavioral medicine' },
+        source: { name: "child development" },
+        target: { name: "developmental-behavioral medicine" },
         confidence: 0.85,
-        reason: 'Related specialty'
+        reason: "Related specialty",
       },
       {
-        source: { name: 'developmental-behavioral medicine' },
-        target: { name: 'child development' },
+        source: { name: "developmental-behavioral medicine" },
+        target: { name: "child development" },
         confidence: 0.85,
-        reason: 'Related specialty'
+        reason: "Related specialty",
       },
       // Gastroenterology rules
       {
-        source: { name: 'gastroenterology' },
-        target: { name: 'gastroenterology' },
+        source: { name: "gastroenterology" },
+        target: { name: "gastroenterology" },
         confidence: 0.95,
-        reason: 'Exact specialty match'
+        reason: "Exact specialty match",
       },
       // Otolaryngology/Otorhinolaryngology rules
       {
-        source: { name: 'otolaryngology' },
-        target: { name: 'otorhinolaryngology' },
+        source: { name: "otolaryngology" },
+        target: { name: "otorhinolaryngology" },
         confidence: 0.95,
-        reason: 'Known synonym'
+        reason: "Known synonym",
       },
       {
-        source: { name: 'otorhinolaryngology' },
-        target: { name: 'otolaryngology' },
+        source: { name: "otorhinolaryngology" },
+        target: { name: "otolaryngology" },
         confidence: 0.95,
-        reason: 'Known synonym'
+        reason: "Known synonym",
       },
       // Urgent Care rules
       {
-        source: { name: 'urgent care' },
-        target: { name: 'urgent care' },
+        source: { name: "urgent care" },
+        target: { name: "urgent care" },
         confidence: 0.95,
-        reason: 'Exact specialty match'
+        reason: "Exact specialty match",
       },
       // Cross-vendor specific rules
       {
-        source: { name: 'adolescent medicine', vendor: 'MGMA' },
-        target: { name: 'adolescent medicine', vendor: 'SULLIVANCOTTER' },
+        source: { name: "adolescent medicine", vendor: "MGMA" },
+        target: { name: "adolescent medicine", vendor: "SULLIVANCOTTER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'adolescent medicine', vendor: 'MGMA' },
-        target: { name: 'adolescent medicine', vendor: 'GALLAGHER' },
+        source: { name: "adolescent medicine", vendor: "MGMA" },
+        target: { name: "adolescent medicine", vendor: "GALLAGHER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'child and adolescent psychiatry', vendor: 'MGMA' },
-        target: { name: 'child and adolescent psychiatry', vendor: 'SULLIVANCOTTER' },
+        source: { name: "child and adolescent psychiatry", vendor: "MGMA" },
+        target: {
+          name: "child and adolescent psychiatry",
+          vendor: "SULLIVANCOTTER",
+        },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'child development', vendor: 'MGMA' },
-        target: { name: 'child development', vendor: 'GALLAGHER' },
+        source: { name: "child development", vendor: "MGMA" },
+        target: { name: "child development", vendor: "GALLAGHER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'gastroenterology', vendor: 'MGMA' },
-        target: { name: 'gastroenterology', vendor: 'SULLIVANCOTTER' },
+        source: { name: "gastroenterology", vendor: "MGMA" },
+        target: { name: "gastroenterology", vendor: "SULLIVANCOTTER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'gastroenterology', vendor: 'MGMA' },
-        target: { name: 'gastroenterology', vendor: 'GALLAGHER' },
+        source: { name: "gastroenterology", vendor: "MGMA" },
+        target: { name: "gastroenterology", vendor: "GALLAGHER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'otorhinolaryngology', vendor: 'MGMA' },
-        target: { name: 'otolaryngology', vendor: 'SULLIVANCOTTER' },
+        source: { name: "otorhinolaryngology", vendor: "MGMA" },
+        target: { name: "otolaryngology", vendor: "SULLIVANCOTTER" },
         confidence: 0.98,
-        reason: 'Known cross-vendor synonym'
+        reason: "Known cross-vendor synonym",
       },
       {
-        source: { name: 'otorhinolaryngology', vendor: 'MGMA' },
-        target: { name: 'otorhinolaryngology', vendor: 'GALLAGHER' },
+        source: { name: "otorhinolaryngology", vendor: "MGMA" },
+        target: { name: "otorhinolaryngology", vendor: "GALLAGHER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'urgent care', vendor: 'MGMA' },
-        target: { name: 'urgent care', vendor: 'SULLIVANCOTTER' },
+        source: { name: "urgent care", vendor: "MGMA" },
+        target: { name: "urgent care", vendor: "SULLIVANCOTTER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
+        reason: "Exact cross-vendor match",
       },
       {
-        source: { name: 'urgent care', vendor: 'MGMA' },
-        target: { name: 'urgent care', vendor: 'GALLAGHER' },
+        source: { name: "urgent care", vendor: "MGMA" },
+        target: { name: "urgent care", vendor: "GALLAGHER" },
         confidence: 0.98,
-        reason: 'Exact cross-vendor match'
-      }
+        reason: "Exact cross-vendor match",
+      },
     ];
-    
+
     // Check if any rules match
     for (const rule of vendorSpecificRules) {
       if (
-        (rule.source.name === sourceName || sourceName.includes(rule.source.name)) &&
-        (rule.target.name === targetName || targetName.includes(rule.target.name)) &&
+        (rule.source.name === sourceName ||
+          sourceName.includes(rule.source.name)) &&
+        (rule.target.name === targetName ||
+          targetName.includes(rule.target.name)) &&
         (!rule.source.vendor || rule.source.vendor === sourceVendor) &&
         (!rule.target.vendor || rule.target.vendor === targetVendor)
       ) {
@@ -645,15 +728,15 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         break;
       }
     }
-    
+
     return result;
   };
 
   // Update the toggleSpecialtySelection function
   const toggleSpecialtySelection = (specialty: SpecialtyData) => {
     const key = `${specialty.vendor}:${specialty.specialty}`;
-    
-    setSelectedSpecialties(prev => {
+
+    setSelectedSpecialties((prev) => {
       const updated = new Set(prev);
       if (updated.has(key)) {
         updated.delete(key);
@@ -665,56 +748,69 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   };
 
   // Update the acceptSuggestedMatches function
-  const acceptSuggestedMatches = (suggestion: AutoMapSuggestion, matchesToAccept?: Array<{specialty: SpecialtyData; confidence: number; reason: string}>) => {
+  const acceptSuggestedMatches = (
+    suggestion: AutoMapSuggestion,
+    matchesToAccept?: Array<{
+      specialty: SpecialtyData;
+      confidence: number;
+      reason: string;
+    }>
+  ) => {
     const selectedMatches = matchesToAccept || suggestion.suggestedMatches;
-    
+
     if (selectedMatches.length === 0) {
-      toast.error('No matches to accept');
+      toast.error("No matches to accept");
       return;
     }
-    
+
     const selectedItems: SpecialtyData[] = [
       suggestion.sourceSpecialty,
-      ...selectedMatches.map(match => match.specialty)
+      ...selectedMatches.map((match) => match.specialty),
     ];
 
     const newGroup: MappedGroup = {
       id: Math.random().toString(36).substr(2, 9),
       specialties: selectedItems,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
-    setMappedGroups(prev => [...prev, newGroup]);
+    setMappedGroups((prev) => [...prev, newGroup]);
     setSelectedSpecialties(new Set());
     setAutoMapSuggestions(null);
-    
+
     // Notify parent component
-    const mappedSpecialties = selectedMatches.map(match => match.specialty.specialty);
+    const mappedSpecialties = selectedMatches.map(
+      (match) => match.specialty.specialty
+    );
     if (onMappingChange) {
       onMappingChange(suggestion.sourceSpecialty.specialty, mappedSpecialties);
     }
-    
-    toast.success(`Created new mapping group with ${selectedMatches.length} matches`);
+
+    toast.success(
+      `Created new mapping group with ${selectedMatches.length} matches`
+    );
   };
 
   // Add a function to accept all matches above a certain confidence threshold
   const acceptAllMatches = (suggestion: AutoMapSuggestion, threshold = 0.9) => {
     const highConfidenceMatches = suggestion.suggestedMatches.filter(
-      match => match.confidence >= threshold
+      (match) => match.confidence >= threshold
     );
-    
+
     if (highConfidenceMatches.length === 0) {
-      toast.success('No high-confidence matches found');
+      toast.success("No high-confidence matches found");
       return;
     }
-    
+
     acceptSuggestedMatches(suggestion, highConfidenceMatches);
   };
 
   // Render a specialty card
   const renderSpecialtyCard = (specialty: SpecialtyData) => {
-    const isSelected = selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`);
-    
+    const isSelected = selectedSpecialties.has(
+      `${specialty.vendor}:${specialty.specialty}`
+    );
+
     return (
       <motion.div
         layout
@@ -723,20 +819,27 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         exit={{ opacity: 0, y: -20 }}
         className={`
           px-3 py-2 rounded-md transition-all cursor-pointer
-          ${isSelected 
-            ? 'bg-indigo-50 border-indigo-200 shadow-sm' 
-            : 'hover:bg-gray-50'
+          ${
+            isSelected
+              ? "bg-indigo-50 border-indigo-200 shadow-sm"
+              : "hover:bg-gray-50"
           }
         `}
-        onClick={() => toggleSpecialtySelection({
-          specialty: specialty.specialty,
-          vendor: specialty.vendor,
-          metrics: specialty.metrics
-        })}
+        onClick={() =>
+          toggleSpecialtySelection({
+            specialty: specialty.specialty,
+            vendor: specialty.vendor,
+            metrics: specialty.metrics,
+          })
+        }
       >
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <div className={`font-medium truncate ${isSelected ? 'text-indigo-900' : 'text-gray-900'}`}>
+            <div
+              className={`font-medium truncate ${
+                isSelected ? "text-indigo-900" : "text-gray-900"
+              }`}
+            >
               {specialty.specialty}
             </div>
           </div>
@@ -750,8 +853,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Optimize the generateAllMappings function to fix performance issues
   const generateAllMappings = useCallback(() => {
-    console.log('Starting generateAllMappings');
-    
+    console.log("Starting generateAllMappings");
+
     // Track processed specialties to prevent duplicates
     const processedSpecialties = new Set<string>();
     const processedAsTarget = new Set<string>();
@@ -759,33 +862,35 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
     // Get currently mapped specialties
     const mappedSpecialtyKeys = new Set(
-      mappedGroups.flatMap(group => 
-        group.specialties.map(s => `${s.specialty}:${s.vendor}`.toLowerCase())
+      mappedGroups.flatMap((group) =>
+        group.specialties.map((s) => `${s.specialty}:${s.vendor}`.toLowerCase())
       )
     );
 
     // Process each vendor
     Object.entries(specialtiesByVendor).forEach(([vendor, specialties]) => {
-      specialties.forEach(specialty => {
-        const specialtyKey = `${specialty.specialty}:${specialty.vendor}`.toLowerCase();
-        
+      specialties.forEach((specialty) => {
+        const specialtyKey =
+          `${specialty.specialty}:${specialty.vendor}`.toLowerCase();
+
         // Check if specialty is unmapped and not processed
         const isUnmapped = !mappedSpecialtyKeys.has(specialtyKey);
         const isUnprocessed = !processedSpecialties.has(specialtyKey);
-        const isNotTarget = !processedAsTarget.has(specialtyKey.split(':')[0]); // Compare just the specialty name
+        const isNotTarget = !processedAsTarget.has(specialtyKey.split(":")[0]); // Compare just the specialty name
 
         if (isUnmapped && isUnprocessed && isNotTarget) {
           // Find potential matches
           const suggestions = findPotentialMatches(specialty);
-          
+
           // Filter out matches that are already mapped or processed
-          const validMatches = suggestions.suggestedMatches.filter(match => {
-            const matchKey = `${match.specialty.specialty}:${match.specialty.vendor}`.toLowerCase();
+          const validMatches = suggestions.suggestedMatches.filter((match) => {
+            const matchKey =
+              `${match.specialty.specialty}:${match.specialty.vendor}`.toLowerCase();
             const matchName = match.specialty.specialty.toLowerCase();
-            
+
             const isMatchUnmapped = !mappedSpecialtyKeys.has(matchKey);
             const isMatchUnprocessed = !processedSpecialties.has(matchKey);
-            
+
             if (isMatchUnmapped && isMatchUnprocessed) {
               // Mark this specialty as processed as a target
               processedAsTarget.add(matchName);
@@ -797,9 +902,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           if (validMatches.length > 0) {
             newMappings.push({
               sourceSpecialty: specialty,
-              matches: validMatches
+              matches: validMatches,
             });
-            
+
             // Mark this specialty as processed
             processedSpecialties.add(specialtyKey);
           }
@@ -812,7 +917,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Update useEffect hooks to prevent infinite loops
   useEffect(() => {
-    console.log('🔄 Initializing auto mappings');
+    console.log("🔄 Initializing auto mappings");
     generateAllMappings();
   }, [mappedGroups]); // Only depend on mappedGroups
 
@@ -820,17 +925,20 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const updateMappingStatus = (
     sourceSpecialty: SpecialtyData,
     matchSpecialty: SpecialtyData,
-    status: 'approved' | 'rejected'
+    status: "approved" | "rejected"
   ) => {
-    setAllAutoMappings(prev => {
-      const newMappings = prev.map(mapping => {
-        if (mapping.sourceSpecialty.specialty === sourceSpecialty.specialty &&
-            mapping.sourceSpecialty.vendor === sourceSpecialty.vendor) {
-          
+    setAllAutoMappings((prev) => {
+      const newMappings = prev.map((mapping) => {
+        if (
+          mapping.sourceSpecialty.specialty === sourceSpecialty.specialty &&
+          mapping.sourceSpecialty.vendor === sourceSpecialty.vendor
+        ) {
           // Update the status of the specific match
-          const updatedMatches = mapping.matches.map(match => {
-            if (match.specialty.specialty === matchSpecialty.specialty &&
-                match.specialty.vendor === matchSpecialty.vendor) {
+          const updatedMatches = mapping.matches.map((match) => {
+            if (
+              match.specialty.specialty === matchSpecialty.specialty &&
+              match.specialty.vendor === matchSpecialty.vendor
+            ) {
               return { ...match, status };
             }
             return match;
@@ -844,111 +952,126 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       return newMappings;
     });
 
-    if (status === 'approved') {
-      toast.success('Match approved - approve or reject other matches to create the group');
+    if (status === "approved") {
+      toast.success(
+        "Match approved - approve or reject other matches to create the group"
+      );
     } else {
-      toast.success('Match rejected');
+      toast.success("Match rejected");
     }
-    
+
     // Update mappedGroups (this will trigger the save effect)
-    setMappedGroups(prev => [...prev, newGroup]);
+    setMappedGroups((prev) => [...prev, newGroup]);
     if (onMappingChange) {
       onMappingChange(
-        mapping.sourceSpecialty.specialty, 
-        approvedMatches.map(m => m.specialty.specialty)
+        mapping.sourceSpecialty.specialty,
+        approvedMatches.map((m) => m.specialty.specialty)
       );
     }
   };
 
   // Effect to handle mapping group creation when matches are updated
   useEffect(() => {
-    console.log('👥 Processing auto mappings updates:', allAutoMappings);
-    
-    allAutoMappings.forEach(mapping => {
-      const allMatchesHandled = mapping.matches.every(m => m.status === 'approved' || m.status === 'rejected');
-      const approvedMatches = mapping.matches.filter(m => m.status === 'approved');
+    console.log("👥 Processing auto mappings updates:", allAutoMappings);
 
-      console.log('Processing mapping:', {
+    allAutoMappings.forEach((mapping) => {
+      const allMatchesHandled = mapping.matches.every(
+        (m) => m.status === "approved" || m.status === "rejected"
+      );
+      const approvedMatches = mapping.matches.filter(
+        (m) => m.status === "approved"
+      );
+
+      console.log("Processing mapping:", {
         sourceSpecialty: mapping.sourceSpecialty.specialty,
         allMatchesHandled,
-        approvedMatchesCount: approvedMatches.length
+        approvedMatchesCount: approvedMatches.length,
       });
 
       if (allMatchesHandled && approvedMatches.length > 0) {
-        console.log('✅ Creating new mapping group for:', mapping.sourceSpecialty.specialty);
-        
+        console.log(
+          "✅ Creating new mapping group for:",
+          mapping.sourceSpecialty.specialty
+        );
+
         // Create the mapping group
         const newGroup: MappedGroup = {
           id: Math.random().toString(36).substr(2, 9),
           specialties: [
             mapping.sourceSpecialty,
-            ...approvedMatches.map(m => m.specialty)
+            ...approvedMatches.map((m) => m.specialty),
           ],
-          createdAt: new Date()
+          createdAt: new Date(),
         };
-        
+
         // Update mappedGroups (this will trigger the save effect)
-        setMappedGroups(prev => [...prev, newGroup]);
+        setMappedGroups((prev) => [...prev, newGroup]);
         if (onMappingChange) {
           onMappingChange(
-            mapping.sourceSpecialty.specialty, 
-            approvedMatches.map(m => m.specialty.specialty)
+            mapping.sourceSpecialty.specialty,
+            approvedMatches.map((m) => m.specialty.specialty)
           );
         }
 
         // Remove this mapping from auto-mappings
-        setAllAutoMappings(prev => 
-          prev.filter(m => 
-            m.sourceSpecialty.specialty !== mapping.sourceSpecialty.specialty ||
-            m.sourceSpecialty.vendor !== mapping.sourceSpecialty.vendor
+        setAllAutoMappings((prev) =>
+          prev.filter(
+            (m) =>
+              m.sourceSpecialty.specialty !==
+                mapping.sourceSpecialty.specialty ||
+              m.sourceSpecialty.vendor !== mapping.sourceSpecialty.vendor
           )
         );
 
-        console.log('✅ Mapping group created successfully');
+        console.log("✅ Mapping group created successfully");
       }
     });
   }, [allAutoMappings, onMappingChange]);
 
   // Filter mappings based on search
   const filteredMappings = useMemo(() => {
-    console.log('Filtering mappings with search:', debouncedSearchQuery);
-    
+    console.log("Filtering mappings with search:", debouncedSearchQuery);
+
     // Get all mapped specialties
     const mappedSpecialtyKeys = new Set(
-      mappedGroups.flatMap(group => 
-        group.specialties.map(s => `${s.specialty}:${s.vendor}`)
+      mappedGroups.flatMap((group) =>
+        group.specialties.map((s) => `${s.specialty}:${s.vendor}`)
       )
     );
 
     // First filter out any mappings where the source specialty is already mapped
-    let mappingsToShow = allAutoMappings.filter(mapping => {
+    let mappingsToShow = allAutoMappings.filter((mapping) => {
       const sourceKey = `${mapping.sourceSpecialty.specialty}:${mapping.sourceSpecialty.vendor}`;
       return !mappedSpecialtyKeys.has(sourceKey);
     });
 
     // Then filter out any matches that are already mapped
-    mappingsToShow = mappingsToShow.map(mapping => ({
+    mappingsToShow = mappingsToShow.map((mapping) => ({
       sourceSpecialty: mapping.sourceSpecialty,
-      matches: mapping.matches.filter(match => {
+      matches: mapping.matches.filter((match) => {
         const matchKey = `${match.specialty.specialty}:${match.specialty.vendor}`;
         return !mappedSpecialtyKeys.has(matchKey);
-      })
+      }),
     }));
 
     // Remove any mappings that no longer have matches
-    mappingsToShow = mappingsToShow.filter(mapping => mapping.matches.length > 0);
+    mappingsToShow = mappingsToShow.filter(
+      (mapping) => mapping.matches.length > 0
+    );
 
     // Then apply search filter if there's a search query
     if (debouncedSearchQuery) {
       const searchTerm = debouncedSearchQuery.toLowerCase();
-      mappingsToShow = mappingsToShow.filter(mapping => {
+      mappingsToShow = mappingsToShow.filter((mapping) => {
         // Check if source specialty matches
-        if (mapping.sourceSpecialty.specialty.toLowerCase().includes(searchTerm)) {
-        return true;
-      }
-      
+        if (
+          mapping.sourceSpecialty.specialty.toLowerCase().includes(searchTerm)
+        ) {
+          return true;
+        }
+
         // Check if any matches contain the search term
-        return mapping.matches.some(match => 
+        return mapping.matches.some((match) =>
           match.specialty.specialty.toLowerCase().includes(searchTerm)
         );
       });
@@ -960,28 +1083,28 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update handleSpecialtySelect to properly load synonyms
   const handleSpecialtySelect = (specialty: string): void => {
     setSelectedSpecialtyForSynonyms(specialty);
-    
+
     // Get the specialty object by name
-    const specialtyObj = allSpecialties.find(s => s.name === specialty);
-    
-    console.log('Selected specialty:', specialty);
-    console.log('Found specialty object:', specialtyObj);
-    
+    const specialtyObj = allSpecialties.find((s) => s.name === specialty);
+
+    console.log("Selected specialty:", specialty);
+    console.log("Found specialty object:", specialtyObj);
+
     if (specialtyObj) {
-      console.log('Setting synonyms:', {
+      console.log("Setting synonyms:", {
         predefined: specialtyObj.synonyms.predefined,
-        custom: specialtyObj.synonyms.custom
+        custom: specialtyObj.synonyms.custom,
       });
-      
+
       setCurrentSynonyms({
         predefined: specialtyObj.synonyms.predefined,
-        custom: specialtyObj.synonyms.custom
+        custom: specialtyObj.synonyms.custom,
       });
-      } else {
-      console.log('No specialty object found, clearing synonyms');
+    } else {
+      console.log("No specialty object found, clearing synonyms");
       setCurrentSynonyms({
         predefined: [],
-        custom: []
+        custom: [],
       });
     }
   };
@@ -1001,7 +1124,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     }
 
     // Find the specialty object
-    const specialtyObj = allSpecialties.find(s => s.name === selectedSpecialtyForSynonyms);
+    const specialtyObj = allSpecialties.find(
+      (s) => s.name === selectedSpecialtyForSynonyms
+    );
     if (!specialtyObj) {
       toast("Selected specialty not found");
       return;
@@ -1010,30 +1135,32 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     // Check if it's already a synonym for this specialty
     const existingSynonyms = [
       ...specialtyObj.synonyms.predefined,
-      ...specialtyObj.synonyms.custom
+      ...specialtyObj.synonyms.custom,
     ];
-    
+
     if (existingSynonyms.includes(synonym)) {
       toast(`"${synonym}" is already a synonym for "${specialtyObj.name}"`);
       return;
     }
 
     // Check if it's used by another specialty
-    const otherSpecialty = allSpecialties.find(s => 
-      s.id !== specialtyObj.id && (
-        s.name === synonym ||
-        s.synonyms.predefined.includes(synonym) ||
-        s.synonyms.custom.includes(synonym)
-      )
+    const otherSpecialty = allSpecialties.find(
+      (s) =>
+        s.id !== specialtyObj.id &&
+        (s.name === synonym ||
+          s.synonyms.predefined.includes(synonym) ||
+          s.synonyms.custom.includes(synonym))
     );
 
     if (otherSpecialty) {
       const isPredefined = otherSpecialty.synonyms.predefined.includes(synonym);
       toast(
         `Mapping Already Defined: "${synonym}" is already ${
-          otherSpecialty.name === synonym 
-            ? "a specialty name" 
-            : `a ${isPredefined ? 'predefined' : 'custom'} synonym for "${otherSpecialty.name}"`
+          otherSpecialty.name === synonym
+            ? "a specialty name"
+            : `a ${isPredefined ? "predefined" : "custom"} synonym for "${
+                otherSpecialty.name
+              }"`
         }`
       );
       return;
@@ -1041,26 +1168,29 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
     // Add to specialty manager
     const result = specialtyManager.addSynonym(specialtyObj.id, synonym);
-    
+
     if (result.success) {
       // Update local state - ensure no duplicates are added
-      setCurrentSynonyms(prev => {
+      setCurrentSynonyms((prev) => {
         // Check if the synonym already exists in either array to prevent duplicates
-        if (prev.predefined.includes(synonym) || prev.custom.includes(synonym)) {
+        if (
+          prev.predefined.includes(synonym) ||
+          prev.custom.includes(synonym)
+        ) {
           return prev; // Return unchanged state if already exists
         }
-        
+
         return {
           ...prev,
-          custom: [...prev.custom, synonym]
+          custom: [...prev.custom, synonym],
         };
       });
-      
+
       // Clear both inputs
-      setNewSynonym('');
-      setPendingSynonym('');
+      setNewSynonym("");
+      setPendingSynonym("");
       toast(`Added synonym: ${synonym}`);
-      
+
       // Refresh stats and specialties list to maintain data integrity
       getSpecialtyStats();
       loadSpecialties(); // Reload all specialties to ensure UI is in sync with backend
@@ -1077,7 +1207,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       return;
     }
 
-    const specialtyObj = allSpecialties.find(s => s.name === selectedSpecialtyForSynonyms);
+    const specialtyObj = allSpecialties.find(
+      (s) => s.name === selectedSpecialtyForSynonyms
+    );
     if (!specialtyObj) {
       toast.error("Selected specialty not found");
       return;
@@ -1085,11 +1217,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
     const isPredefined = currentSynonyms.predefined.includes(synonym);
     if (isPredefined) {
-      if (!window.confirm(
-        `Warning: "${synonym}" is a predefined synonym.\n\n` +
-        `Removing it may affect system functionality.\n` +
-        `Are you sure you want to remove it?`
-      )) {
+      if (
+        !window.confirm(
+          `Warning: "${synonym}" is a predefined synonym.\n\n` +
+            `Removing it may affect system functionality.\n` +
+            `Are you sure you want to remove it?`
+        )
+      ) {
         return;
       }
     }
@@ -1098,13 +1232,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     const success = specialtyManager.removeSynonym(specialtyObj.id, synonym);
     if (success) {
       // Update local state
-      setCurrentSynonyms(prev => ({
-        predefined: prev.predefined.filter(s => s !== synonym),
-        custom: prev.custom.filter(s => s !== synonym)
+      setCurrentSynonyms((prev) => ({
+        predefined: prev.predefined.filter((s) => s !== synonym),
+        custom: prev.custom.filter((s) => s !== synonym),
       }));
-      
+
       toast.success(`Removed synonym: ${synonym}`);
-      
+
       // Refresh stats
       getSpecialtyStats();
     } else {
@@ -1115,20 +1249,24 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update handleSaveSynonyms
   const handleSaveSynonyms = (): void => {
     if (selectedSpecialtyForSynonyms) {
-      const specialty = allSpecialties.find(s => s.name === selectedSpecialtyForSynonyms);
+      const specialty = allSpecialties.find(
+        (s) => s.name === selectedSpecialtyForSynonyms
+      );
       if (specialty) {
         // Update both predefined and custom synonyms using the correct interface
         specialtyManager.updateSpecialtySynonyms(specialty.id, currentSynonyms);
-        
+
         // Refresh the specialties list
-        const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
+        const loadedSpecialties = specialtyManager
+          .getAllSpecialties()
+          .map(convertToSpecialtyWithStats);
         setAllSpecialties(loadedSpecialties);
         setSearchResults(loadedSpecialties);
-        
+
         // Update stats and close modal
         getSpecialtyStats();
         setShowSynonymModal(false);
-        toast.success('Synonyms updated successfully');
+        toast.success("Synonyms updated successfully");
       }
     }
   };
@@ -1139,7 +1277,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     setSelectedSpecialtyForSynonyms("");
     setCurrentSynonyms({
       predefined: [],
-      custom: []
+      custom: [],
     });
   };
 
@@ -1147,32 +1285,36 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const getSpecialtyStats = () => {
     const stats = allSpecialties.reduce<SpecialtyStats>((acc, specialty) => {
       acc[specialty.id] = {
-        synonymCount: specialty.synonyms.predefined.length + specialty.synonyms.custom.length,
+        synonymCount:
+          specialty.synonyms.predefined.length +
+          specialty.synonyms.custom.length,
         predefinedCount: specialty.synonyms.predefined.length,
-        customCount: specialty.synonyms.custom.length
+        customCount: specialty.synonyms.custom.length,
       };
       return acc;
     }, {} as SpecialtyStats);
-    
+
     setSpecialtyStats(stats);
   };
 
   // Update useEffect to load specialties
   useEffect(() => {
     // Only refresh predefined synonyms on initial mount
-    const hasInitialized = localStorage.getItem('synonyms_initialized');
+    const hasInitialized = localStorage.getItem("synonyms_initialized");
     if (!hasInitialized) {
       specialtyManager.refreshPredefinedSynonyms();
-      localStorage.setItem('synonyms_initialized', 'true');
+      localStorage.setItem("synonyms_initialized", "true");
     }
-    
+
     // Load all specialties with stats
-    const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
-    
+    const loadedSpecialties = specialtyManager
+      .getAllSpecialties()
+      .map(convertToSpecialtyWithStats);
+
     // Update state with properly typed specialties
     setAllSpecialties(loadedSpecialties);
     setSearchResults(loadedSpecialties);
-    
+
     // Initialize specialty stats
     getSpecialtyStats();
   }, []); // Empty dependency array since this should only run once on mount
@@ -1180,47 +1322,53 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update the search function to properly filter specialties
   const getFilteredSpecialties = (): SpecialtyWithStats[] => {
     if (!specialtySearch) {
-      return allSpecialties.map(specialty => ({
+      return allSpecialties.map((specialty) => ({
         ...specialty,
         stats: {
           predefinedCount: specialty.synonyms.predefined.length,
           customCount: specialty.synonyms.custom.length,
-          synonymCount: specialty.synonyms.predefined.length + specialty.synonyms.custom.length
-        }
+          synonymCount:
+            specialty.synonyms.predefined.length +
+            specialty.synonyms.custom.length,
+        },
       }));
     }
 
     const searchTerm = specialtySearch.toLowerCase();
     return allSpecialties
-      .filter(specialty => {
+      .filter((specialty) => {
         const nameMatch = specialty.name.toLowerCase().includes(searchTerm);
-        const predefinedMatch = specialty.synonyms.predefined.some(syn => 
+        const predefinedMatch = specialty.synonyms.predefined.some((syn) =>
           syn.toLowerCase().includes(searchTerm)
         );
-        const customMatch = specialty.synonyms.custom.some(syn => 
+        const customMatch = specialty.synonyms.custom.some((syn) =>
           syn.toLowerCase().includes(searchTerm)
         );
         return nameMatch || predefinedMatch || customMatch;
       })
-      .map(specialty => ({
+      .map((specialty) => ({
         ...specialty,
         stats: {
           predefinedCount: specialty.synonyms.predefined.length,
           customCount: specialty.synonyms.custom.length,
-          synonymCount: specialty.synonyms.predefined.length + specialty.synonyms.custom.length
-        }
+          synonymCount:
+            specialty.synonyms.predefined.length +
+            specialty.synonyms.custom.length,
+        },
       }));
   };
 
   // Handle adding new specialty
   const handleAddSpecialty = () => {
     if (!newSpecialtyName.trim()) return;
-    
-    const addedSpecialty = specialtyManager.addSpecialty(newSpecialtyName.trim());
-    
+
+    const addedSpecialty = specialtyManager.addSpecialty(
+      newSpecialtyName.trim()
+    );
+
     if (addedSpecialty) {
       const specialtyWithStats = convertToSpecialtyWithStats(addedSpecialty);
-      setAllSpecialties(prev => [...prev, specialtyWithStats]);
+      setAllSpecialties((prev) => [...prev, specialtyWithStats]);
       setSelectedSpecialty(specialtyWithStats);
       setNewSpecialtyName("");
       toast.success(`Added new specialty: ${addedSpecialty.name}`);
@@ -1234,7 +1382,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const handleSave = () => {
     if (onSave) {
       const mappings: Record<string, string[]> = {};
-      allSpecialties.forEach(specialty => {
+      allSpecialties.forEach((specialty) => {
         mappings[specialty.name] = [
           ...specialty.synonyms.predefined,
           ...specialty.synonyms.custom,
@@ -1246,7 +1394,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
   // Update the loadSpecialties function to properly convert Specialty to SpecialtyWithStats
   const loadSpecialties = useCallback(() => {
-    const loadedSpecialties = specialtyManager.getAllSpecialties()
+    const loadedSpecialties = specialtyManager
+      .getAllSpecialties()
       .map(convertToSpecialtyWithStats);
     setAllSpecialties(loadedSpecialties);
     setSearchResults(loadedSpecialties);
@@ -1262,10 +1411,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     setSpecialtySearch(value);
     setSelectedSpecialty(null);
     setCurrentSynonyms({ predefined: [], custom: [] });
-    
+
     // Filter and convert specialties
-    const filtered = specialtyManager.getAllSpecialties()
-      .filter(s => s.name.toLowerCase().includes(value.toLowerCase()))
+    const filtered = specialtyManager
+      .getAllSpecialties()
+      .filter((s) => s.name.toLowerCase().includes(value.toLowerCase()))
       .map(convertToSpecialtyWithStats);
     setSearchResults(filtered);
   };
@@ -1273,7 +1423,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update search results when modal opens
   useEffect(() => {
     if (showSynonymModal && allSpecialties.length > 0) {
-      const convertedSpecialties = allSpecialties.map(convertToSpecialtyWithStats);
+      const convertedSpecialties = allSpecialties.map(
+        convertToSpecialtyWithStats
+      );
       setSearchResults(convertedSpecialties);
     }
   }, [showSynonymModal, allSpecialties]);
@@ -1281,39 +1433,47 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Restore createManualMapping function
   const createManualMapping = (): void => {
     if (selectedSpecialties.size < 1) {
-      toast.error('Please select at least 1 specialty');
+      toast.error("Please select at least 1 specialty");
       return;
     }
 
-    const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(key => {
-      const [vendor, specialty] = key.split(':');
-      return {
-        specialty,
-        vendor,
-        metrics: specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.metrics
-      };
-    });
+    const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(
+      (key) => {
+        const [vendor, specialty] = key.split(":");
+        return {
+          specialty,
+          vendor,
+          metrics: specialtiesByVendor[vendor]?.find(
+            (s) => s.specialty === specialty
+          )?.metrics,
+        };
+      }
+    );
 
     const newGroup: MappedGroup = {
       id: Math.random().toString(36).substr(2, 9),
       specialties: selectedItems,
       createdAt: new Date(),
-      isSingleSource: selectedItems.length === 1
+      isSingleSource: selectedItems.length === 1,
     };
 
-    setMappedGroups(prev => [...prev, newGroup]);
+    setMappedGroups((prev) => [...prev, newGroup]);
     setSelectedSpecialties(new Set());
-    
+
     // Only notify of mapping change when creating a new mapping
     const sourceSpecialty = selectedItems[0].specialty;
-    const mappedSpecialties = selectedItems.slice(1).map(item => item.specialty);
+    const mappedSpecialties = selectedItems
+      .slice(1)
+      .map((item) => item.specialty);
     if (onMappingChange) {
       onMappingChange(sourceSpecialty, mappedSpecialties);
     }
-    
-    toast.success(selectedItems.length === 1 
-      ? 'Created single source specialty mapping'
-      : 'Created new specialty mapping group');
+
+    toast.success(
+      selectedItems.length === 1
+        ? "Created single source specialty mapping"
+        : "Created new specialty mapping group"
+    );
   };
 
   // Function to get available specialties for mapping
@@ -1323,21 +1483,28 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   ): AvailableSpecialty[] => {
     return Object.entries(specialtiesByVendor)
       .filter(([vendor]) => vendor !== mapping.sourceSpecialty.vendor)
-      .flatMap(([vendor, specialties]) => 
+      .flatMap(([vendor, specialties]) =>
         specialties
-          .filter(specialty => 
-            // Filter out already mapped and matched specialties
-            !mappedGroups.some(group => 
-              group.specialties.some(gs => 
-                gs.specialty === specialty.specialty && gs.vendor === specialty.vendor
-              )
-            ) &&
-            !mapping.matches.some(m => 
-              m.specialty.specialty === specialty.specialty && m.specialty.vendor === specialty.vendor
-            ) &&
-            specialty.specialty.toLowerCase().includes(localSearchQuery.toLowerCase())
+          .filter(
+            (specialty) =>
+              // Filter out already mapped and matched specialties
+              !mappedGroups.some((group) =>
+                group.specialties.some(
+                  (gs) =>
+                    gs.specialty === specialty.specialty &&
+                    gs.vendor === specialty.vendor
+                )
+              ) &&
+              !mapping.matches.some(
+                (m) =>
+                  m.specialty.specialty === specialty.specialty &&
+                  m.specialty.vendor === specialty.vendor
+              ) &&
+              specialty.specialty
+                .toLowerCase()
+                .includes(localSearchQuery.toLowerCase())
           )
-          .map(specialty => ({ ...specialty, vendor }))
+          .map((specialty) => ({ ...specialty, vendor }))
       )
       .sort((a, b) => a.specialty.localeCompare(b.specialty));
   };
@@ -1345,7 +1512,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Update the specialty search handling
   useEffect(() => {
     if (specialtySearch) {
-      const filtered = allSpecialties.filter(specialty =>
+      const filtered = allSpecialties.filter((specialty) =>
         specialty.name.toLowerCase().includes(specialtySearch.toLowerCase())
       );
       setSpecialties(filtered);
@@ -1359,7 +1526,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     const success = await specialtyManager.deleteSpecialty(specialty.id);
     if (success) {
       // Update the local state
-      setAllSpecialties(prev => prev.filter(s => s.id !== specialty.id));
+      setAllSpecialties((prev) => prev.filter((s) => s.id !== specialty.id));
       if (selectedSpecialty?.id === specialty.id) {
         setSelectedSpecialty(null);
       }
@@ -1385,44 +1552,50 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     const loadMappings = async () => {
       try {
         // Get all specialty mappings for the current surveys
-        const surveyIds = surveys.map(s => s.id);
+        const surveyIds = surveys.map((s) => s.id);
         const dbMappings = await prisma.specialtyMapping.findMany({
           where: {
             surveyId: {
-              in: surveyIds
-            }
-          }
+              in: surveyIds,
+            },
+          },
         });
 
         // Convert Prisma mappings to MappedGroup format
         const groupedMappings = new Map<string, MappedGroup>();
-        
-        dbMappings.forEach(mapping => {
+
+        dbMappings.forEach((mapping) => {
           const key = mapping.sourceSpecialty;
           if (!groupedMappings.has(key)) {
             groupedMappings.set(key, {
               id: `${key}-${Date.now()}`, // Generate a unique ID
-              specialties: [{
-                specialty: mapping.sourceSpecialty,
-                vendor: surveys.find(s => s.id === mapping.surveyId)?.vendor || 'unknown'
-              }],
+              specialties: [
+                {
+                  specialty: mapping.sourceSpecialty,
+                  vendor:
+                    surveys.find((s) => s.id === mapping.surveyId)?.vendor ||
+                    "unknown",
+                },
+              ],
               createdAt: new Date(),
-              notes: mapping.notes || '',
-              isSingleSource: false
+              notes: mapping.notes || "",
+              isSingleSource: false,
             });
           }
-          
+
           const group = groupedMappings.get(key)!;
           group.specialties.push({
             specialty: mapping.mappedSpecialty,
-            vendor: surveys.find(s => s.id === mapping.surveyId)?.vendor || 'unknown'
+            vendor:
+              surveys.find((s) => s.id === mapping.surveyId)?.vendor ||
+              "unknown",
           });
         });
 
         setMappedGroups(Array.from(groupedMappings.values()));
       } catch (error) {
-        console.error('Error loading specialty mappings:', error);
-        toast.error('Failed to load specialty mappings');
+        console.error("Error loading specialty mappings:", error);
+        toast.error("Failed to load specialty mappings");
       }
     };
 
@@ -1439,8 +1612,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         // First, delete all existing mappings for these surveys
         await prisma.specialtyMapping.deleteMany({
           where: {
-            surveyId: surveyId
-          }
+            surveyId: surveyId,
+          },
         });
 
         // Then create new mappings
@@ -1455,8 +1628,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 sourceSpecialty: sourceSpecialty.specialty,
                 mappedSpecialty: mappedSpecialty.specialty,
                 confidence: 1, // Default high confidence for manual mappings
-                notes: group.notes
-              }
+                notes: group.notes,
+              },
             });
           }
         }
@@ -1464,19 +1637,19 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
         // Notify parent component
         if (onSave) {
           const simpleMappings: Record<string, string[]> = {};
-          mappedGroups.forEach(group => {
+          mappedGroups.forEach((group) => {
             const sourceSpecialty = group.specialties[0];
             if (sourceSpecialty) {
               simpleMappings[sourceSpecialty.specialty] = group.specialties
                 .slice(1)
-                .map(s => s.specialty);
+                .map((s) => s.specialty);
             }
           });
           onSave(simpleMappings);
         }
       } catch (error) {
-        console.error('Error saving specialty mappings:', error);
-        toast.error('Failed to save specialty mappings');
+        console.error("Error saving specialty mappings:", error);
+        toast.error("Failed to save specialty mappings");
       }
     };
 
@@ -1486,29 +1659,33 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   // Add new function to create individual single mappings
   const createIndividualSingleMappings = (): void => {
     if (selectedSpecialties.size < 1) {
-      toast.error('Please select at least 1 specialty');
+      toast.error("Please select at least 1 specialty");
       return;
     }
 
-    const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(key => {
-      const [vendor, specialty] = key.split(':');
-      return {
-        specialty,
-        vendor,
-        metrics: specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.metrics
-      };
-    });
+    const selectedItems: SpecialtyData[] = Array.from(selectedSpecialties).map(
+      (key) => {
+        const [vendor, specialty] = key.split(":");
+        return {
+          specialty,
+          vendor,
+          metrics: specialtiesByVendor[vendor]?.find(
+            (s) => s.specialty === specialty
+          )?.metrics,
+        };
+      }
+    );
 
     // Create individual single mappings for each specialty
-    selectedItems.forEach(item => {
+    selectedItems.forEach((item) => {
       const newGroup: MappedGroup = {
         id: Math.random().toString(36).substr(2, 9),
         specialties: [item],
         createdAt: new Date(),
-        isSingleSource: true
+        isSingleSource: true,
       };
-      
-      setMappedGroups(prev => [...prev, newGroup]);
+
+      setMappedGroups((prev) => [...prev, newGroup]);
       // Notify of mapping change for each individual mapping
       if (onMappingChange) {
         onMappingChange(item.specialty, []);
@@ -1530,12 +1707,12 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
     const newSpecialty = specialtyManager.addSpecialty(name);
     if (newSpecialty) {
       const specialtyWithStats = convertToSpecialtyWithStats(newSpecialty);
-      setAllSpecialties(prev => [...prev, specialtyWithStats]);
+      setAllSpecialties((prev) => [...prev, specialtyWithStats]);
       setSelectedSpecialty(specialtyWithStats);
       setNewSpecialtyName("");
       toast.success(`Added new specialty: ${name}`);
     } else {
-      toast.error('Failed to add specialty');
+      toast.error("Failed to add specialty");
     }
     setShowNewSpecialtyDialog(false);
   };
@@ -1548,31 +1725,38 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   const loadMappings = async (surveys: Survey[]) => {
     try {
       // Get all survey IDs
-      const surveyIds = surveys.map(s => s.id);
-      
+      const surveyIds = surveys.map((s) => s.id);
+
       // Fetch mappings from API
-      const response = await fetch(`/api/specialty-mappings?surveyIds=${surveyIds.join(',')}`);
+      const response = await fetch(
+        `/api/specialty-mappings?surveyIds=${surveyIds.join(",")}`
+      );
       if (!response.ok) {
-        throw new Error('Failed to fetch specialty mappings');
+        throw new Error("Failed to fetch specialty mappings");
       }
-      
+
       const { mappings } = await response.json();
-      
+
       // Process mappings as before
-      const processedMappings = mappings.reduce<Record<string, SpecialtyMapping>>((acc, mapping) => ({
-        ...acc,
-        [mapping.sourceSpecialty]: {
-          mappedSpecialties: [mapping.mappedSpecialty],
-          notes: mapping.notes || '',
-          resolved: mapping.isVerified,
-          confidence: mapping.confidence || 0
-        }
-      }), {});
+      const processedMappings = mappings.reduce<
+        Record<string, SpecialtyMapping>
+      >(
+        (acc, mapping) => ({
+          ...acc,
+          [mapping.sourceSpecialty]: {
+            mappedSpecialties: [mapping.mappedSpecialty],
+            notes: mapping.notes || "",
+            resolved: mapping.isVerified,
+            confidence: mapping.confidence || 0,
+          },
+        }),
+        {}
+      );
 
       setSpecialtyMappings(processedMappings);
     } catch (error) {
-      console.error('Error loading specialty mappings:', error);
-      toast.error('Failed to load specialty mappings');
+      console.error("Error loading specialty mappings:", error);
+      toast.error("Failed to load specialty mappings");
     }
   };
 
@@ -1621,11 +1805,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        onClick={() => setViewMode('auto')}
+                        onClick={() => setViewMode("auto")}
                         className={`px-4 py-2 text-sm font-medium border-y inline-flex items-center gap-1.5
-                          ${viewMode === 'auto'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                          ${
+                            viewMode === "auto"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300"
+                          }`}
                       >
                         <ComputerDesktopIcon className="h-4 w-4" />
                         Auto-Map Mode
@@ -1639,11 +1825,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        onClick={() => setViewMode('manual')}
+                        onClick={() => setViewMode("manual")}
                         className={`px-4 py-2 text-sm font-medium border-y
-                          ${viewMode === 'manual'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                          ${
+                            viewMode === "manual"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300"
+                          }`}
                       >
                         Manual Map Mode
                       </button>
@@ -1656,11 +1844,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        onClick={() => setViewMode('mapped')}
+                        onClick={() => setViewMode("mapped")}
                         className={`px-4 py-2 text-sm font-medium rounded-r-lg border
-                          ${viewMode === 'mapped'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200'
-                            : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-300'}`}
+                          ${
+                            viewMode === "mapped"
+                              ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : "bg-white text-gray-700 hover:bg-gray-50 border-gray-300"
+                          }`}
                       >
                         View Mapped
                       </button>
@@ -1677,13 +1867,20 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border shadow-sm
-                        ${Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) 
-                          ? 'bg-green-50 text-green-700 border-green-200' 
-                          : 'bg-yellow-50 text-yellow-700 border-yellow-200'}
+                      <span
+                        className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium border shadow-sm
+                        ${
+                          Object.values(specialtiesByVendor).every(
+                            (specialties) => specialties.length === 0
+                          )
+                            ? "bg-green-50 text-green-700 border-green-200"
+                            : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                        }
                         transition-colors duration-150 ease-in-out`}
                       >
-                        {Object.values(specialtiesByVendor).every(specialties => specialties.length === 0) ? (
+                        {Object.values(specialtiesByVendor).every(
+                          (specialties) => specialties.length === 0
+                        ) ? (
                           <>
                             <CheckCircleIcon className="h-4 w-4 mr-1.5" />
                             100% Complete
@@ -1725,13 +1922,16 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       </div>
 
       {/* Clear Confirmation Dialog */}
-      <Dialog open={showClearConfirmation} onOpenChange={setShowClearConfirmation}>
+      <Dialog
+        open={showClearConfirmation}
+        onOpenChange={setShowClearConfirmation}
+      >
         <DialogContent className="sm:max-w-[425px] bg-white border border-gray-200">
           <DialogHeader>
             <DialogTitle>Clear All Mappings?</DialogTitle>
             <DialogDescription>
-              This will remove all specialty mappings. This action cannot be undone.
-              Are you sure you want to continue?
+              This will remove all specialty mappings. This action cannot be
+              undone. Are you sure you want to continue?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1748,7 +1948,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 localStorage.removeItem(STORAGE_KEY);
                 generateAllMappings();
                 setShowClearConfirmation(false);
-                toast.success('All mappings cleared');
+                toast.success("All mappings cleared");
               }}
             >
               Clear All
@@ -1758,7 +1958,10 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       </Dialog>
 
       {/* New Specialty Dialog */}
-      <Dialog open={showNewSpecialtyDialog} onOpenChange={setShowNewSpecialtyDialog}>
+      <Dialog
+        open={showNewSpecialtyDialog}
+        onOpenChange={setShowNewSpecialtyDialog}
+      >
         <DialogContent className="sm:max-w-[425px] bg-white">
           <DialogHeader>
             <DialogTitle>Add New Specialty</DialogTitle>
@@ -1819,38 +2022,38 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center">
-              <div 
+              <div
                 className="fixed w-[900px] max-h-[85vh] bg-white rounded-lg shadow-xl border border-gray-200 flex flex-col"
-                style={{ 
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)'
+                style={{
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%, -50%)",
                 }}
                 ref={modalRef}
               >
                 {/* Windows-style draggable title bar */}
-                <div 
+                <div
                   className="px-4 py-3 border-b border-gray-200 bg-gradient-to-b from-gray-100 to-gray-50 cursor-move select-none flex-shrink-0"
                   onMouseDown={(e) => {
                     if (!modalRef.current) return;
                     e.preventDefault();
-                    
+
                     const modal = modalRef.current;
                     const rect = modal.getBoundingClientRect();
-                    
+
                     // Calculate the actual position considering the transform
                     const startLeft = rect.left;
                     const startTop = rect.top;
-                    
+
                     // Calculate offset relative to the mouse position
                     const offsetX = e.clientX - startLeft;
                     const offsetY = e.clientY - startTop;
-                    
+
                     // Set initial position before removing transform
                     modal.style.left = `${startLeft}px`;
                     modal.style.top = `${startTop}px`;
-                    modal.style.transform = 'none';
-                    
+                    modal.style.transform = "none";
+
                     function onMouseMove(e: MouseEvent) {
                       if (!modal) return;
                       const x = e.clientX - offsetX;
@@ -1858,14 +2061,14 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                       modal.style.left = `${x}px`;
                       modal.style.top = `${y}px`;
                     }
-                    
+
                     function onMouseUp() {
-                      document.removeEventListener('mousemove', onMouseMove);
-                      document.removeEventListener('mouseup', onMouseUp);
+                      document.removeEventListener("mousemove", onMouseMove);
+                      document.removeEventListener("mouseup", onMouseUp);
                     }
-                    
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.addEventListener('mouseup', onMouseUp);
+
+                    document.addEventListener("mousemove", onMouseMove);
+                    document.addEventListener("mouseup", onMouseUp);
                   }}
                 >
                   <div className="flex items-center justify-between">
@@ -1874,7 +2077,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                         Manage Specialty Mappings
                       </h2>
                       <p className="mt-0.5 text-sm text-gray-500">
-                        {pendingSynonym 
+                        {pendingSynonym
                           ? `Select a specialty to map "${pendingSynonym}"`
                           : "Add, edit, or remove specialty mappings and variations."}
                       </p>
@@ -1886,7 +2089,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                       <XMarkIcon className="h-5 w-5 text-gray-500" />
                     </button>
                   </div>
-            </div>
+                </div>
 
                 <div className="flex divide-x divide-gray-200 flex-1 min-h-0 overflow-hidden">
                   {/* Left side - Specialty List */}
@@ -1923,24 +2126,36 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               className="group flex items-center gap-2 w-full"
                             >
                               <button
-                                onClick={() => handleSpecialtySelect(specialty.name)}
+                                onClick={() =>
+                                  handleSpecialtySelect(specialty.name)
+                                }
                                 className={cn(
                                   "flex-1 text-left px-3 py-2 rounded-md transition-all text-sm",
-                                  selectedSpecialtyForSynonyms === specialty.name
+                                  selectedSpecialtyForSynonyms ===
+                                    specialty.name
                                     ? "bg-blue-50 text-blue-700"
                                     : "hover:bg-gray-50"
                                 )}
                               >
                                 <div className="flex items-center justify-between">
-                                  <span className="font-medium truncate">{specialty.name}</span>
+                                  <span className="font-medium truncate">
+                                    {specialty.name}
+                                  </span>
                                   <div className="flex gap-1 flex-shrink-0">
-                                    {specialty.synonyms.predefined.length > 0 && (
-                                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                                    {specialty.synonyms.predefined.length >
+                                      0 && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="bg-blue-50 text-blue-700 border-blue-200"
+                                      >
                                         {specialty.synonyms.predefined.length}
                                       </Badge>
                                     )}
                                     {specialty.synonyms.custom.length > 0 && (
-                                      <Badge variant="secondary" className="bg-purple-50 text-purple-700 border-purple-200">
+                                      <Badge
+                                        variant="secondary"
+                                        className="bg-purple-50 text-purple-700 border-purple-200"
+                                      >
                                         {specialty.synonyms.custom.length}
                                       </Badge>
                                     )}
@@ -1969,7 +2184,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                       <div className="space-y-2 flex-shrink-0">
                         {pendingSynonym ? (
                           <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
-                            <span className="text-sm text-blue-700">Ready to add: <strong>{pendingSynonym}</strong></span>
+                            <span className="text-sm text-blue-700">
+                              Ready to add: <strong>{pendingSynonym}</strong>
+                            </span>
                             <button
                               onClick={() => setPendingSynonym("")}
                               className="p-1 hover:bg-blue-100 rounded"
@@ -1987,7 +2204,10 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                             />
                             <Button
                               onClick={handleAddSynonym}
-                              disabled={!newSynonym.trim() || !selectedSpecialtyForSynonyms}
+                              disabled={
+                                !newSynonym.trim() ||
+                                !selectedSpecialtyForSynonyms
+                              }
                               size="sm"
                               className="bg-blue-600 text-white hover:bg-blue-700"
                             >
@@ -2001,54 +2221,67 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                       <div className="flex-1 overflow-hidden border border-gray-200 rounded-lg">
                         <ScrollArea className="h-full">
                           <div className="p-3 space-y-1">
-                            {selectedSpecialtyForSynonyms && currentSynonyms && (
-                              <>
-                                {currentSynonyms.predefined.length > 0 && (
-                                  <div className="mb-2">
-                                    <h4 className="text-xs font-medium text-gray-500 mb-1">Predefined</h4>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {currentSynonyms.predefined.map((synonym, index) => (
-                                        <Badge
-                                          key={`predefined-${index}`}
-                                          variant="secondary"
-                                          className="bg-blue-50 text-blue-700 border border-blue-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
-                                        >
-                                          {synonym}
-                                          <button
-                                            onClick={() => handleRemoveSynonym(synonym)}
-                                            className="hover:bg-blue-100 rounded p-0.5"
-                                          >
-                                            <XMarkIcon className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ))}
+                            {selectedSpecialtyForSynonyms &&
+                              currentSynonyms && (
+                                <>
+                                  {currentSynonyms.predefined.length > 0 && (
+                                    <div className="mb-2">
+                                      <h4 className="text-xs font-medium text-gray-500 mb-1">
+                                        Predefined
+                                      </h4>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {currentSynonyms.predefined.map(
+                                          (synonym, index) => (
+                                            <Badge
+                                              key={`predefined-${index}`}
+                                              variant="secondary"
+                                              className="bg-blue-50 text-blue-700 border border-blue-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
+                                            >
+                                              {synonym}
+                                              <button
+                                                onClick={() =>
+                                                  handleRemoveSynonym(synonym)
+                                                }
+                                                className="hover:bg-blue-100 rounded p-0.5"
+                                              >
+                                                <XMarkIcon className="h-3 w-3" />
+                                              </button>
+                                            </Badge>
+                                          )
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                                {currentSynonyms.custom.length > 0 && (
-                                  <div>
-                                    <h4 className="text-xs font-medium text-gray-500 mb-1">Custom</h4>
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {currentSynonyms.custom.map((synonym, index) => (
-                                        <Badge
-                                          key={`custom-${index}`}
-                                          variant="secondary"
-                                          className="bg-purple-50 text-purple-700 border border-purple-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
-                                        >
-                                          {synonym}
-                                          <button
-                                            onClick={() => handleRemoveSynonym(synonym)}
-                                            className="hover:bg-purple-100 rounded p-0.5"
-                                          >
-                                            <XMarkIcon className="h-3 w-3" />
-                                          </button>
-                                        </Badge>
-                                      ))}
+                                  )}
+                                  {currentSynonyms.custom.length > 0 && (
+                                    <div>
+                                      <h4 className="text-xs font-medium text-gray-500 mb-1">
+                                        Custom
+                                      </h4>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {currentSynonyms.custom.map(
+                                          (synonym, index) => (
+                                            <Badge
+                                              key={`custom-${index}`}
+                                              variant="secondary"
+                                              className="bg-purple-50 text-purple-700 border border-purple-200 pl-2 pr-1 py-0.5 flex items-center gap-1"
+                                            >
+                                              {synonym}
+                                              <button
+                                                onClick={() =>
+                                                  handleRemoveSynonym(synonym)
+                                                }
+                                                className="hover:bg-purple-100 rounded p-0.5"
+                                              >
+                                                <XMarkIcon className="h-3 w-3" />
+                                              </button>
+                                            </Badge>
+                                          )
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                              </>
-                            )}
+                                  )}
+                                </>
+                              )}
                           </div>
                         </ScrollArea>
                       </div>
@@ -2058,17 +2291,17 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
                 {/* Footer */}
                 <div className="px-4 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2 flex-shrink-0">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={handleSynonymModalClose}
                     className="border-gray-300 text-gray-700 hover:bg-gray-50"
                   >
                     Cancel
                   </Button>
                   {pendingSynonym ? (
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => {
                         if (selectedSpecialtyForSynonyms && pendingSynonym) {
                           handleAddSynonym();
@@ -2081,8 +2314,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                       Add to Selected Specialty
                     </Button>
                   ) : (
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={handleSaveSynonyms}
                       className="bg-blue-600 text-white hover:bg-blue-700"
                     >
@@ -2098,7 +2331,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto p-6 space-y-6">
-        {viewMode === 'mapped' ? (
+        {viewMode === "mapped" ? (
           <div className="space-y-4">
             {/* Search and Stats Header */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -2106,50 +2339,61 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center">
-                      <span className="text-2xl font-semibold text-gray-900">{mappedGroups.length}</span>
-                      <span className="ml-2 text-sm text-gray-500">Mapped Groups</span>
+                      <span className="text-2xl font-semibold text-gray-900">
+                        {mappedGroups.length}
+                      </span>
+                      <span className="ml-2 text-sm text-gray-500">
+                        Mapped Groups
+                      </span>
                     </div>
                     <div className="h-8 w-px bg-gray-200" />
                     <div className="flex items-center">
                       <span className="text-2xl font-semibold text-gray-900">
-                        {Object.values(specialtiesByVendor).reduce((acc, curr) => acc + curr.length, 0)}
+                        {Object.values(specialtiesByVendor).reduce(
+                          (acc, curr) => acc + curr.length,
+                          0
+                        )}
                       </span>
-                      <span className="ml-2 text-sm text-gray-500">Unmapped Specialties</span>
+                      <span className="ml-2 text-sm text-gray-500">
+                        Unmapped Specialties
+                      </span>
                     </div>
                   </div>
-                <div className="relative">
-                  <MagnifyingGlassIcon 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-                  />
-                  <input
-                    type="text"
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
                       placeholder="Search mapped or unmapped specialties..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-96 pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg 
                       focus:ring-2 focus:ring-blue-500 focus:border-transparent
                       shadow-sm placeholder-gray-400"
-                  />
-              </div>
-            </div>
+                    />
+                  </div>
+                </div>
 
                 {/* Tabs */}
                 <div className="flex space-x-1 border-b border-gray-200">
                   <button
                     onClick={() => setShowUnmapped(false)}
                     className={`px-4 py-2 text-sm font-medium rounded-t-lg border-x border-t transition-colors
-                      ${!showUnmapped 
-                        ? 'bg-white border-gray-200 text-blue-600 -mb-px' 
-                        : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                      ${
+                        !showUnmapped
+                          ? "bg-white border-gray-200 text-blue-600 -mb-px"
+                          : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      }`}
                   >
                     Mapped Specialty Groups
                   </button>
                   <button
                     onClick={() => setShowUnmapped(true)}
                     className={`px-4 py-2 text-sm font-medium rounded-t-lg border-x border-t transition-colors
-                      ${showUnmapped 
-                        ? 'bg-white border-gray-200 text-blue-600 -mb-px' 
-                        : 'bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                      ${
+                        showUnmapped
+                          ? "bg-white border-gray-200 text-blue-600 -mb-px"
+                          : "bg-gray-100 border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      }`}
                   >
                     Unmapped Specialties
                   </button>
@@ -2161,149 +2405,182 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               {!showUnmapped ? (
                 /* Mapped Groups View */
-              <div className="divide-y divide-gray-200">
-                {mappedGroups
-                  .filter(group =>
-                    searchQuery ? 
-                      group.specialties.some(s => 
-                        s.specialty.toLowerCase().includes(searchQuery.toLowerCase())
-                      ) : true
-                  )
-                  .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-                  .map((group) => (
-                    <div key={group.id} className="p-6 hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                          <div className="flex flex-wrap gap-4">
-                          {group.specialties.map((specialty, index) => (
-                            <div key={`${specialty.vendor}:${specialty.specialty}`} 
-                                 className="flex items-center">
-                                <div className="flex flex-col items-start bg-white rounded-lg border border-gray-200 shadow-sm p-3">
-                                  <span className="text-sm font-medium text-gray-900">
-                                {specialty.specialty}
-                                  </span>
-                                  <span className="mt-1 px-2 py-0.5 text-xs rounded bg-blue-50 text-blue-700 border border-blue-100">
-                                  {specialty.vendor}
-                                </span>
-                                </div>
-                              {index < group.specialties.length - 1 && (
-                                  <div className="mx-2">
-                                    <ArrowsRightLeftIcon className="h-5 w-5 text-gray-400" />
+                <div className="divide-y divide-gray-200">
+                  {mappedGroups
+                    .filter((group) =>
+                      searchQuery
+                        ? group.specialties.some((s) =>
+                            s.specialty
+                              .toLowerCase()
+                              .includes(searchQuery.toLowerCase())
+                          )
+                        : true
+                    )
+                    .sort(
+                      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+                    )
+                    .map((group) => (
+                      <div key={group.id} className="p-6 hover:bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap gap-4">
+                              {group.specialties.map((specialty, index) => (
+                                <div
+                                  key={`${specialty.vendor}:${specialty.specialty}`}
+                                  className="flex items-center"
+                                >
+                                  <div className="flex flex-col items-start bg-white rounded-lg border border-gray-200 shadow-sm p-3">
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {specialty.specialty}
+                                    </span>
+                                    <span className="mt-1 px-2 py-0.5 text-xs rounded bg-blue-50 text-blue-700 border border-blue-100">
+                                      {specialty.vendor}
+                                    </span>
                                   </div>
-                              )}
+                                  {index < group.specialties.length - 1 && (
+                                    <div className="mx-2">
+                                      <ArrowsRightLeftIcon className="h-5 w-5 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                          <div className="mt-4 flex items-center space-x-4 text-sm text-gray-500">
-                            <span>Created {new Date(group.createdAt).toLocaleString()}</span>
-                            {group.isSingleSource && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
-                                Single Source
+                            <div className="mt-4 flex items-center space-x-4 text-sm text-gray-500">
+                              <span>
+                                Created{" "}
+                                {new Date(group.createdAt).toLocaleString()}
                               </span>
-                            )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setMappedGroups(prev => prev.filter(g => g.id !== group.id));
-                          generateAllMappings();
-                          toast.success('Mapping removed');
-                        }}
-                        className="ml-4 p-2 text-gray-400 hover:text-red-500 rounded-md
-                          hover:bg-red-50 transition-colors"
-                        title="Remove mapping"
-                      >
-                        <XMarkIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                  {mappedGroups.length === 0 && (
-                    <div className="p-8 text-center">
-                      <div className="mx-auto h-12 w-12 text-gray-400">
-                        <InformationCircleIcon className="h-12 w-12" />
-              </div>
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">No mapped groups</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        Get started by mapping specialties in Auto-Map or Manual Map mode
-                      </p>
-            </div>
-                  )}
-                  </div>
-              ) : (
-                /* Unmapped Specialties View */
-                <div className="p-6">
-                  <div className="grid grid-cols-3 gap-6">
-                {Object.entries(specialtiesByVendor).map(([vendor, specialties]) => (
-                  <div key={vendor} className="flex flex-col">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-2">
-                      <h4 className="text-sm font-semibold text-gray-900">{vendor}</h4>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                              {specialties.length} specialties
-                            </span>
-                          </div>
-                    </div>
-                        <div className="space-y-2">
-                      {specialties
-                        .filter(s => searchQuery ? s.specialty.toLowerCase().includes(searchQuery.toLowerCase()) : true)
-                        .map(specialty => (
-                        <div
-                          key={`${specialty.vendor}:${specialty.specialty}`}
-                              className="group flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
-                        >
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {specialty.specialty}
+                              {group.isSingleSource && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
+                                  Single Source
+                                </span>
+                              )}
                             </div>
                           </div>
                           <button
                             onClick={() => {
-                              const newGroup: MappedGroup = {
-                                id: Math.random().toString(36).substr(2, 9),
-                                specialties: [specialty],
-                                createdAt: new Date(),
-                                isSingleSource: true
-                              };
-                              setMappedGroups(prev => [...prev, newGroup]);
-                              toast.success('Marked as single source specialty');
+                              setMappedGroups((prev) =>
+                                prev.filter((g) => g.id !== group.id)
+                              );
+                              generateAllMappings();
+                              toast.success("Mapping removed");
                             }}
-                                className="opacity-0 group-hover:opacity-100 px-3 py-1.5 text-xs font-medium rounded-md
-                              text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200
-                              transition-all duration-150"
+                            className="ml-4 p-2 text-gray-400 hover:text-red-500 rounded-md
+                          hover:bg-red-50 transition-colors"
+                            title="Remove mapping"
                           >
-                            Mark as Single Source
+                            <XMarkIcon className="h-5 w-5" />
                           </button>
                         </div>
-                      ))}
-                      {specialties.length === 0 && (
-                        <div className="flex items-center justify-center p-8 bg-white rounded-lg border border-gray-200">
-                          <div className="text-center">
-                            <InformationCircleIcon className="mx-auto h-10 w-10 text-gray-400" />
-                            <h3 className="mt-2 text-sm font-medium text-gray-900">No unmapped specialties</h3>
-                            <p className="mt-1 text-sm text-gray-500">
-                              All specialties in this vendor have been mapped
-                            </p>
+                      </div>
+                    ))}
+                  {mappedGroups.length === 0 && (
+                    <div className="p-8 text-center">
+                      <div className="mx-auto h-12 w-12 text-gray-400">
+                        <InformationCircleIcon className="h-12 w-12" />
+                      </div>
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">
+                        No mapped groups
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Get started by mapping specialties in Auto-Map or Manual
+                        Map mode
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Unmapped Specialties View */
+                <div className="p-6">
+                  <div className="grid grid-cols-3 gap-6">
+                    {Object.entries(specialtiesByVendor).map(
+                      ([vendor, specialties]) => (
+                        <div key={vendor} className="flex flex-col">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center space-x-2">
+                              <h4 className="text-sm font-semibold text-gray-900">
+                                {vendor}
+                              </h4>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                {specialties.length} specialties
+                              </span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            {specialties
+                              .filter((s) =>
+                                searchQuery
+                                  ? s.specialty
+                                      .toLowerCase()
+                                      .includes(searchQuery.toLowerCase())
+                                  : true
+                              )
+                              .map((specialty) => (
+                                <div
+                                  key={`${specialty.vendor}:${specialty.specialty}`}
+                                  className="group flex items-center justify-between p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                                >
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">
+                                      {specialty.specialty}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      const newGroup: MappedGroup = {
+                                        id: Math.random()
+                                          .toString(36)
+                                          .substr(2, 9),
+                                        specialties: [specialty],
+                                        createdAt: new Date(),
+                                        isSingleSource: true,
+                                      };
+                                      setMappedGroups((prev) => [
+                                        ...prev,
+                                        newGroup,
+                                      ]);
+                                      toast.success(
+                                        "Marked as single source specialty"
+                                      );
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 px-3 py-1.5 text-xs font-medium rounded-md
+                              text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200
+                              transition-all duration-150"
+                                  >
+                                    Mark as Single Source
+                                  </button>
+                                </div>
+                              ))}
+                            {specialties.length === 0 && (
+                              <div className="flex items-center justify-center p-8 bg-white rounded-lg border border-gray-200">
+                                <div className="text-center">
+                                  <InformationCircleIcon className="mx-auto h-10 w-10 text-gray-400" />
+                                  <h3 className="mt-2 text-sm font-medium text-gray-900">
+                                    No unmapped specialties
+                                  </h3>
+                                  <p className="mt-1 text-sm text-gray-500">
+                                    All specialties in this vendor have been
+                                    mapped
+                                  </p>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      )}
-                    </div>
+                      )
+                    )}
                   </div>
-                ))}
-              </div>
                 </div>
               )}
             </div>
           </div>
-        ) : viewMode === 'manual' ? (
+        ) : viewMode === "manual" ? (
           <div className="space-y-4">
             {/* Search Field */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="p-4">
                 <div className="relative">
-                  <MagnifyingGlassIcon 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-                  />
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search specialties across vendors to map together..."
@@ -2322,67 +2599,83 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               <div className="h-full flex gap-6 p-6">
                 {/* Three columns for vendors */}
                 <div className="flex-1 grid grid-cols-3 gap-6">
-                  {Object.entries(filteredSpecialties).map(([vendor, specialties]) => (
-                    <div key={vendor} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-                      <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-gray-900">{vendor}</h3>
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
-                            {specialties.length} specialties
-                          </span>
+                  {Object.entries(filteredSpecialties).map(
+                    ([vendor, specialties]) => (
+                      <div
+                        key={vendor}
+                        className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden"
+                      >
+                        <div className="px-4 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-semibold text-gray-900">
+                              {vendor}
+                            </h3>
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                              {specialties.length} specialties
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-3 space-y-1.5 bg-gray-50">
-                        <AnimatePresence>
-                          {specialties.map(specialty => (
-                            <motion.div
-                              key={`${specialty.vendor}:${specialty.specialty}`}
-                              layout
-                              initial={{ opacity: 0, y: 20 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              exit={{ opacity: 0, y: -20 }}
-                              className={`
+                        <div className="flex-1 overflow-y-auto p-3 space-y-1.5 bg-gray-50">
+                          <AnimatePresence>
+                            {specialties.map((specialty) => (
+                              <motion.div
+                                key={`${specialty.vendor}:${specialty.specialty}`}
+                                layout
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                className={`
                                 px-3 py-2.5 rounded-md transition-all cursor-pointer
                                 border shadow-sm
-                                ${selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`)
-                                  ? 'bg-blue-50 border-blue-200 hover:bg-blue-100'
-                                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                                ${
+                                  selectedSpecialties.has(
+                                    `${specialty.vendor}:${specialty.specialty}`
+                                  )
+                                    ? "bg-blue-50 border-blue-200 hover:bg-blue-100"
+                                    : "bg-white border-gray-200 hover:bg-gray-50"
                                 }
                               `}
-                              onClick={() => toggleSpecialtySelection({
-                                specialty: specialty.specialty,
-                                vendor: specialty.vendor,
-                                metrics: specialty.metrics
-                              })}
-                            >
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium truncate">
-                                    {specialty.specialty}
+                                onClick={() =>
+                                  toggleSpecialtySelection({
+                                    specialty: specialty.specialty,
+                                    vendor: specialty.vendor,
+                                    metrics: specialty.metrics,
+                                  })
+                                }
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium truncate">
+                                      {specialty.specialty}
+                                    </div>
                                   </div>
+                                  {selectedSpecialties.has(
+                                    `${specialty.vendor}:${specialty.specialty}`
+                                  ) && (
+                                    <CheckCircleIcon className="h-5 w-5 text-blue-500 flex-shrink-0 ml-2" />
+                                  )}
                                 </div>
-                                {selectedSpecialties.has(`${specialty.vendor}:${specialty.specialty}`) && (
-                                  <CheckCircleIcon className="h-5 w-5 text-blue-500 flex-shrink-0 ml-2" />
-                                )}
-                              </div>
-                            </motion.div>
-                          ))}
-                        </AnimatePresence>
-                        {specialties.length === 0 && (
-                          <div className="px-3 py-4 text-center text-sm text-gray-500">
-                            No specialties found
-                          </div>
-                        )}
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                          {specialties.length === 0 && (
+                            <div className="px-3 py-4 text-center text-sm text-gray-500">
+                              No specialties found
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
 
                 {/* Selected Specialties Panel */}
                 <div className="w-80 flex flex-col bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-white border-b border-gray-200">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-gray-900">Selected Specialties</h3>
+                      <h3 className="text-sm font-semibold text-gray-900">
+                        Selected Specialties
+                      </h3>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
                         {selectedSpecialties.size} selected
                       </span>
@@ -2408,7 +2701,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               transition-colors duration-150 ease-in-out shadow-sm"
                           >
                             {selectedSpecialties.size === 1
-                              ? 'Create Single Source'
+                              ? "Create Single Source"
                               : `Create Group (${selectedSpecialties.size})`}
                           </button>
                           {selectedSpecialties.size > 1 && (
@@ -2421,8 +2714,10 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               title="Create individual single sources"
                             >
                               <ArrowsRightLeftIcon className="h-4 w-4" />
-                              <span className="absolute right-0 top-full mt-2 w-48 p-2 bg-gray-900 text-white text-xs rounded shadow-lg
-                                opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                              <span
+                                className="absolute right-0 top-full mt-2 w-48 p-2 bg-gray-900 text-white text-xs rounded shadow-lg
+                                opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none"
+                              >
                                 Create individual single sources
                               </span>
                             </button>
@@ -2433,10 +2728,10 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   </div>
                   <div className="flex-1 overflow-y-auto p-3 bg-gray-50">
                     <div className="space-y-2">
-                      {Array.from(selectedSpecialties).map(key => {
-                        const [vendor, ...specialtyParts] = key.split(':');
+                      {Array.from(selectedSpecialties).map((key) => {
+                        const [vendor, ...specialtyParts] = key.split(":");
                         // Join back the specialty parts to handle cases where specialty name contains colons
-                        const specialty = specialtyParts.join(':');
+                        const specialty = specialtyParts.join(":");
                         return (
                           <div
                             key={key}
@@ -2444,18 +2739,24 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                           >
                             <div>
                               <div className="text-sm font-medium text-gray-900">
-                                {specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.specialty || specialty}
+                                {specialtiesByVendor[vendor]?.find(
+                                  (s) => s.specialty === specialty
+                                )?.specialty || specialty}
                               </div>
                               <div className="mt-0.5 text-xs text-gray-500">
                                 {vendor}
                               </div>
                             </div>
                             <button
-                              onClick={() => toggleSpecialtySelection({
-                                specialty: specialty,
-                                vendor: vendor,
-                                metrics: specialtiesByVendor[vendor]?.find(s => s.specialty === specialty)?.metrics
-                              })}
+                              onClick={() =>
+                                toggleSpecialtySelection({
+                                  specialty: specialty,
+                                  vendor: vendor,
+                                  metrics: specialtiesByVendor[vendor]?.find(
+                                    (s) => s.specialty === specialty
+                                  )?.metrics,
+                                })
+                              }
                               className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50"
                             >
                               <XMarkIcon className="h-5 w-5" />
@@ -2480,9 +2781,7 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
               <div className="p-4">
                 <div className="relative">
-                  <MagnifyingGlassIcon 
-                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-                  />
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search for specialties to find potential matches..."
@@ -2518,21 +2817,32 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th scope="col" className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                      >
                         Source Specialty
                       </th>
-                      <th scope="col" className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                      >
                         Vendor
                       </th>
-                      <th scope="col" className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th
+                        scope="col"
+                        className="sticky top-0 px-6 py-4 border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                      >
                         Potential Matches
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredMappings.map((mapping) => (
-                      <tr key={`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`}
-                          className="hover:bg-gray-50 group">
+                      <tr
+                        key={`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`}
+                        className="hover:bg-gray-50 group"
+                      >
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-gray-900">
@@ -2542,39 +2852,59 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               type="button"
                               onClick={() => {
                                 // Find the specialty object
-                                let specialty = allSpecialties.find(s => s.name === mapping.sourceSpecialty.specialty);
+                                let specialty = allSpecialties.find(
+                                  (s) =>
+                                    s.name === mapping.sourceSpecialty.specialty
+                                );
                                 if (!specialty) {
                                   // If specialty doesn't exist, create it
-                                  const newSpecialty = specialtyManager.addSpecialty(mapping.sourceSpecialty.specialty);
+                                  const newSpecialty =
+                                    specialtyManager.addSpecialty(
+                                      mapping.sourceSpecialty.specialty
+                                    );
                                   if (!newSpecialty) {
                                     toast.error("Failed to create specialty");
                                     return;
                                   }
                                   // Refresh the specialties list
-                                  const loadedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
+                                  const loadedSpecialties = specialtyManager
+                                    .getAllSpecialties()
+                                    .map(convertToSpecialtyWithStats);
                                   setAllSpecialties(loadedSpecialties);
-                                  specialty = convertToSpecialtyWithStats(newSpecialty);
+                                  specialty =
+                                    convertToSpecialtyWithStats(newSpecialty);
                                 }
-                                
+
                                 // Get potential matches as predefined synonyms
                                 const predefinedSynonyms = mapping.matches
-                                  .filter(m => m.confidence >= 0.8)
-                                  .map(m => m.specialty.specialty);
-                                  
+                                  .filter((m) => m.confidence >= 0.8)
+                                  .map((m) => m.specialty.specialty);
+
                                 // Update the specialty with predefined synonyms
-                                if (predefinedSynonyms.length > 0 && specialty) {
+                                if (
+                                  predefinedSynonyms.length > 0 &&
+                                  specialty
+                                ) {
                                   for (const synonymText of predefinedSynonyms) {
-                                    specialtyManager.addSynonym(specialty.id, synonymText, true);
+                                    specialtyManager.addSynonym(
+                                      specialty.id,
+                                      synonymText,
+                                      true
+                                    );
                                   }
                                 }
-                                
+
                                 // Refresh stats and specialties list again after adding synonyms
                                 getSpecialtyStats();
-                                const updatedSpecialties = specialtyManager.getAllSpecialties().map(convertToSpecialtyWithStats);
+                                const updatedSpecialties = specialtyManager
+                                  .getAllSpecialties()
+                                  .map(convertToSpecialtyWithStats);
                                 setAllSpecialties(updatedSpecialties);
-                                
+
                                 // Select the specialty and open the modal
-                                handleSpecialtySelect(mapping.sourceSpecialty.specialty);
+                                handleSpecialtySelect(
+                                  mapping.sourceSpecialty.specialty
+                                );
                                 setShowSynonymModal(true);
                               }}
                               className="group relative inline-flex items-center p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
@@ -2598,24 +2928,41 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               <div className="flex justify-end mb-2">
                                 <button
                                   onClick={() => {
-                                    mapping.matches.forEach(match => {
+                                    mapping.matches.forEach((match) => {
                                       if (!match.status) {
-                                        updateMappingStatus(mapping.sourceSpecialty, match.specialty, 'approved');
+                                        updateMappingStatus(
+                                          mapping.sourceSpecialty,
+                                          match.specialty,
+                                          "approved"
+                                        );
                                       }
                                     });
                                   }}
                                   className="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 shadow-sm transition-colors duration-150 ease-in-out border border-green-500"
                                 >
                                   <CheckIcon className="h-4 w-4 mr-2" />
-                                  Accept All Matches ({mapping.matches.filter(m => !m.status || m.status === 'approved').length})
+                                  Accept All Matches (
+                                  {
+                                    mapping.matches.filter(
+                                      (m) =>
+                                        !m.status || m.status === "approved"
+                                    ).length
+                                  }
+                                  )
                                 </button>
                               </div>
                             )}
-                            
+
                             {mapping.matches.map((match) => (
                               <div
                                 key={`${match.specialty.vendor}:${match.specialty.specialty}`}
-                                className={`flex items-center justify-between p-3 rounded-lg border transition-all ${match.status === 'approved' ? 'bg-green-50 border-green-200 shadow-sm' : match.status === 'rejected' ? 'bg-red-50 border-red-200 shadow-sm' : 'bg-white border-gray-200 shadow-sm group-hover:border-gray-300'}`}
+                                className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                                  match.status === "approved"
+                                    ? "bg-green-50 border-green-200 shadow-sm"
+                                    : match.status === "rejected"
+                                    ? "bg-red-50 border-red-200 shadow-sm"
+                                    : "bg-white border-gray-200 shadow-sm group-hover:border-gray-300"
+                                }`}
                               >
                                 <div className="flex-1">
                                   <div className="flex items-center flex-wrap gap-2">
@@ -2625,31 +2972,41 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
                                       {match.specialty.vendor}
                                     </span>
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
-                                      ${match.confidence >= 0.95 
-                                        ? 'bg-green-50 text-green-700 border border-green-200' 
-                                        : match.confidence >= 0.8
-                                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                        : 'bg-yellow-50 text-yellow-700 border border-yellow-200'}`}
+                                    <span
+                                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                                      ${
+                                        match.confidence >= 0.95
+                                          ? "bg-green-50 text-green-700 border border-green-200"
+                                          : match.confidence >= 0.8
+                                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                          : "bg-yellow-50 text-yellow-700 border border-yellow-200"
+                                      }`}
                                     >
-                                      {Math.round(match.confidence * 100)}% match
+                                      {Math.round(match.confidence * 100)}%
+                                      match
                                     </span>
-                                    {match.status === 'approved' && (
+                                    {match.status === "approved" && (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                                         Approved
                                       </span>
                                     )}
-                                    {match.status === 'rejected' && (
+                                    {match.status === "rejected" && (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
                                         Rejected
                                       </span>
                                     )}
                                   </div>
-                                    </div>
+                                </div>
                                 {!match.status && (
                                   <div className="flex items-center gap-2 ml-4">
-                              <Button
-                                      onClick={() => updateMappingStatus(mapping.sourceSpecialty, match.specialty, 'approved')}
+                                    <Button
+                                      onClick={() =>
+                                        updateMappingStatus(
+                                          mapping.sourceSpecialty,
+                                          match.specialty,
+                                          "approved"
+                                        )
+                                      }
                                       variant="outline"
                                       size="icon"
                                       className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50 border-green-200"
@@ -2658,18 +3015,24 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                       <CheckIcon className="h-4 w-4" />
                                     </Button>
                                     <Button
-                                      onClick={() => updateMappingStatus(mapping.sourceSpecialty, match.specialty, 'rejected')}
+                                      onClick={() =>
+                                        updateMappingStatus(
+                                          mapping.sourceSpecialty,
+                                          match.specialty,
+                                          "rejected"
+                                        )
+                                      }
                                       variant="outline"
                                       size="icon"
                                       className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                                       title="Reject match"
-                              >
-                                <XMarkIcon className="h-4 w-4" />
-                              </Button>
+                                    >
+                                      <XMarkIcon className="h-4 w-4" />
+                                    </Button>
                                   </div>
                                 )}
-                            </div>
-                          ))}
+                              </div>
+                            ))}
 
                             {/* Replace the "Add More" button with inline search */}
                             <div className="relative mt-2">
@@ -2678,32 +3041,40 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                   <input
                                     type="text"
                                     placeholder="Search to add more specialties..."
-                                    value={localSearchQueries.get(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`) || ''}
+                                    value={
+                                      localSearchQueries.get(
+                                        `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                      ) || ""
+                                    }
                                     onChange={(e) => {
-                                      setLocalSearchQueries(prev => new Map(prev).set(
-                                        `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`,
-                                        e.target.value
-                                      ));
+                                      setLocalSearchQueries((prev) =>
+                                        new Map(prev).set(
+                                          `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`,
+                                          e.target.value
+                                        )
+                                      );
                                     }}
                                     onFocus={() => {
-                                      setOpenSearchDropdowns(prev => {
+                                      setOpenSearchDropdowns((prev) => {
                                         const next = new Set(prev);
-                                        next.add(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                        next.add(
+                                          `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                        );
                                         return next;
                                       });
                                     }}
                                     className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md
                                       focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                   />
-                                  <MagnifyingGlassIcon 
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
-                                  />
+                                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                                 </div>
                                 <button
                                   onClick={() => {
-                                    setOpenSearchDropdowns(prev => {
+                                    setOpenSearchDropdowns((prev) => {
                                       const next = new Set(prev);
-                                      next.add(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                      next.add(
+                                        `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                      );
                                       return next;
                                     });
                                   }}
@@ -2716,15 +3087,22 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                               </div>
 
                               {/* Dropdown for search results */}
-                              {openSearchDropdowns.has(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`) && (
+                              {openSearchDropdowns.has(
+                                `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                              ) && (
                                 <div className="absolute z-50 mt-1 w-full bg-white rounded-md shadow-lg border border-gray-200">
                                   <div className="max-h-60 overflow-y-auto py-1">
                                     {(() => {
-                                      const localSearchQuery = localSearchQueries.get(
-                                        `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
-                                      ) || '';
-                                      
-                                      const availableSpecialties = getAvailableSpecialties(mapping, localSearchQuery);
+                                      const localSearchQuery =
+                                        localSearchQueries.get(
+                                          `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                        ) || "";
+
+                                      const availableSpecialties =
+                                        getAvailableSpecialties(
+                                          mapping,
+                                          localSearchQuery
+                                        );
 
                                       if (availableSpecialties.length === 0) {
                                         return (
@@ -2734,68 +3112,97 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                         );
                                       }
 
-                                      return availableSpecialties.map((specialty) => (
-                                        <button
-                                          key={`${specialty.vendor}:${specialty.specialty}`}
-                                          onClick={() => {
-                                            const newMatch = {
-                                              specialty,
-                                              confidence: calculateStringSimilarity(
-                                                mapping.sourceSpecialty.specialty,
-                                                specialty.specialty
-                                              ),
-                                              reason: 'Manually added',
-                                              status: undefined as 'approved' | 'rejected' | undefined
-                                            };
-                                            
-                                            setAllAutoMappings(prev => prev.map(m => 
-                                              m.sourceSpecialty.specialty === mapping.sourceSpecialty.specialty
-                                                ? { 
-                                                    ...m, 
-                                                    matches: [...m.matches, newMatch].sort((a, b) => b.confidence - a.confidence)
-                                                  }
-                                                : m
-                                            ));
-                                            
-                                            setOpenSearchDropdowns(prev => {
-                                              const next = new Set(prev);
-                                              next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
-                                              return next;
-                                            });
-                                            setLocalSearchQueries(prev => {
-                                              const next = new Map(prev);
-                                              next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
-                                              return next;
-                                            });
-                                            
-                                            toast.success('Added new specialty to mapping');
-                                          }}
-                                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between"
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <span className="font-medium text-gray-900">
-                                              {specialty.specialty}
-                                            </span>
-                                            <span className="px-1.5 py-0.5 text-xs rounded bg-blue-50 text-blue-700 border border-blue-100">
-                                              {specialty.vendor}
-                                            </span>
-                                          </div>
-                                          <PlusIcon className="h-4 w-4 text-gray-400" />
-                                        </button>
-                                      ));
+                                      return availableSpecialties.map(
+                                        (specialty) => (
+                                          <button
+                                            key={`${specialty.vendor}:${specialty.specialty}`}
+                                            onClick={() => {
+                                              const newMatch = {
+                                                specialty,
+                                                confidence:
+                                                  calculateStringSimilarity(
+                                                    mapping.sourceSpecialty
+                                                      .specialty,
+                                                    specialty.specialty
+                                                  ),
+                                                reason: "Manually added",
+                                                status: undefined as
+                                                  | "approved"
+                                                  | "rejected"
+                                                  | undefined,
+                                              };
+
+                                              setAllAutoMappings((prev) =>
+                                                prev.map((m) =>
+                                                  m.sourceSpecialty
+                                                    .specialty ===
+                                                  mapping.sourceSpecialty
+                                                    .specialty
+                                                    ? {
+                                                        ...m,
+                                                        matches: [
+                                                          ...m.matches,
+                                                          newMatch,
+                                                        ].sort(
+                                                          (a, b) =>
+                                                            b.confidence -
+                                                            a.confidence
+                                                        ),
+                                                      }
+                                                    : m
+                                                )
+                                              );
+
+                                              setOpenSearchDropdowns((prev) => {
+                                                const next = new Set(prev);
+                                                next.delete(
+                                                  `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                                );
+                                                return next;
+                                              });
+                                              setLocalSearchQueries((prev) => {
+                                                const next = new Map(prev);
+                                                next.delete(
+                                                  `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                                );
+                                                return next;
+                                              });
+
+                                              toast.success(
+                                                "Added new specialty to mapping"
+                                              );
+                                            }}
+                                            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center justify-between"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-gray-900">
+                                                {specialty.specialty}
+                                              </span>
+                                              <span className="px-1.5 py-0.5 text-xs rounded bg-blue-50 text-blue-700 border border-blue-100">
+                                                {specialty.vendor}
+                                              </span>
+                                            </div>
+                                            <PlusIcon className="h-4 w-4 text-gray-400" />
+                                          </button>
+                                        )
+                                      );
                                     })()}
                                   </div>
                                   <div className="border-t px-3 py-2 bg-gray-50">
                                     <button
                                       onClick={() => {
-                                        setOpenSearchDropdowns(prev => {
+                                        setOpenSearchDropdowns((prev) => {
                                           const next = new Set(prev);
-                                          next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                          next.delete(
+                                            `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                          );
                                           return next;
                                         });
-                                        setLocalSearchQueries(prev => {
+                                        setLocalSearchQueries((prev) => {
                                           const next = new Map(prev);
-                                          next.delete(`${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`);
+                                          next.delete(
+                                            `${mapping.sourceSpecialty.vendor}:${mapping.sourceSpecialty.specialty}`
+                                          );
                                           return next;
                                         });
                                       }}
@@ -2803,9 +3210,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                                     >
                                       Close
                                     </button>
-                        </div>
-                      </div>
-                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -2820,13 +3227,15 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
       </div>
 
       {/* Empty State - Only show in Auto-Map mode */}
-      {viewMode === 'auto' && filteredMappings.length === 0 && (
+      {viewMode === "auto" && filteredMappings.length === 0 && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center max-w-md mx-auto p-6">
             <div className="mx-auto h-12 w-12 text-gray-400">
               <MagnifyingGlassIcon className="h-12 w-12" />
             </div>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No specialties found</h3>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">
+              No specialties found
+            </h3>
             <p className="mt-1 text-sm text-gray-500">
               {searchQuery
                 ? "Try adjusting your search terms"
@@ -2841,7 +3250,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           <DialogHeader>
             <DialogTitle>Delete Specialty</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{specialtyToDelete?.name}"? This action cannot be undone.
+              Are you sure you want to delete "{specialtyToDelete?.name}"? This
+              action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -2871,44 +3281,87 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
               How to Use Specialty Mapping Studio
             </DialogTitle>
             <DialogDescription>
-              A comprehensive guide to mapping medical specialties across different survey vendors
+              A comprehensive guide to mapping medical specialties across
+              different survey vendors
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="flex-1 max-h-[calc(90vh-180px)] pr-6">
             <div className="space-y-6">
               {/* Auto-Mapping System */}
               <div>
-                <h3 className="text-lg font-semibold text-blue-700 mb-2">Auto-Mapping System</h3>
+                <h3 className="text-lg font-semibold text-blue-700 mb-2">
+                  Auto-Mapping System
+                </h3>
                 <div className="space-y-4 text-gray-600">
-                  <p>The auto-mapping system uses pattern matching and text analysis to identify potential specialty matches across different vendors:</p>
-                  
+                  <p>
+                    The auto-mapping system uses pattern matching and text
+                    analysis to identify potential specialty matches across
+                    different vendors:
+                  </p>
+
                   <div className="pl-4 space-y-3">
                     <div>
-                      <h4 className="font-medium text-gray-900">Match Detection</h4>
+                      <h4 className="font-medium text-gray-900">
+                        Match Detection
+                      </h4>
                       <ul className="list-disc pl-4 space-y-1">
-                        <li>Exact String Matches: Direct specialty name comparisons</li>
-                        <li>Synonym Database: Using predefined and custom synonyms</li>
-                        <li>Text Analysis: Basic prefix, suffix, and acronym detection</li>
-                        <li>String Similarity: Fuzzy matching for close variations</li>
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h4 className="font-medium text-gray-900">Confidence Score Calculation</h4>
-                      <p>Confidence scores (0-1) indicate match quality:</p>
-                      <ul className="list-disc pl-4 space-y-1">
-                        <li><span className="font-medium">1.0 (Exact Match)</span>: Perfect string match or known synonym match</li>
-                        <li><span className="font-medium">0.95 (High)</span>: Known variations or predefined specialty patterns</li>
-                        <li><span className="font-medium">0.8-0.94 (Strong)</span>: Strong similarity or partial pattern match</li>
-                        <li><span className="font-medium">0.6-0.79 (Moderate)</span>: Moderate similarity or potential match</li>
-                        <li><span className="font-medium">&lt;0.6 (Low)</span>: Not shown in suggestions</li>
+                        <li>
+                          Exact String Matches: Direct specialty name
+                          comparisons
+                        </li>
+                        <li>
+                          Synonym Database: Using predefined and custom synonyms
+                        </li>
+                        <li>
+                          Text Analysis: Basic prefix, suffix, and acronym
+                          detection
+                        </li>
+                        <li>
+                          String Similarity: Fuzzy matching for close variations
+                        </li>
                       </ul>
                     </div>
 
                     <div>
-                      <h4 className="font-medium text-gray-900">Special Cases</h4>
+                      <h4 className="font-medium text-gray-900">
+                        Confidence Score Calculation
+                      </h4>
+                      <p>Confidence scores (0-1) indicate match quality:</p>
                       <ul className="list-disc pl-4 space-y-1">
-                        <li>Critical Care specialties receive additional pattern matching</li>
+                        <li>
+                          <span className="font-medium">1.0 (Exact Match)</span>
+                          : Perfect string match or known synonym match
+                        </li>
+                        <li>
+                          <span className="font-medium">0.95 (High)</span>:
+                          Known variations or predefined specialty patterns
+                        </li>
+                        <li>
+                          <span className="font-medium">0.8-0.94 (Strong)</span>
+                          : Strong similarity or partial pattern match
+                        </li>
+                        <li>
+                          <span className="font-medium">
+                            0.6-0.79 (Moderate)
+                          </span>
+                          : Moderate similarity or potential match
+                        </li>
+                        <li>
+                          <span className="font-medium">&lt;0.6 (Low)</span>:
+                          Not shown in suggestions
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        Special Cases
+                      </h4>
+                      <ul className="list-disc pl-4 space-y-1">
+                        <li>
+                          Critical Care specialties receive additional pattern
+                          matching
+                        </li>
                         <li>Vendor-specific naming patterns are considered</li>
                         <li>Common medical abbreviations are recognized</li>
                       </ul>
@@ -2919,23 +3372,37 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
               {/* Synonym Management System */}
               <div>
-                <h3 className="text-lg font-semibold text-blue-700 mb-2">Synonym Management System</h3>
+                <h3 className="text-lg font-semibold text-blue-700 mb-2">
+                  Synonym Management System
+                </h3>
                 <div className="space-y-4 text-gray-600">
-                  <p>The synonym system helps maintain consistent specialty mapping through three types of synonyms:</p>
-                  
+                  <p>
+                    The synonym system helps maintain consistent specialty
+                    mapping through three types of synonyms:
+                  </p>
+
                   <div className="pl-4 space-y-3">
                     <div>
-                      <h4 className="font-medium text-gray-900">Predefined Synonyms</h4>
+                      <h4 className="font-medium text-gray-900">
+                        Predefined Synonyms
+                      </h4>
                       <ul className="list-disc pl-4 space-y-1">
                         <li>System-provided standard specialty variations</li>
                         <li>Based on industry-standard terminology</li>
-                        <li>Example: "Otorhinolaryngology" → ["ENT", "Ear Nose and Throat"]</li>
-                        <li>Cannot be deleted but can be temporarily disabled</li>
+                        <li>
+                          Example: "Otorhinolaryngology" → ["ENT", "Ear Nose and
+                          Throat"]
+                        </li>
+                        <li>
+                          Cannot be deleted but can be temporarily disabled
+                        </li>
                       </ul>
                     </div>
-                    
+
                     <div>
-                      <h4 className="font-medium text-gray-900">Custom Synonyms</h4>
+                      <h4 className="font-medium text-gray-900">
+                        Custom Synonyms
+                      </h4>
                       <ul className="list-disc pl-4 space-y-1">
                         <li>User-defined specialty variations</li>
                         <li>Organization-specific terminology</li>
@@ -2943,9 +3410,11 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                         <li>Syncs across all mapping sessions</li>
                       </ul>
                     </div>
-                    
+
                     <div>
-                      <h4 className="font-medium text-gray-900">Learned Synonyms</h4>
+                      <h4 className="font-medium text-gray-900">
+                        Learned Synonyms
+                      </h4>
                       <ul className="list-disc pl-4 space-y-1">
                         <li>Automatically generated from approved mappings</li>
                         <li>Based on historical mapping decisions</li>
@@ -2955,11 +3424,19 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </div>
 
                     <div>
-                      <h4 className="font-medium text-gray-900">Synonym Rules</h4>
+                      <h4 className="font-medium text-gray-900">
+                        Synonym Rules
+                      </h4>
                       <ul className="list-disc pl-4 space-y-1">
-                        <li>Each specialty name can only be a synonym for one primary specialty</li>
+                        <li>
+                          Each specialty name can only be a synonym for one
+                          primary specialty
+                        </li>
                         <li>Synonyms are bi-directional (A → B means B → A)</li>
-                        <li>Transitive relationships are automatically applied (if A → B and B → C, then A → C)</li>
+                        <li>
+                          Transitive relationships are automatically applied (if
+                          A → B and B → C, then A → C)
+                        </li>
                         <li>Conflicts are prevented during synonym addition</li>
                       </ul>
                     </div>
@@ -2969,17 +3446,27 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
 
               {/* Best Practices */}
               <div>
-                <h3 className="text-lg font-semibold text-blue-700 mb-2">Best Practices</h3>
+                <h3 className="text-lg font-semibold text-blue-700 mb-2">
+                  Best Practices
+                </h3>
                 <div className="space-y-2">
                   <h4 className="font-medium text-gray-900">Auto-Mapping</h4>
                   <ul className="list-disc pl-4 space-y-1 text-gray-600">
                     <li>Review high-confidence matches (0.95+) first</li>
-                    <li>Use "Accept All" for groups of high-confidence matches</li>
-                    <li>Manually verify moderate confidence matches (0.6-0.79)</li>
-                    <li>Consider adding custom synonyms for recurring variations</li>
+                    <li>
+                      Use "Accept All" for groups of high-confidence matches
+                    </li>
+                    <li>
+                      Manually verify moderate confidence matches (0.6-0.79)
+                    </li>
+                    <li>
+                      Consider adding custom synonyms for recurring variations
+                    </li>
                   </ul>
 
-                  <h4 className="font-medium text-gray-900 mt-3">Synonym Management</h4>
+                  <h4 className="font-medium text-gray-900 mt-3">
+                    Synonym Management
+                  </h4>
                   <ul className="list-disc pl-4 space-y-1 text-gray-600">
                     <li>Add custom synonyms for organization-specific terms</li>
                     <li>Review and validate learned synonyms regularly</li>
@@ -2987,7 +3474,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     <li>Use the synonym search to check existing mappings</li>
                   </ul>
 
-                  <h4 className="font-medium text-gray-900 mt-3">Manual Mapping</h4>
+                  <h4 className="font-medium text-gray-900 mt-3">
+                    Manual Mapping
+                  </h4>
                   <ul className="list-disc pl-4 space-y-1 text-gray-600">
                     <li>Use for complex specialty relationships</li>
                     <li>Create single-source mappings when needed</li>
@@ -3012,7 +3501,8 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-medium text-gray-900">
-                Suggested Matches for "{autoMapSuggestions.sourceSpecialty.specialty}"
+                Suggested Matches for "
+                {autoMapSuggestions.sourceSpecialty.specialty}"
                 <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
                   {autoMapSuggestions.sourceSpecialty.vendor}
                 </span>
@@ -3023,7 +3513,13 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                   onClick={() => acceptAllMatches(autoMapSuggestions, 0.9)}
                   className="px-3 py-1.5 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
                 >
-                  Accept All Matches ({autoMapSuggestions.suggestedMatches.filter(m => m.confidence >= 0.9).length})
+                  Accept All Matches (
+                  {
+                    autoMapSuggestions.suggestedMatches.filter(
+                      (m) => m.confidence >= 0.9
+                    ).length
+                  }
+                  )
                 </button>
                 <button
                   type="button"
@@ -3038,28 +3534,35 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
           <div className="px-6 py-4 max-h-96 overflow-y-auto">
             <div className="space-y-3">
               {autoMapSuggestions.suggestedMatches.map((match, index) => (
-                <div 
+                <div
                   key={`${match.specialty.vendor}:${match.specialty.specialty}`}
                   className={`flex items-center justify-between p-3 rounded-md border ${
-                    match.confidence >= 0.9 
-                      ? 'border-green-200 bg-green-50' 
-                      : match.confidence >= 0.7 
-                        ? 'border-yellow-200 bg-yellow-50' 
-                        : 'border-gray-200 bg-white'
+                    match.confidence >= 0.9
+                      ? "border-green-200 bg-green-50"
+                      : match.confidence >= 0.7
+                      ? "border-yellow-200 bg-yellow-50"
+                      : "border-gray-200 bg-white"
                   }`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center">
-                      <span className="font-medium text-gray-900">{match.specialty.specialty}</span>
+                      <span className="font-medium text-gray-900">
+                        {match.specialty.specialty}
+                      </span>
                       <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">
                         {match.specialty.vendor}
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-gray-500 flex items-center">
-                      <span className={`inline-block w-16 text-xs font-medium ${
-                        match.confidence >= 0.9 ? 'text-green-600' : 
-                        match.confidence >= 0.7 ? 'text-yellow-600' : 'text-gray-500'
-                      }`}>
+                      <span
+                        className={`inline-block w-16 text-xs font-medium ${
+                          match.confidence >= 0.9
+                            ? "text-green-600"
+                            : match.confidence >= 0.7
+                            ? "text-yellow-600"
+                            : "text-gray-500"
+                        }`}
+                      >
                         {Math.round(match.confidence * 100)}% match
                       </span>
                       <span className="ml-2">{match.reason}</span>
@@ -3082,7 +3585,9 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={() => acceptSuggestedMatches(autoMapSuggestions, [match])}
+                      onClick={() =>
+                        acceptSuggestedMatches(autoMapSuggestions, [match])
+                      }
                       className="px-3 py-1.5 text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
                     >
                       Accept Match
@@ -3098,4 +3603,4 @@ const SpecialtyMappingStudio: React.FC<SpecialtyMappingStudioProps> = ({
   );
 };
 
-export default SpecialtyMappingStudio; 
+export default SpecialtyMappingStudio;

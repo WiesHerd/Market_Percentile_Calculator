@@ -1,71 +1,109 @@
-import { NextResponse, NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import Papa from 'papaparse';
+import { NextResponse, NextRequest } from "next/server";
+import { prisma } from "@/lib/prisma";
+import Papa from "papaparse";
 
 export async function GET() {
   try {
+    console.log("Fetching surveys from database...");
     const surveys = await prisma.survey.findMany({
       include: {
         specialtyMappings: true,
-        data: true
+        data: true,
       },
       orderBy: {
-        uploadDate: 'desc'
-      }
+        uploadDate: "desc",
+      },
     });
 
+    console.log(`Found ${surveys.length} surveys in the database`);
+
+    if (surveys.length === 0) {
+      console.log("No surveys found in the database");
+      return NextResponse.json([]);
+    }
+
+    console.log("Sample survey data:", JSON.stringify(surveys[0], null, 2));
+
     // Transform the data to match the frontend's expected structure
-    const transformedSurveys = surveys.map(survey => ({
+    const transformedSurveys = surveys.map((survey) => ({
       id: survey.id,
       vendor: survey.vendor,
       year: survey.year,
       data: survey.data || [],
       columnMappings: survey.columnMappings,
-      specialtyMappings: survey.specialtyMappings.reduce((acc: any, mapping: any) => {
-        if (!acc[mapping.sourceSpecialty]) {
-          acc[mapping.sourceSpecialty] = {
-            mappedSpecialties: [],
-            notes: mapping.notes || '',
-            resolved: mapping.isVerified || false,
-            confidence: mapping.confidence || 0
-          };
-        }
-        acc[mapping.sourceSpecialty].mappedSpecialties.push(mapping.mappedSpecialty);
-        return acc;
-      }, {}),
-      mappingProgress: survey.mappingProgress || 0
+      specialtyMappings: survey.specialtyMappings.reduce(
+        (acc: any, mapping: any) => {
+          if (!acc[mapping.sourceSpecialty]) {
+            acc[mapping.sourceSpecialty] = {
+              mappedSpecialties: [],
+              notes: mapping.notes || "",
+              resolved: mapping.isVerified || false,
+              confidence: mapping.confidence || 0,
+            };
+          }
+          acc[mapping.sourceSpecialty].mappedSpecialties.push(
+            mapping.mappedSpecialty
+          );
+          return acc;
+        },
+        {}
+      ),
+      mappingProgress: survey.mappingProgress || 0,
     }));
+
+    console.log(
+      `Transformed ${transformedSurveys.length} surveys for frontend`
+    );
+    console.log(
+      "Sample transformed survey:",
+      JSON.stringify(transformedSurveys[0], null, 2)
+    );
 
     return NextResponse.json(transformedSurveys);
   } catch (error) {
-    console.error('Error fetching surveys:', error);
-    return NextResponse.json({ error: 'Failed to fetch surveys' }, { status: 500 });
+    console.error("Error fetching surveys:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch surveys" },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    console.log('Received POST request to /api/surveys');
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const vendor = formData.get('vendor') as string;
-    const year = formData.get('year') as string;
+    
+    const file = formData.get("file") as File;
+    const vendor = formData.get("vendor") as string;
+    const year = formData.get("year") as string;
+
+    console.log('Received form data:', {
+      file: file?.name,
+      vendor,
+      year,
+    });
 
     if (!file || !vendor || !year) {
+      console.error('Missing required fields:', { file: !!file, vendor: !!vendor, year: !!year });
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: "Missing required fields" },
         { status: 400 }
       );
     }
 
     const text = await file.text();
+    console.log('File contents (first 100 chars):', text.substring(0, 100));
+    
     const { data, errors } = Papa.parse(text, {
       header: true,
       skipEmptyLines: true,
     });
 
     if (errors.length > 0) {
+      console.error('CSV parsing errors:', errors);
       return NextResponse.json(
-        { error: 'Error parsing CSV file', details: errors },
+        { error: "Error parsing CSV file", details: errors },
         { status: 400 }
       );
     }
@@ -82,32 +120,35 @@ export async function POST(req: NextRequest) {
         p25: [/25.*(?:tcc|total.*cash|comp)/i, /tcc.*25/i],
         p50: [/50.*(?:tcc|total.*cash|comp)/i, /tcc.*50/i],
         p75: [/75.*(?:tcc|total.*cash|comp)/i, /tcc.*75/i],
-        p90: [/90.*(?:tcc|total.*cash|comp)/i, /tcc.*90/i]
+        p90: [/90.*(?:tcc|total.*cash|comp)/i, /tcc.*90/i],
       },
       wrvu: {
         p25: [/25.*(?:wrvu|rvu)/i, /wrvu.*25/i],
         p50: [/50.*(?:wrvu|rvu)/i, /wrvu.*50/i],
         p75: [/75.*(?:wrvu|rvu)/i, /wrvu.*75/i],
-        p90: [/90.*(?:wrvu|rvu)/i, /wrvu.*90/i]
+        p90: [/90.*(?:wrvu|rvu)/i, /wrvu.*90/i],
       },
       cf: {
         p25: [/25.*(?:cf|conversion)/i, /cf.*25/i],
         p50: [/50.*(?:cf|conversion)/i, /cf.*50/i],
         p75: [/75.*(?:cf|conversion)/i, /cf.*75/i],
-        p90: [/90.*(?:cf|conversion)/i, /cf.*90/i]
-      }
+        p90: [/90.*(?:cf|conversion)/i, /cf.*90/i],
+      },
     };
 
-    const findMatchingColumn = (patterns: RegExp[], columns: string[]): string | null => {
+    const findMatchingColumn = (
+      patterns: RegExp[],
+      columns: string[]
+    ): string | null => {
       for (const pattern of patterns) {
-        const match = columns.find(col => pattern.test(col));
+        const match = columns.find((col) => pattern.test(col));
         if (match) return match;
       }
       return null;
     };
 
     const columnMappings = {
-      specialty: findMatchingColumn(patterns.specialty, columns) || '',
+      specialty: findMatchingColumn(patterns.specialty, columns) || "",
       providerType: findMatchingColumn(patterns.providerType, columns),
       region: findMatchingColumn(patterns.region, columns),
       nOrgs: findMatchingColumn(patterns.nOrgs, columns),
@@ -116,20 +157,20 @@ export async function POST(req: NextRequest) {
         p25: findMatchingColumn(patterns.tcc.p25, columns),
         p50: findMatchingColumn(patterns.tcc.p50, columns),
         p75: findMatchingColumn(patterns.tcc.p75, columns),
-        p90: findMatchingColumn(patterns.tcc.p90, columns)
+        p90: findMatchingColumn(patterns.tcc.p90, columns),
       },
       wrvu: {
         p25: findMatchingColumn(patterns.wrvu.p25, columns),
         p50: findMatchingColumn(patterns.wrvu.p50, columns),
         p75: findMatchingColumn(patterns.wrvu.p75, columns),
-        p90: findMatchingColumn(patterns.wrvu.p90, columns)
+        p90: findMatchingColumn(patterns.wrvu.p90, columns),
       },
       cf: {
         p25: findMatchingColumn(patterns.cf.p25, columns),
         p50: findMatchingColumn(patterns.cf.p50, columns),
         p75: findMatchingColumn(patterns.cf.p75, columns),
-        p90: findMatchingColumn(patterns.cf.p90, columns)
-      }
+        p90: findMatchingColumn(patterns.cf.p90, columns),
+      },
     };
 
     // Create survey record with column mappings
@@ -137,25 +178,27 @@ export async function POST(req: NextRequest) {
       data: {
         vendor,
         year,
-        status: 'PROCESSING',
+        status: "PROCESSING",
         columnMappings,
         mappingProgress: 0,
       },
     });
 
+    // Helper functions for data processing
+    const parseNumber = (value: string | null) => {
+      if (!value) return null;
+      const cleaned = value.replace(/[$,]/g, "");
+      const num = parseFloat(cleaned);
+      return isNaN(num) ? null : num;
+    };
+
     // Process and save survey data using the detected mappings
     const surveyData = data.map((row: any) => {
       const getValue = (mapping: string | null) => mapping ? row[mapping] : null;
-      const parseNumber = (value: string | null) => {
-        if (!value) return null;
-        const cleaned = value.replace(/[$,]/g, '');
-        const num = parseFloat(cleaned);
-        return isNaN(num) ? null : num;
-      };
-
+      
       return {
         surveyId: survey.id,
-        specialty: getValue(columnMappings.specialty) || '',
+        specialty: getValue(columnMappings.specialty) || "",
         providerType: getValue(columnMappings.providerType),
         region: getValue(columnMappings.region),
         nOrgs: parseNumber(getValue(columnMappings.nOrgs)),
@@ -175,26 +218,47 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    await prisma.surveyData.createMany({
-      data: surveyData,
-    });
+    // Create specialty mappings for each unique specialty
+    const uniqueSpecialties = [...new Set(data.map((row: any) => {
+      const getValue = (mapping: string | null) => mapping ? row[mapping] : null;
+      return getValue(columnMappings.specialty) || "";
+    }))];
+    
+    const specialtyMappings = uniqueSpecialties.map(specialty => ({
+      surveyId: survey.id,
+      sourceSpecialty: specialty,
+      mappedSpecialty: specialty,
+      confidence: 1.0,
+      isVerified: true,
+    }));
 
-    // Update survey status to READY
-    await prisma.survey.update({
-      where: { id: survey.id },
-      data: { status: 'READY' },
-    });
+    // Save all data in a transaction
+    await prisma.$transaction([
+      prisma.surveyData.createMany({
+        data: surveyData,
+      }),
+      prisma.specialtyMapping.createMany({
+        data: specialtyMappings,
+      }),
+      prisma.survey.update({
+        where: { id: survey.id },
+        data: { 
+          status: "READY",
+          mappingProgress: 100,
+        },
+      }),
+    ]);
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       surveyId: survey.id,
       columnMappings,
-      message: 'Survey data uploaded successfully' 
+      message: "Survey data uploaded successfully",
     });
   } catch (error) {
-    console.error('Error uploading survey:', error);
+    console.error('Error in POST /api/surveys:', error);
     return NextResponse.json(
-      { error: 'Error uploading survey data' },
+      { error: "Failed to process survey upload" },
       { status: 500 }
     );
   }
@@ -202,10 +266,14 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(request: Request) {
   try {
-    const { id, vendor, year, data, specialtyMappings, columnMappings } = await request.json();
+    const { id, vendor, year, data, specialtyMappings, columnMappings } =
+      await request.json();
 
     if (!id) {
-      return NextResponse.json({ error: 'Survey ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Survey ID is required" },
+        { status: 400 }
+      );
     }
 
     const updateData: any = {
@@ -232,22 +300,27 @@ export async function PATCH(request: Request) {
             cfP25: row.cfP25,
             cfP50: row.cfP50,
             cfP75: row.cfP75,
-            cfP90: row.cfP90
-          }))
-        }
+            cfP90: row.cfP90,
+          })),
+        },
       }),
       ...(specialtyMappings && {
         specialtyMappings: {
           deleteMany: {},
-          create: specialtyMappings.map((mapping: { sourceSpecialty: string; mappedSpecialty: string }) => ({
-            sourceSpecialty: mapping.sourceSpecialty,
-            mappedSpecialty: mapping.mappedSpecialty,
-            isVerified: false,
-            confidence: 0,
-            notes: ''
-          }))
-        }
-      })
+          create: specialtyMappings.map(
+            (mapping: {
+              sourceSpecialty: string;
+              mappedSpecialty: string;
+            }) => ({
+              sourceSpecialty: mapping.sourceSpecialty,
+              mappedSpecialty: mapping.mappedSpecialty,
+              isVerified: false,
+              confidence: 0,
+              notes: "",
+            })
+          ),
+        },
+      }),
     };
 
     const survey = await prisma.survey.update({
@@ -255,39 +328,48 @@ export async function PATCH(request: Request) {
       data: updateData,
       include: {
         specialtyMappings: true,
-        data: true
-      }
+        data: true,
+      },
     });
 
     return NextResponse.json(survey);
   } catch (error) {
-    console.error('Error updating survey:', error);
-    return NextResponse.json({ error: 'Failed to update survey' }, { status: 500 });
+    console.error("Error updating survey:", error);
+    return NextResponse.json(
+      { error: "Failed to update survey" },
+      { status: 500 }
+    );
   }
 }
 
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: 'Survey ID is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: "Survey ID is required" },
+        { status: 400 }
+      );
     }
 
     // Delete related specialty mappings first
     await prisma.specialtyMapping.deleteMany({
-      where: { surveyId: id }
+      where: { surveyId: id },
     });
 
     // Then delete the survey (this will cascade delete survey data)
     const deletedSurvey = await prisma.survey.delete({
-      where: { id }
+      where: { id },
     });
 
     return NextResponse.json(deletedSurvey);
   } catch (error) {
-    console.error('Error deleting survey:', error);
-    return NextResponse.json({ error: 'Failed to delete survey' }, { status: 500 });
+    console.error("Error deleting survey:", error);
+    return NextResponse.json(
+      { error: "Failed to delete survey" },
+      { status: 500 }
+    );
   }
-} 
+}

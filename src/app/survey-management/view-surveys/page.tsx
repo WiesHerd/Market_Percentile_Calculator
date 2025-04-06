@@ -1,10 +1,13 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { MagnifyingGlassIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { LoadingScreen } from '@/components/ui/loading-screen';
+import { useState, useEffect } from "react";
+import {
+  MagnifyingGlassIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { LoadingScreen } from "@/components/ui/loading-screen";
 
 interface SurveyData {
   specialty: string;
@@ -37,8 +40,10 @@ interface UploadedSurvey {
 
 export default function ViewSurveysPage() {
   const [surveys, setSurveys] = useState<UploadedSurvey[]>([]);
-  const [selectedSurvey, setSelectedSurvey] = useState<UploadedSurvey | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSurvey, setSelectedSurvey] = useState<UploadedSurvey | null>(
+    null
+  );
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [showAggregated, setShowAggregated] = useState(false);
   const searchParams = useSearchParams();
@@ -46,74 +51,93 @@ export default function ViewSurveysPage() {
   useEffect(() => {
     const loadSurveys = async () => {
       try {
+        console.log("Starting to fetch surveys...");
         setLoading(true);
         // Fetch surveys from the API
-        const response = await fetch('/api/surveys');
+        const response = await fetch("/api/surveys");
         if (!response.ok) {
-          throw new Error('Failed to fetch surveys');
+          console.error(
+            "Failed to fetch surveys:",
+            response.status,
+            response.statusText
+          );
+          throw new Error("Failed to fetch surveys");
         }
         const dbSurveys = await response.json();
-        
+        console.log("Received surveys from API:", dbSurveys);
+
         // Transform the data into the expected format
-        const transformedSurveys: UploadedSurvey[] = dbSurveys.map((survey: any) => {
-          // Get all unique specialties from the survey data
-          const specialties = Array.from(new Set(
-            survey.data
-              .map((row: any) => String(row.specialty || ''))
-              .filter(Boolean)
-          )) as string[];
+        const transformedSurveys: UploadedSurvey[] = dbSurveys.map(
+          (survey: any) => {
+            console.log("Processing survey:", survey);
+            // Get all unique specialties from the survey data
+            const specialties = Array.from(
+              new Set(
+                survey.data
+                  .map((row: any) => String(row.specialty || ""))
+                  .filter(Boolean)
+              )
+            ) as string[];
+            console.log("Found specialties:", specialties);
 
-          // Create the transformed survey data
-          return {
-            id: survey.id,
-            vendor: survey.vendor,
-            year: survey.year,
-            data: specialties.map((specialty) => {
-              // Find the row that matches this specialty
-              const row = survey.data.find((r: any) => 
-                String(r.specialty) === specialty
-              );
+            // Create the transformed survey data
+            const transformed = {
+              id: survey.id,
+              vendor: survey.vendor,
+              year: survey.year,
+              data: specialties.map((specialty) => {
+                // Find the row that matches this specialty
+                const row = survey.data.find(
+                  (r: any) => String(r.specialty) === specialty
+                );
+                console.log("Processing specialty:", specialty, "row:", row);
 
-              if (!row) return { specialty };
+                if (!row) return { specialty };
 
-              // Transform the data using the database fields
-              return {
-                specialty,
-                tcc: {
-                  p25: row.tccP25 || 0,
-                  p50: row.tccP50 || 0,
-                  p75: row.tccP75 || 0,
-                  p90: row.tccP90 || 0
-                },
-                wrvu: {
-                  p25: row.wrvuP25 || 0,
-                  p50: row.wrvuP50 || 0,
-                  p75: row.wrvuP75 || 0,
-                  p90: row.wrvuP90 || 0
-                },
-                cf: {
-                  p25: row.cfP25 || 0,
-                  p50: row.cfP50 || 0,
-                  p75: row.cfP75 || 0,
-                  p90: row.cfP90 || 0
-                }
-              };
-            })
-          };
-        });
+                // Transform the data using the database fields
+                return {
+                  specialty,
+                  tcc: {
+                    p25: row.tccP25 || 0,
+                    p50: row.tccP50 || 0,
+                    p75: row.tccP75 || 0,
+                    p90: row.tccP90 || 0,
+                  },
+                  wrvu: {
+                    p25: row.wrvuP25 || 0,
+                    p50: row.wrvuP50 || 0,
+                    p75: row.wrvuP75 || 0,
+                    p90: row.wrvuP90 || 0,
+                  },
+                  cf: {
+                    p25: row.cfP25 || 0,
+                    p50: row.cfP50 || 0,
+                    p75: row.cfP75 || 0,
+                    p90: row.cfP90 || 0,
+                  },
+                };
+              }),
+            };
+            console.log("Transformed survey:", transformed);
+            return transformed;
+          }
+        );
 
+        console.log("Final transformed surveys:", transformedSurveys);
         setSurveys(transformedSurveys);
-        
+
         // Get surveyId from URL parameter
-        const surveyId = searchParams.get('surveyId');
+        const surveyId = searchParams.get("surveyId");
         if (surveyId) {
-          const selectedSurvey = transformedSurveys.find(s => s.id === surveyId);
+          const selectedSurvey = transformedSurveys.find(
+            (s) => s.id === surveyId
+          );
           setSelectedSurvey(selectedSurvey || transformedSurveys[0]);
         } else if (transformedSurveys.length > 0) {
           setSelectedSurvey(transformedSurveys[0]);
         }
       } catch (error) {
-        console.error('Error loading surveys:', error);
+        console.error("Error loading surveys:", error);
       } finally {
         setLoading(false);
       }
@@ -122,61 +146,73 @@ export default function ViewSurveysPage() {
     loadSurveys();
   }, [searchParams]);
 
-  const formatValue = (value: number | undefined, type: 'tcc' | 'wrvu' | 'cf'): string => {
-    if (value === undefined) return 'N/A';
-    
-    if (type === 'tcc') {
-      return value.toLocaleString('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 0
+  const formatValue = (
+    value: number | undefined,
+    type: "tcc" | "wrvu" | "cf"
+  ): string => {
+    if (value === undefined) return "N/A";
+
+    if (type === "tcc") {
+      return value.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
       });
-    } else if (type === 'wrvu') {
-      return value.toLocaleString('en-US', {
-        maximumFractionDigits: 2
+    } else if (type === "wrvu") {
+      return value.toLocaleString("en-US", {
+        maximumFractionDigits: 2,
       });
     } else {
-      return value.toLocaleString('en-US', {
-        style: 'currency',
-        currency: 'USD',
+      return value.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+        maximumFractionDigits: 2,
       });
     }
   };
 
   const formatVendorName = (vendor: string): string => {
     const vendorMap: Record<string, string> = {
-      'mgma': 'MGMA',
-      'MGMA': 'MGMA',
-      'sullivan': 'SullivanCotter',
-      'sullivancotter': 'SullivanCotter',
-      'SULLIVANCOTTER': 'SullivanCotter',
-      'SULLIVAN': 'SullivanCotter',
-      'SULLIVAN COTTER': 'SullivanCotter',
-      'SULLIVAN-COTTER': 'SullivanCotter',
-      'gallagher': 'Gallagher',
-      'GALLAGHER': 'Gallagher'
+      mgma: "MGMA",
+      MGMA: "MGMA",
+      sullivan: "SullivanCotter",
+      sullivancotter: "SullivanCotter",
+      SULLIVANCOTTER: "SullivanCotter",
+      SULLIVAN: "SullivanCotter",
+      "SULLIVAN COTTER": "SullivanCotter",
+      "SULLIVAN-COTTER": "SullivanCotter",
+      gallagher: "Gallagher",
+      GALLAGHER: "Gallagher",
     };
     return vendorMap[vendor.toLowerCase()] || vendor;
   };
 
   const aggregateData = (): SurveyData[] => {
     // Create a map to store aggregated values for each specialty
-    const specialtyMap = new Map<string, {
-      tcc: Array<{ sum: number, count: number }>,
-      wrvu: Array<{ sum: number, count: number }>,
-      cf: Array<{ sum: number, count: number }>
-    }>();
+    const specialtyMap = new Map<
+      string,
+      {
+        tcc: Array<{ sum: number; count: number }>;
+        wrvu: Array<{ sum: number; count: number }>;
+        cf: Array<{ sum: number; count: number }>;
+      }
+    >();
 
     // Process each survey
-    surveys.forEach(survey => {
-      survey.data.forEach(item => {
+    surveys.forEach((survey) => {
+      survey.data.forEach((item) => {
         if (!specialtyMap.has(item.specialty)) {
           specialtyMap.set(item.specialty, {
-            tcc: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
-            wrvu: Array(4).fill(null).map(() => ({ sum: 0, count: 0 })),
-            cf: Array(4).fill(null).map(() => ({ sum: 0, count: 0 }))
+            tcc: Array(4)
+              .fill(null)
+              .map(() => ({ sum: 0, count: 0 })),
+            wrvu: Array(4)
+              .fill(null)
+              .map(() => ({ sum: 0, count: 0 })),
+            cf: Array(4)
+              .fill(null)
+              .map(() => ({ sum: 0, count: 0 })),
           });
         }
 
@@ -184,7 +220,12 @@ export default function ViewSurveysPage() {
 
         // Aggregate TCC data
         if (item.tcc) {
-          const values = [item.tcc.p25, item.tcc.p50, item.tcc.p75, item.tcc.p90];
+          const values = [
+            item.tcc.p25,
+            item.tcc.p50,
+            item.tcc.p75,
+            item.tcc.p90,
+          ];
           values.forEach((value, index) => {
             if (value && value > 0) {
               specialtyData.tcc[index].sum += value;
@@ -195,7 +236,12 @@ export default function ViewSurveysPage() {
 
         // Aggregate WRVU data
         if (item.wrvu) {
-          const values = [item.wrvu.p25, item.wrvu.p50, item.wrvu.p75, item.wrvu.p90];
+          const values = [
+            item.wrvu.p25,
+            item.wrvu.p50,
+            item.wrvu.p75,
+            item.wrvu.p90,
+          ];
           values.forEach((value, index) => {
             if (value && value > 0) {
               specialtyData.wrvu[index].sum += value;
@@ -224,28 +270,28 @@ export default function ViewSurveysPage() {
         p25: data.tcc[0].count > 0 ? data.tcc[0].sum / data.tcc[0].count : 0,
         p50: data.tcc[1].count > 0 ? data.tcc[1].sum / data.tcc[1].count : 0,
         p75: data.tcc[2].count > 0 ? data.tcc[2].sum / data.tcc[2].count : 0,
-        p90: data.tcc[3].count > 0 ? data.tcc[3].sum / data.tcc[3].count : 0
+        p90: data.tcc[3].count > 0 ? data.tcc[3].sum / data.tcc[3].count : 0,
       },
       wrvu: {
         p25: data.wrvu[0].count > 0 ? data.wrvu[0].sum / data.wrvu[0].count : 0,
         p50: data.wrvu[1].count > 0 ? data.wrvu[1].sum / data.wrvu[1].count : 0,
         p75: data.wrvu[2].count > 0 ? data.wrvu[2].sum / data.wrvu[2].count : 0,
-        p90: data.wrvu[3].count > 0 ? data.wrvu[3].sum / data.wrvu[3].count : 0
+        p90: data.wrvu[3].count > 0 ? data.wrvu[3].sum / data.wrvu[3].count : 0,
       },
       cf: {
         p25: data.cf[0].count > 0 ? data.cf[0].sum / data.cf[0].count : 0,
         p50: data.cf[1].count > 0 ? data.cf[1].sum / data.cf[1].count : 0,
         p75: data.cf[2].count > 0 ? data.cf[2].sum / data.cf[2].count : 0,
-        p90: data.cf[3].count > 0 ? data.cf[3].sum / data.cf[3].count : 0
-      }
+        p90: data.cf[3].count > 0 ? data.cf[3].sum / data.cf[3].count : 0,
+      },
     }));
   };
 
   const filteredData = showAggregated
-    ? aggregateData().filter(item =>
+    ? aggregateData().filter((item) =>
         item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : selectedSurvey?.data.filter(item =>
+    : selectedSurvey?.data.filter((item) =>
         item.specialty.toLowerCase().includes(searchTerm.toLowerCase())
       ) || [];
 
@@ -258,13 +304,24 @@ export default function ViewSurveysPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-start space-x-4">
                 <div className="p-3 bg-white rounded-xl shadow-sm">
-                  <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                  <svg
+                    className="h-8 w-8 text-blue-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+                    />
                   </svg>
                 </div>
                 <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">Uploaded Surveys</h1>
+                  <h1 className="text-2xl font-semibold text-gray-900">
+                    Uploaded Surveys
+                  </h1>
                   <p className="mt-2 text-gray-600 max-w-2xl">
                     View and manage uploaded compensation survey data
                   </p>
@@ -273,14 +330,16 @@ export default function ViewSurveysPage() {
               <div className="flex items-center space-x-4">
                 {!showAggregated && (
                   <select
-                    value={selectedSurvey?.id || ''}
+                    value={selectedSurvey?.id || ""}
                     onChange={(e) => {
-                      const survey = surveys.find(s => s.id === e.target.value);
+                      const survey = surveys.find(
+                        (s) => s.id === e.target.value
+                      );
                       setSelectedSurvey(survey || null);
                     }}
                     className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    {surveys.map(survey => (
+                    {surveys.map((survey) => (
                       <option key={survey.id} value={survey.id}>
                         {formatVendorName(survey.vendor)}
                       </option>
@@ -291,11 +350,13 @@ export default function ViewSurveysPage() {
                   onClick={() => setShowAggregated(!showAggregated)}
                   className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
                     showAggregated
-                      ? 'border-blue-600 text-blue-600 bg-blue-50 hover:bg-blue-100'
-                      : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                      ? "border-blue-600 text-blue-600 bg-blue-50 hover:bg-blue-100"
+                      : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
                   }`}
                 >
-                  {showAggregated ? 'Show Individual Surveys' : 'Show Aggregated Data'}
+                  {showAggregated
+                    ? "Show Individual Surveys"
+                    : "Show Aggregated Data"}
                 </button>
                 <Link
                   href="/survey-management"
@@ -311,7 +372,8 @@ export default function ViewSurveysPage() {
         {selectedSurvey && (
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-center">
             <p className="text-sm text-gray-600">
-              Note: This is synthetic data generated for illustration purposes only and does not represent actual survey information.
+              Note: This is synthetic data generated for illustration purposes
+              only and does not represent actual survey information.
             </p>
           </div>
         )}
@@ -344,30 +406,48 @@ export default function ViewSurveysPage() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50">
+                      <th
+                        scope="col"
+                        className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50"
+                      >
                         Specialty
                       </th>
-                      <th colSpan={4} scope="col" className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
+                      <th
+                        colSpan={4}
+                        scope="col"
+                        className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l"
+                      >
                         Total Cash Compensation
                       </th>
-                      <th colSpan={4} scope="col" className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
+                      <th
+                        colSpan={4}
+                        scope="col"
+                        className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l"
+                      >
                         Work RVUs
                       </th>
-                      <th colSpan={4} scope="col" className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">
+                      <th
+                        colSpan={4}
+                        scope="col"
+                        className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l"
+                      >
                         Conversion Factor
                       </th>
                     </tr>
                     <tr>
-                      <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50">
+                      <th
+                        scope="col"
+                        className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50"
+                      >
                         &nbsp;
                       </th>
-                      {['tcc', 'wrvu', 'cf'].flatMap((metricType) => 
-                        ['25', '50', '75', '90'].map((percentile, index) => (
+                      {["tcc", "wrvu", "cf"].flatMap((metricType) =>
+                        ["25", "50", "75", "90"].map((percentile, index) => (
                           <th
                             key={`${metricType}-${percentile}`}
                             scope="col"
                             className={`px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider ${
-                              index === 0 ? 'border-l' : ''
+                              index === 0 ? "border-l" : ""
                             }`}
                           >
                             {percentile}th
@@ -378,22 +458,57 @@ export default function ViewSurveysPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredData.map((item, index) => (
-                      <tr key={item.specialty} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                      <tr
+                        key={item.specialty}
+                        className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
                         <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-inherit">
                           {item.specialty}
                         </td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">{item.tcc ? formatValue(item.tcc.p25, 'tcc') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.tcc ? formatValue(item.tcc.p50, 'tcc') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.tcc ? formatValue(item.tcc.p75, 'tcc') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.tcc ? formatValue(item.tcc.p90, 'tcc') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">{item.wrvu ? formatValue(item.wrvu.p25, 'wrvu') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.wrvu ? formatValue(item.wrvu.p50, 'wrvu') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.wrvu ? formatValue(item.wrvu.p75, 'wrvu') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.wrvu ? formatValue(item.wrvu.p90, 'wrvu') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">{item.cf ? formatValue(item.cf.p25, 'cf') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.cf ? formatValue(item.cf.p50, 'cf') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.cf ? formatValue(item.cf.p75, 'cf') : 'N/A'}</td>
-                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">{item.cf ? formatValue(item.cf.p90, 'cf') : 'N/A'}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">
+                          {item.tcc ? formatValue(item.tcc.p25, "tcc") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.tcc ? formatValue(item.tcc.p50, "tcc") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.tcc ? formatValue(item.tcc.p75, "tcc") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.tcc ? formatValue(item.tcc.p90, "tcc") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">
+                          {item.wrvu
+                            ? formatValue(item.wrvu.p25, "wrvu")
+                            : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.wrvu
+                            ? formatValue(item.wrvu.p50, "wrvu")
+                            : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.wrvu
+                            ? formatValue(item.wrvu.p75, "wrvu")
+                            : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.wrvu
+                            ? formatValue(item.wrvu.p90, "wrvu")
+                            : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900 border-l">
+                          {item.cf ? formatValue(item.cf.p25, "cf") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.cf ? formatValue(item.cf.p50, "cf") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.cf ? formatValue(item.cf.p75, "cf") : "N/A"}
+                        </td>
+                        <td className="px-3 py-2 whitespace-nowrap text-sm text-right text-gray-900">
+                          {item.cf ? formatValue(item.cf.p90, "cf") : "N/A"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -401,9 +516,13 @@ export default function ViewSurveysPage() {
 
                 {filteredData.length === 0 && (
                   <div className="text-center py-12">
-                    <h3 className="text-sm font-medium text-gray-900">No specialties found</h3>
+                    <h3 className="text-sm font-medium text-gray-900">
+                      No specialties found
+                    </h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      {searchTerm ? 'Try adjusting your search terms' : 'No specialties available in this survey'}
+                      {searchTerm
+                        ? "Try adjusting your search terms"
+                        : "No specialties available in this survey"}
                     </p>
                   </div>
                 )}
@@ -414,4 +533,4 @@ export default function ViewSurveysPage() {
       </div>
     </div>
   );
-} 
+}
