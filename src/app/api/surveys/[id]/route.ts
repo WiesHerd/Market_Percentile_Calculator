@@ -59,4 +59,39 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = params.id;
+
+    // Delete in a transaction to ensure all related data is deleted
+    await prisma.$transaction(async (tx) => {
+      // Delete survey data first
+      await tx.surveyData.deleteMany({
+        where: { surveyId: id }
+      });
+
+      // Delete specialty mappings
+      await tx.specialtyMapping.deleteMany({
+        where: { surveyId: id }
+      });
+
+      // Finally delete the survey
+      await tx.survey.delete({
+        where: { id }
+      });
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting survey:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete survey' },
+      { status: 500 }
+    );
+  }
 } 

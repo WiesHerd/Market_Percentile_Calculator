@@ -1,0 +1,3 @@
+specialty,provider_type,region,n_orgs,n_incumbents,tcc_p25,tcc_p50,tcc_p75,tcc_p90,wrvu_p25,wrvu_p50,wrvu_p75,wrvu_p90,cf_p25,cf_p50,cf_p75,cf_p90
+General Pediatrics,Chief of Pediatrics,National,100,500,500000,600000,700000,800000,5000,6000,7000,8000,50,60,70,80
+Cardiology,Chief of Cardiology,National,80,400,600000,700000,800000,900000,6000,7000,8000,9000,60,70,80,90 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon, UserGroupIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ArrowUpTrayIcon, DocumentTextIcon, ExclamationCircleIcon, CheckCircleIcon, XCircleIcon, DocumentChartBarIcon, ArrowPathIcon, CheckIcon, TableCellsIcon, ArrowDownTrayIcon, UserGroupIcon, TrashIcon } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import Papa, { ParseResult, ParseError as PapaParseError } from 'papaparse';
 import Select, { MultiValue, StylesConfig } from 'react-select';
@@ -16,6 +16,7 @@ import { Dialog, Transition } from '@headlessui/react';
 import { SpecialtyProgressDisplay } from '@/components/SpecialtyProgressDisplay';
 import { SpecialtyMappingTest } from '@/components/SpecialtyMappingTest';
 import { v4 as uuidv4 } from 'uuid';
+import { validateSurveyUpload, backupDataBeforeChange } from '@/utils/globalRules';
 
 interface ColumnMappingMetric {
   p25: string;
@@ -868,39 +869,60 @@ export default function SurveyManagementPage(): JSX.Element {
   };
 
   const handleFileUpload = async (file: File) => {
-    if (!selectedVendor || !selectedYear) {
-      toast.error('Please select a vendor and year');
+    // Validate using global rules
+    if (!validateSurveyUpload({
+      vendor: selectedVendor,
+      year: selectedYear,
+      file: file
+    })) {
       return;
     }
 
     setIsUploading(true);
     setUploadError(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('vendor', selectedVendor === 'custom' ? customVendorName : selectedVendor);
-    formData.append('year', selectedYear);
-
+    
     try {
-      const response = await fetch('/api/surveys', {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('vendor', selectedVendor === 'custom' ? customVendorName : selectedVendor);
+      formData.append('year', selectedYear);
+
+      // Get the API URL from environment or use the current origin
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+      
+      console.log('Attempting to upload to:', `${apiUrl}/api/surveys`);
+      console.log('Form data contents:', {
+        file: file.name,
+        vendor: selectedVendor === 'custom' ? customVendorName : selectedVendor,
+        year: selectedYear
+      });
+      
+      const response = await fetch(`${apiUrl}/api/surveys`, {
         method: 'POST',
+        // Don't set Content-Type header - let the browser set it with the boundary
         body: formData,
       });
 
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        console.error('Upload failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData
+        });
+        throw new Error(errorData.error || `Upload failed with status ${response.status}`);
       }
 
       const result = await response.json();
       setCurrentSurvey(result);
-      await loadSurveys(); // Refresh surveys from the database
+      await loadSurveys();
       toast.success('Survey uploaded successfully');
       setIsSurveySaved(true);
       setActiveStep('mapping');
     } catch (error) {
       console.error('Error uploading file:', error);
-      setUploadError('Failed to upload file');
-      toast.error('Failed to upload survey');
+      setUploadError(error instanceof Error ? error.message : String(error));
+      toast.error(`Failed to upload survey: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsUploading(false);
     }
@@ -1832,37 +1854,14 @@ export default function SurveyManagementPage(): JSX.Element {
                         </p>
                       </div>
                       <button
-                        onClick={async (e) => {
+                        onClick={(e) => {
                           e.preventDefault();
-                          if (!window.confirm('Are you sure you want to delete this survey?')) {
-                            return;
-                          }
-                          try {
-                            const response = await fetch(`/api/surveys/${survey.id}`, {
-                              method: 'DELETE',
-                            });
-                            
-                            if (!response.ok) {
-                              throw new Error('Failed to delete survey');
-                            }
-                            
-                            const index = uploadedSurveys.findIndex(s => s.id === survey.id);
-                            if (index !== -1) {
-                              const updatedSurveys = [...uploadedSurveys];
-                              updatedSurveys.splice(index, 1);
-                              setUploadedSurveys(updatedSurveys);
-                              localStorage.setItem('uploadedSurveys', JSON.stringify(updatedSurveys));
-                            }
-                          } catch (error) {
-                            console.error('Error deleting survey:', error);
-                            alert('Failed to delete survey. Please try again.');
-                          }
+                          handleDeleteSurvey(survey.id);
                         }}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-lg"
+                        className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                        title="Delete Survey"
                       >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <TrashIcon className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
@@ -2533,6 +2532,34 @@ export default function SurveyManagementPage(): JSX.Element {
     } catch (error) {
       console.error('Error saving template:', error);
       toast.error('Failed to save template');
+    }
+  };
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5558';
+
+  const handleDeleteSurvey = async (surveyId: string): Promise<void> => {
+    if (!window.confirm('Are you sure you want to delete this survey?')) {
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${apiUrl}/api/surveys/${surveyId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete survey');
+      }
+      
+      // Update the local state
+      setUploadedSurveys(prev => prev.filter(s => s.id !== surveyId));
+      toast.success('Survey deleted successfully');
+      
+      // Refresh the surveys list
+      await loadSurveys();
+    } catch (error) {
+      console.error('Error deleting survey:', error);
+      toast.error('Failed to delete survey. Please try again.');
     }
   };
 

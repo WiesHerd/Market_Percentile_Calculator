@@ -20,34 +20,26 @@ export async function GET(request: Request) {
   const surveyIds = searchParams.get("surveyIds")?.split(",");
 
   try {
-    const dbMappings = await prisma.specialtyMapping.findMany({
-      where: surveyIds?.length ? {
-        surveyId: {
-          in: surveyIds,
-        },
-      } : undefined,
+    const mappings = await prisma.specialtyMapping.findMany({
       include: {
         survey: {
           select: {
             vendor: true,
-            year: true
-          }
-        }
-      }
+            year: true,
+          },
+        },
+      },
     });
 
-    // Transform the data to include survey info
-    const mappings = dbMappings.map((mapping: DBSpecialtyMapping) => ({
-      sourceSpecialty: mapping.sourceSpecialty,
-      mappedSpecialty: mapping.mappedSpecialty,
-      notes: mapping.notes || undefined,
-      confidence: mapping.confidence,
+    // Transform mappings to include vendor and year directly
+    const transformedMappings = mappings.map((mapping) => ({
+      ...mapping,
       surveyId: mapping.surveyId,
       surveyVendor: mapping.survey.vendor,
       surveyYear: mapping.survey.year
     }));
 
-    return NextResponse.json({ mappings });
+    return NextResponse.json(transformedMappings);
   } catch (error) {
     console.error("Error fetching specialty mappings:", error);
     return NextResponse.json(

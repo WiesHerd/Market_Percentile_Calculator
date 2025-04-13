@@ -12,10 +12,12 @@ interface MappingState {
 }
 
 interface SpecialtyMapping {
+  id: string;
   sourceSpecialty: string;
   mappedSpecialty: string;
   notes?: string;
   confidence: number;
+  isVerified: boolean;
   surveyId: string;
   surveyVendor: string;
   surveyYear: string;
@@ -36,35 +38,65 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadMappings = async () => {
       try {
+        console.log("Fetching specialty mappings from API...");
         const response = await fetch('/api/specialty-mappings');
         if (!response.ok) {
+          // If there are no mappings yet, that's okay - just return empty state
+          if (response.status === 404) {
+            console.log("No specialty mappings found yet - this is expected for new surveys");
+            setSpecialtyMappings({});
+            return;
+          }
           throw new Error('Failed to fetch specialty mappings');
         }
-        const { mappings: dbMappings } = await response.json();
+        const mappings = await response.json();
+        console.log("Received specialty mappings:", mappings);
 
         // Convert API response to MappingState format
         const mappingState: MappingState = {};
-        (dbMappings as SpecialtyMapping[]).forEach(mapping => {
-          if (!mappingState[mapping.sourceSpecialty]) {
-            mappingState[mapping.sourceSpecialty] = {
-              mappedSpecialties: [],
-              notes: mapping.notes
+        
+        // Handle both array and object formats
+        if (Array.isArray(mappings)) {
+          mappings.forEach((mapping: SpecialtyMapping) => {
+            if (!mappingState[mapping.sourceSpecialty]) {
+              mappingState[mapping.sourceSpecialty] = {
+                mappedSpecialties: [],
+                notes: mapping.notes || "",
+                isSingleSource: false
+              };
+            }
+            mappingState[mapping.sourceSpecialty].mappedSpecialties.push(mapping.mappedSpecialty);
+          });
+        } else {
+          Object.entries(mappings).forEach(([sourceSpecialty, mapping]: [string, any]) => {
+            mappingState[sourceSpecialty] = {
+              mappedSpecialties: mapping.mappedSpecialties,
+              notes: mapping.notes || "",
+              isSingleSource: mapping.resolved
             };
-          }
-          mappingState[mapping.sourceSpecialty].mappedSpecialties.push(mapping.mappedSpecialty);
-        });
+          });
+        }
 
+        console.log("Transformed mapping state:", mappingState);
         setSpecialtyMappings(mappingState);
       } catch (error) {
-        console.error('Error loading specialty mappings:', error);
-        toast.error('Failed to load specialty mappings');
+        console.error("Error loading specialty mappings:", error);
+        // Don't show error toast for expected empty state
+        if (error instanceof Error && error.message !== 'Failed to fetch specialty mappings') {
+          toast.error("Failed to load specialty mappings");
+        }
       }
     };
 
     loadMappings();
   }, []);
 
-  const updateSpecialtyMapping = async (surveyId: string, sourceSpecialty: string, mappedSpecialties: string[], notes?: string) => {
+  const updateSpecialtyMapping = async (
+    surveyId: string,
+    sourceSpecialty: string,
+    mappedSpecialties: string[],
+    notes?: string
+  ) => {
     try {
       const response = await fetch('/api/specialty-mappings', {
         method: 'POST',
@@ -75,24 +107,23 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
           surveyId,
           sourceSpecialty,
           mappedSpecialties,
-          notes
+          notes,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update specialty mappings');
+        throw new Error('Failed to update specialty mapping');
       }
 
-      // Update state
+      // Update local state
       setSpecialtyMappings(prev => ({
         ...prev,
         [sourceSpecialty]: {
           mappedSpecialties,
-          notes
+          notes: notes || "",
+          isSingleSource: mappedSpecialties.length === 1
         }
       }));
-
-      toast.success('Specialty mapping updated successfully');
     } catch (error) {
       console.error('Error updating specialty mapping:', error);
       toast.error('Failed to update specialty mapping');
@@ -115,20 +146,23 @@ export function SurveyProvider({ children }: { children: React.ReactNode }) {
       // Load associated specialty mappings
       const mappingsResponse = await fetch(`/api/specialty-mappings?surveyIds=${surveyId}`);
       if (!mappingsResponse.ok) {
+        // If there are no mappings yet, that's okay
+        if (mappingsResponse.status === 404) {
+          console.log("No specialty mappings found for survey - this is expected for new surveys");
+          return;
+        }
         throw new Error('Failed to fetch specialty mappings');
       }
       const { mappings } = await mappingsResponse.json();
 
       // Convert to MappingState format
       const mappingState: MappingState = {};
-      (mappings as SpecialtyMapping[]).forEach(mapping => {
-        if (!mappingState[mapping.sourceSpecialty]) {
-          mappingState[mapping.sourceSpecialty] = {
-            mappedSpecialties: [],
-            notes: mapping.notes
-          };
-        }
-        mappingState[mapping.sourceSpecialty].mappedSpecialties.push(mapping.mappedSpecialty);
+      Object.entries(mappings).forEach(([sourceSpecialty, mapping]: [string, any]) => {
+        mappingState[sourceSpecialty] = {
+          mappedSpecialties: mapping.mappedSpecialties,
+          notes: mapping.notes || "",
+          isSingleSource: mapping.resolved
+        };
       });
 
       setSpecialtyMappings(mappingState);

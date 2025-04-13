@@ -3,16 +3,14 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    // First check if the table exists by trying to count records
-    const count = await prisma.surveyTemplate.count();
-    console.log(`Found ${count} templates`);
-    
+    console.log('Fetching templates from database...');
     const templates = await prisma.surveyTemplate.findMany({
       orderBy: {
         updatedAt: 'desc'
       }
     });
 
+    console.log('Found', templates.length, 'templates');
     return NextResponse.json(templates);
   } catch (error) {
     console.error('Error fetching templates:', error);

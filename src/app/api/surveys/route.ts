@@ -1,6 +1,23 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import Papa from "papaparse";
+import type { ParseResult } from "papaparse";
+import { z } from 'zod';
+import { getErrorMessage } from '@/lib/utils';
+
+// Define the expected row structure
+interface SurveyRow {
+  specialty: string;
+  [key: string]: string | undefined;
+}
+
+// Add type for Papa Parse error handler
+interface ParseError {
+  type: string;
+  code: string;
+  message: string;
+  row: number;
+}
 
 export async function GET() {
   try {
@@ -63,29 +80,57 @@ export async function GET() {
   } catch (error) {
     console.error("Error fetching surveys:", error);
     return NextResponse.json(
-      { error: "Failed to fetch surveys" },
+      { error: "Failed to fetch surveys", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
+  console.log('POST /api/surveys: Starting to process request');
   try {
     console.log('Received POST request to /api/surveys');
+    
+    // Check content type
+    const contentType = req.headers.get('content-type');
+    console.log('Content-Type:', contentType);
+    
+    if (!contentType?.includes('multipart/form-data')) {
+      console.error('Invalid content type:', contentType);
+      return NextResponse.json(
+        { error: "Content type must be multipart/form-data" },
+        { status: 400 }
+      );
+    }
+
     const formData = await req.formData();
     
     const file = formData.get("file") as File;
     const vendor = formData.get("vendor") as string;
     const year = formData.get("year") as string;
 
+    // Log all form data fields
+    console.log('Form data fields:', Array.from(formData.keys()));
+    
     console.log('Received form data:', {
       file: file?.name,
+      fileSize: file?.size,
       vendor,
       year,
+      fileType: file?.type,
     });
 
     if (!file || !vendor || !year) {
-      console.error('Missing required fields:', { file: !!file, vendor: !!vendor, year: !!year });
+      console.error('Missing required fields:', { 
+        fileExists: !!file, 
+        vendorExists: !!vendor, 
+        yearExists: !!year,
+        fileDetails: file ? {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        } : 'No file'
+      });
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
@@ -93,23 +138,54 @@ export async function POST(req: NextRequest) {
     }
 
     const text = await file.text();
-    console.log('File contents (first 100 chars):', text.substring(0, 100));
+    console.log('File contents preview:', {
+      firstLine: text.split('\n')[0],
+      totalLines: text.split('\n').length,
+      totalLength: text.length
+    });
     
-    const { data, errors } = Papa.parse(text, {
-      header: true,
-      skipEmptyLines: true,
+    // Parse CSV data
+    const parseResult = await new Promise<ParseResult<SurveyRow>>((resolve, reject) => {
+      Papa.parse<SurveyRow>(text, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => resolve(results),
+        error: (error) => reject(new Error(error.message)),
+      });
     });
 
-    if (errors.length > 0) {
-      console.error('CSV parsing errors:', errors);
+    const { data: csvData, errors: parseErrors, meta } = parseResult;
+
+    console.log('Parsing complete:', {
+      rowCount: csvData.length,
+      errorCount: parseErrors.length,
+      fields: meta.fields
+    });
+
+    if (parseErrors.length > 0) {
+      console.error('CSV parsing errors:', parseErrors);
       return NextResponse.json(
-        { error: "Error parsing CSV file", details: errors },
+        { error: "Error parsing CSV file", details: parseErrors },
         { status: 400 }
       );
     }
 
+    if (!csvData.length) {
+      console.error('No data found in CSV file');
+      return NextResponse.json(
+        { error: "No data found in CSV file" },
+        { status: 400 }
+      );
+    }
+
+    console.log('CSV parsing results:', {
+      rowCount: csvData.length,
+      columnCount: Object.keys(csvData[0] || {}).length,
+      sampleRow: csvData[0]
+    });
+
     // Auto-detect column mappings
-    const columns = Object.keys(data[0] || {});
+    const columns = Object.keys(csvData[0] || {});
     const patterns = {
       specialty: [/specialty/i, /provider.*type/i, /physician.*type/i],
       providerType: [/provider.*type/i, /physician.*type/i, /role/i],
@@ -193,7 +269,7 @@ export async function POST(req: NextRequest) {
     };
 
     // Process and save survey data using the detected mappings
-    const surveyData = data.map((row: any) => {
+    const surveyData = csvData.map((row: any) => {
       const getValue = (mapping: string | null) => mapping ? row[mapping] : null;
       
       return {
@@ -219,10 +295,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Create specialty mappings for each unique specialty
-    const uniqueSpecialties = [...new Set(data.map((row: any) => {
-      const getValue = (mapping: string | null) => mapping ? row[mapping] : null;
-      return getValue(columnMappings.specialty) || "";
-    }))];
+    const uniqueSpecialties = [...new Set(csvData.map(row => row.specialty || ''))];
     
     const specialtyMappings = uniqueSpecialties.map(specialty => ({
       surveyId: survey.id,
@@ -233,21 +306,37 @@ export async function POST(req: NextRequest) {
     }));
 
     // Save all data in a transaction
-    await prisma.$transaction([
-      prisma.surveyData.createMany({
-        data: surveyData,
-      }),
-      prisma.specialtyMapping.createMany({
-        data: specialtyMappings,
-      }),
-      prisma.survey.update({
-        where: { id: survey.id },
-        data: { 
-          status: "READY",
-          mappingProgress: 100,
-        },
-      }),
-    ]);
+    try {
+      console.log('Attempting to save data to database in a transaction...');
+      await prisma.$transaction([
+        prisma.surveyData.createMany({
+          data: surveyData,
+        }),
+        prisma.specialtyMapping.createMany({
+          data: specialtyMappings,
+        }),
+        prisma.survey.update({
+          where: { id: survey.id },
+          data: { 
+            status: "READY",
+            mappingProgress: 100,
+          },
+        }),
+      ]);
+      console.log('Transaction completed successfully');
+    } catch (dbError) {
+      console.error('Database transaction failed:', dbError);
+      return NextResponse.json(
+        { error: "Failed to save survey data to database", details: String(dbError) },
+        { status: 500 }
+      );
+    }
+
+    console.log('Survey upload completed successfully:', {
+      surveyId: survey.id,
+      rowCount: surveyData.length,
+      specialtyCount: specialtyMappings.length
+    });
 
     return NextResponse.json({
       success: true,
@@ -257,8 +346,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error('Error in POST /api/surveys:', error);
+    // Return a more detailed error response
     return NextResponse.json(
-      { error: "Failed to process survey upload" },
+      { 
+        error: "Error uploading survey data", 
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

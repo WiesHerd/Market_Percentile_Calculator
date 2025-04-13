@@ -1,0 +1,1097 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Percentile Calculator Project Rules
+
+
+## Migration Strategy: LocalStorage to Prisma
+- Track migration progress by component
+  ```typescript
+  // Migration status tracking
+  interface MigrationStatus {
+    component: string;
+    status: 'pending' | 'in-progress' | 'completed';
+    hasLocalData: boolean;
+    hasPrismaData: boolean;
+  }
+  ```
+
+## Error Handling Standards
+- Fix current error patterns seen in logs:
+  ```typescript
+  // Current error in logs
+  console.error("Error:", error);
+  // Should be changed to
+  console.error("Error:", { 
+    message: error.message,
+    stack: error.stack,
+    cause: error.cause 
+  });
+  ```
+
+## Database Architecture (Prisma)
+- Current Tables:
+  - Survey
+  - SpecialtyMapping
+  - Template
+- Required Environment:
+  ```env
+  DATABASE_URL="file:./dev.db"
+  NEXT_PUBLIC_API_URL="http://localhost:3000"
+  ```
+
+## API Routes Error Handling
+- Fix current patterns in:
+  - /api/surveys/route.ts
+  - /api/specialty-mappings/route.ts
+  - /api/templates/route.ts
+
+## Migration Checklist
+1. Data Migration Components:
+   - [ ] Survey Management
+   - [ ] Specialty Mappings
+   - [ ] Templates
+   - [ ] Column Mappings
+
+2. LocalStorage Cleanup:
+   - [ ] Identify all localStorage usage
+   - [ ] Create Prisma models
+   - [ ] Migrate existing data
+   - [ ] Remove localStorage code
+
+## Development Environment
+- Running Services:
+  - Next.js on http://localhost:3000
+  - Prisma Studio on http://localhost:5555
+  - Network access on http://10.5.0.2:3000
+
+## Known Issues
+1. Error Handling:
+   ```typescript
+   // Fix payload errors in:
+   src/app/api/specialty-mappings/route.ts:52
+   src/app/api/templates/route.ts:18
+   src/app/api/surveys/route.ts:64
+   ```
+
+2. Configuration:
+   - Remove 'swcMinify' from next.config.js
+   - Update environment variables
+
+## Data Models
+1. Survey Data Structure:
+   ```typescript
+   interface SurveyData {
+     specialty: string;
+     providerType: string;
+     region: string;
+     nOrgs: number;
+     nIncumbents: number;
+     tccP25: number;
+     tccP50: number;
+     tccP75: number;
+     tccP90: number;
+     // ... other fields
+   }
+   ```
+
+2. Specialty Mappings:
+   ```typescript
+   interface SpecialtyMapping {
+     mappedSpecialties: string[];
+     notes: string;
+     resolved: boolean;
+     confidence: number;
+   }
+   ```
+
+## API Standards
+- Error Response Format:
+  ```typescript
+  interface ErrorResponse {
+    error: string;
+    details?: unknown;
+    status: number;
+  }
+  ```
+
+## Testing Requirements
+1. Database Operations:
+   - Test connection
+   - Validate migrations
+   - Check data integrity
+
+2. API Routes:
+   - Verify error handling
+   - Test data validation
+   - Check response formats
+
+## Performance Guidelines
+1. Database Queries:
+   - Use proper indexes
+   - Implement pagination
+   - Cache frequent queries
+
+2. Data Loading:
+   - Implement loading states
+   - Handle large datasets
+   - Show progress indicators
+
+## Security Standards
+1. Data Validation:
+   - Sanitize inputs
+   - Validate file uploads
+   - Check data types
+
+2. Error Handling:
+   - Hide internal errors
+   - Log security issues
+   - Sanitize error messages
+
+## Migration Process
+1. Phase 1: Database Setup
+   - [x] Initialize Prisma
+   - [x] Create schema
+   - [ ] Test connection
+
+2. Phase 2: Data Migration
+   - [ ] Export localStorage data
+   - [ ] Transform to Prisma format
+   - [ ] Import to database
+
+3. Phase 3: Code Updates
+   - [ ] Update API routes
+   - [ ] Modify components
+   - [ ] Add error handling
+
+4. Phase 4: Testing
+   - [ ] Verify data integrity
+   - [ ] Test functionality
+   - [ ] Performance testing
+
+## File Structure
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── surveys/
+│   │   ├── specialty-mappings/
+│   │   └── templates/
+│   └── survey-management/
+├── components/
+└── lib/
+    └── prisma/
+```
+
+@src/app/api/surveys/route.ts
+@src/app/api/specialty-mappings/route.ts
+@src/app/api/templates/route.ts
+@prisma/schema.prisma
+## Testing Requirements
+
+1. Survey Upload Testing
+   ```typescript
+   describe('Survey Upload', () => {
+     it('should handle MGMA file upload', async () => {
+       // Test MGMA specific patterns
+       const patterns = SURVEY_PATTERNS['MGMA'];
+     })
+
+     it('should handle CUSTOM file upload', async () => {
+       // Test custom upload patterns
+       const patterns = SURVEY_PATTERNS['CUSTOM'];
+     })
+
+     it('should validate column mappings', () => {
+       // Test required fields:
+       // - specialty
+       // - provider_type
+       // - geographic_region
+       // - n_orgs
+       // - n_incumbents
+     })
+   })
+   ```
+
+2. Specialty Mapping Tests
+   ```typescript
+   describe('Specialty Mapping', () => {
+     it('should handle auto-mapping', () => {
+       // Test calculateStringSimilarity
+       // Test confidence thresholds
+       // Verify mapping suggestions
+     })
+
+     it('should track mapping progress', () => {
+       // Test calculateSpecialtyProgress
+       // Verify progress calculations
+       // Check progress updates
+     })
+
+     it('should handle manual mappings', () => {
+       // Test handleSpecialtyMappingChange
+       // Verify mapping updates
+       // Check state persistence
+     })
+   })
+   ```
+
+3. Data Migration Tests
+   ```typescript
+   describe('LocalStorage to Prisma Migration', () => {
+     beforeEach(async () => {
+       // Setup test database
+       await prisma.$executeRaw`DELETE FROM surveys`;
+       await prisma.$executeRaw`DELETE FROM specialty_mappings`;
+       await prisma.$executeRaw`DELETE FROM survey_data`;
+     })
+
+     it('should migrate survey data', async () => {
+       // Setup localStorage data
+       const mockLocalStorage = {
+         uploadedSurveys: [/* mock data */],
+         specialtyMappings: [/* mock data */]
+       };
+
+       // Test migration
+       await migrateSurveyData(mockLocalStorage);
+
+       // Verify Prisma data
+       const surveys = await prisma.survey.findMany({
+         include: {
+           data: true,
+           specialtyMappings: true
+         }
+       });
+
+       // Assert data integrity
+     })
+
+     it('should handle partial migrations', async () => {
+       // Test interrupted migrations
+       // Verify data consistency
+       // Check error handling
+     })
+   })
+   ```
+
+4. API Route Tests
+   ```typescript
+   describe('API Routes', () => {
+     describe('/api/surveys', () => {
+       it('should handle file upload', async () => {
+         // Test file processing
+         // Verify column detection
+         // Check data transformation
+       })
+
+       it('should create survey record', async () => {
+         // Test survey creation
+         // Verify relationships
+         // Check computed fields
+       })
+     })
+
+     describe('/api/specialty-mappings', () => {
+       it('should handle mapping updates', async () => {
+         // Test mapping creation
+         // Verify confidence scores
+         // Check notes and verification
+       })
+     })
+   })
+   ```
+
+5. Component Tests
+   ```typescript
+   describe('SurveyManagementPage', () => {
+     it('should handle step transitions', () => {
+       // Test upload -> mapping -> specialties -> preview
+     })
+
+     it('should validate data before proceeding', () => {
+       // Test validation rules
+       // Check error messages
+       // Verify progress tracking
+     })
+   })
+
+   describe('SpecialtyMappingStudio', () => {
+     it('should handle specialty matching', () => {
+       // Test matching algorithm
+       // Verify UI updates
+       // Check state management
+     })
+   })
+   ```
+
+6. Database Tests
+   ```typescript
+   describe('Prisma Operations', () => {
+     it('should handle survey relationships', async () => {
+       // Test cascade deletes
+       // Verify foreign key constraints
+       // Check data integrity
+     })
+
+     it('should handle concurrent operations', async () => {
+       // Test transaction handling
+       // Verify race conditions
+       // Check error recovery
+     })
+   })
+   ```
+
+7. Performance Tests
+   ```typescript
+   describe('Performance', () => {
+     it('should handle large datasets', async () => {
+       // Test with 1000+ records
+       // Verify memory usage
+       // Check response times
+     })
+
+     it('should optimize specialty matching', async () => {
+       // Test matching algorithm speed
+       // Verify batch processing
+       // Check memory efficiency
+     })
+   })
+   ```
+
+// ... rest of existing code ...
+
+# Percentile Calculator Project Rules
+
+## Migration Strategy: LocalStorage to Prisma
+- Track migration progress by component
+  ```typescript
+  // Migration status tracking
+  interface MigrationStatus {
+    component: string;
+    status: 'pending' | 'in-progress' | 'completed';
+    hasLocalData: boolean;
+    hasPrismaData: boolean;
+  }
+  ```
+
+## Error Handling Standards
+- Fix current error patterns seen in logs:
+  ```typescript
+  // Current error in logs
+  console.error("Error:", error);
+  // Should be changed to
+  console.error("Error:", { 
+    message: error.message,
+    stack: error.stack,
+    cause: error.cause 
+  });
+  ```
+
+## Database Architecture (Prisma)
+- Current Tables:
+  - Survey
+  - SpecialtyMapping
+  - Template
+- Required Environment:
+  ```env
+  DATABASE_URL="file:./dev.db"
+  NEXT_PUBLIC_API_URL="http://localhost:3000"
+  ```
+
+## API Routes Error Handling
+- Fix current patterns in:
+  - /api/surveys/route.ts
+  - /api/specialty-mappings/route.ts
+  - /api/templates/route.ts
+
+## Migration Checklist
+1. Data Migration Components:
+   - [ ] Survey Management
+   - [ ] Specialty Mappings
+   - [ ] Templates
+   - [ ] Column Mappings
+
+2. LocalStorage Cleanup:
+   - [ ] Identify all localStorage usage
+   - [ ] Create Prisma models
+   - [ ] Migrate existing data
+   - [ ] Remove localStorage code
+
+## Development Environment
+- Running Services:
+  - Next.js on http://localhost:3000
+  - Prisma Studio on http://localhost:5555
+  - Network access on http://10.5.0.2:3000
+
+## Known Issues
+1. Error Handling:
+   ```typescript
+   // Fix payload errors in:
+   src/app/api/specialty-mappings/route.ts:52
+   src/app/api/templates/route.ts:18
+   src/app/api/surveys/route.ts:64
+   ```
+
+2. Configuration:
+   - Remove 'swcMinify' from next.config.js
+   - Update environment variables
+
+## Data Models
+1. Survey Data Structure:
+   ```typescript
+   interface SurveyData {
+     specialty: string;
+     providerType: string;
+     region: string;
+     nOrgs: number;
+     nIncumbents: number;
+     tccP25: number;
+     tccP50: number;
+     tccP75: number;
+     tccP90: number;
+     // ... other fields
+   }
+   ```
+
+2. Specialty Mappings:
+   ```typescript
+   interface SpecialtyMapping {
+     mappedSpecialties: string[];
+     notes: string;
+     resolved: boolean;
+     confidence: number;
+   }
+   ```
+
+## API Standards
+- Error Response Format:
+  ```typescript
+  interface ErrorResponse {
+    error: string;
+    details?: unknown;
+    status: number;
+  }
+  ```
+
+## Testing Requirements
+1. Testing Tools & Setup
+   ```json
+   {
+     "devDependencies": {
+       "jest": "^29.7.0",
+       "jest-environment-jsdom": "^29.7.0",
+       "@testing-library/react": "^16.2.0",
+       "@testing-library/jest-dom": "^6.6.3"
+     }
+   }
+   ```
+
+2. Test File Structure
+   ```
+   __tests__/
+   ├── unit/
+   │   ├── components/
+   │   ├── utils/
+   │   └── hooks/
+   ├── integration/
+   │   ├── api/
+   │   └── database/
+   └── e2e/
+       └── flows/
+   ```
+
+3. Unit Testing Requirements
+   - Component Tests:
+     ```typescript
+     describe('ComponentName', () => {
+       beforeEach(() => {
+         // Setup Prisma mock
+         jest.mock('@prisma/client')
+       })
+
+       it('should render correctly', () => {
+         // Test implementation
+       })
+
+       it('should handle data loading states', () => {
+         // Test loading states
+       })
+
+       it('should handle error states', () => {
+         // Test error handling
+       })
+     })
+     ```
+
+4. Database Testing
+   - Mock Prisma Client:
+     ```typescript
+     // prisma.mock.ts
+     export const mockPrisma = {
+       survey: {
+         create: jest.fn(),
+         findMany: jest.fn(),
+         update: jest.fn(),
+         delete: jest.fn(),
+       },
+       specialtyMapping: {
+         // ... mock methods
+       }
+     }
+     ```
+   - Test Cases:
+     - Connection handling
+     - Transaction rollback
+     - Error scenarios
+     - Data integrity
+
+5. API Route Testing
+   ```typescript
+   // Example API test
+   describe('/api/surveys', () => {
+     it('should handle file upload', async () => {
+       // Test implementation
+     })
+
+     it('should validate CSV data', async () => {
+       // Test implementation
+     })
+
+     it('should handle migration from localStorage', async () => {
+       // Test implementation
+     })
+   })
+   ```
+
+6. Migration Testing
+   - Data Consistency Tests:
+     ```typescript
+     describe('Migration Tests', () => {
+       it('should correctly migrate localStorage data to Prisma', async () => {
+         // Setup test data in localStorage
+         // Run migration
+         // Verify Prisma data matches
+       })
+
+       it('should handle partial migrations', async () => {
+         // Test interrupted migrations
+       })
+
+       it('should validate data integrity', async () => {
+         // Compare data structures
+       })
+     })
+     ```
+
+7. Performance Testing
+   - Load Testing:
+     - Large dataset handling
+     - Concurrent requests
+     - Memory usage monitoring
+   - Response Times:
+     - API endpoints
+     - Database queries
+     - Data transformations
+
+8. Test Coverage Requirements
+   ```json
+   {
+     "jest": {
+       "coverageThreshold": {
+         "global": {
+           "branches": 80,
+           "functions": 80,
+           "lines": 80,
+           "statements": 80
+         }
+       }
+     }
+   }
+   ```
+
+9. Testing Scripts
+   ```json
+   {
+     "scripts": {
+       "test": "jest",
+       "test:watch": "jest --watch",
+       "test:coverage": "jest --coverage",
+       "test:e2e": "jest --config jest.config.e2e.js",
+       "test:migration": "jest --config jest.config.migration.js"
+     }
+   }
+   ```
+
+10. Testing Guidelines
+    - Write tests before migration
+    - Test both old and new implementations
+    - Verify data consistency
+    - Test error scenarios
+    - Monitor performance impact
+    - Document test cases
+
+11. Continuous Integration
+    - Run tests on every PR
+    - Verify coverage requirements
+    - Test database migrations
+    - Check performance metrics
+    - Validate data integrity
+
+12. Test Environment Setup
+    ```env
+    # test.env
+    DATABASE_URL="file:./test.db"
+    NEXT_PUBLIC_API_URL="http://localhost:3000"
+    NODE_ENV="test"
+    ```
+
+## Performance Guidelines
+1. Database Queries:
+   - Use proper indexes
+   - Implement pagination
+   - Cache frequent queries
+
+2. Data Loading:
+   - Implement loading states
+   - Handle large datasets
+   - Show progress indicators
+
+## Security Standards
+1. Data Validation:
+   - Sanitize inputs
+   - Validate file uploads
+   - Check data types
+
+2. Error Handling:
+   - Hide internal errors
+   - Log security issues
+   - Sanitize error messages
+
+## Migration Process
+1. Phase 1: Database Setup
+   - [x] Initialize Prisma
+   - [x] Create schema
+   - [ ] Test connection
+
+2. Phase 2: Data Migration
+   - [ ] Export localStorage data
+   - [ ] Transform to Prisma format
+   - [ ] Import to database
+
+3. Phase 3: Code Updates
+   - [ ] Update API routes
+   - [ ] Modify components
+   - [ ] Add error handling
+
+4. Phase 4: Testing
+   - [ ] Verify data integrity
+   - [ ] Test functionality
+   - [ ] Performance testing
+
+## File Structure
+```
+src/
+├── app/
+│   ├── api/
+│   │   ├── surveys/
+│   │   ├── specialty-mappings/
+│   │   └── templates/
+│   └── survey-management/
+├── components/
+└── lib/
+    └── prisma/
+```
+
+@src/app/api/surveys/route.ts
+@src/app/api/specialty-mappings/route.ts
+@src/app/api/templates/route.ts
+@prisma/schema.prisma 
+
+## Testing Requirements
+
+1. Survey Upload Testing
+   ```typescript
+   describe('Survey Upload', () => {
+     it('should handle MGMA file upload', async () => {
+       // Test MGMA specific patterns
+       const patterns = SURVEY_PATTERNS['MGMA'];
+     })
+
+     it('should handle CUSTOM file upload', async () => {
+       // Test custom upload patterns
+       const patterns = SURVEY_PATTERNS['CUSTOM'];
+     })
+
+     it('should validate column mappings', () => {
+       // Test required fields:
+       // - specialty
+       // - provider_type
+       // - geographic_region
+       // - n_orgs
+       // - n_incumbents
+     })
+   })
+   ```
+
+2. Specialty Mapping Tests
+   ```typescript
+   describe('Specialty Mapping', () => {
+     it('should handle auto-mapping', () => {
+       // Test calculateStringSimilarity
+       // Test confidence thresholds
+       // Verify mapping suggestions
+     })
+
+     it('should track mapping progress', () => {
+       // Test calculateSpecialtyProgress
+       // Verify progress calculations
+       // Check progress updates
+     })
+
+     it('should handle manual mappings', () => {
+       // Test handleSpecialtyMappingChange
+       // Verify mapping updates
+       // Check state persistence
+     })
+   })
+   ```
+
+3. Data Migration Tests
+   ```typescript
+   describe('LocalStorage to Prisma Migration', () => {
+     beforeEach(async () => {
+       // Setup test database
+       await prisma.$executeRaw`DELETE FROM surveys`;
+       await prisma.$executeRaw`DELETE FROM specialty_mappings`;
+       await prisma.$executeRaw`DELETE FROM survey_data`;
+     })
+
+     it('should migrate survey data', async () => {
+       // Setup localStorage data
+       const mockLocalStorage = {
+         uploadedSurveys: [/* mock data */],
+         specialtyMappings: [/* mock data */]
+       };
+
+       // Test migration
+       await migrateSurveyData(mockLocalStorage);
+
+       // Verify Prisma data
+       const surveys = await prisma.survey.findMany({
+         include: {
+           data: true,
+           specialtyMappings: true
+         }
+       });
+
+       // Assert data integrity
+     })
+
+     it('should handle partial migrations', async () => {
+       // Test interrupted migrations
+       // Verify data consistency
+       // Check error handling
+     })
+   })
+   ```
+
+4. API Route Tests
+   ```typescript
+   describe('API Routes', () => {
+     describe('/api/surveys', () => {
+       it('should handle file upload', async () => {
+         // Test file processing
+         // Verify column detection
+         // Check data transformation
+       })
+
+       it('should create survey record', async () => {
+         // Test survey creation
+         // Verify relationships
+         // Check computed fields
+       })
+     })
+
+     describe('/api/specialty-mappings', () => {
+       it('should handle mapping updates', async () => {
+         // Test mapping creation
+         // Verify confidence scores
+         // Check notes and verification
+       })
+     })
+   })
+   ```
+
+5. Component Tests
+   ```typescript
+   describe('SurveyManagementPage', () => {
+     it('should handle step transitions', () => {
+       // Test upload -> mapping -> specialties -> preview
+     })
+
+     it('should validate data before proceeding', () => {
+       // Test validation rules
+       // Check error messages
+       // Verify progress tracking
+     })
+   })
+
+   describe('SpecialtyMappingStudio', () => {
+     it('should handle specialty matching', () => {
+       // Test matching algorithm
+       // Verify UI updates
+       // Check state management
+     })
+   })
+   ```
+
+6. Database Tests
+   ```typescript
+   describe('Prisma Operations', () => {
+     it('should handle survey relationships', async () => {
+       // Test cascade deletes
+       // Verify foreign key constraints
+       // Check data integrity
+     })
+
+     it('should handle concurrent operations', async () => {
+       // Test transaction handling
+       // Verify race conditions
+       // Check error recovery
+     })
+   })
+   ```
+
+7. Performance Tests
+   ```typescript
+   describe('Performance', () => {
+     it('should handle large datasets', async () => {
+       // Test with 1000+ records
+       // Verify memory usage
+       // Check response times
+     })
+
+     it('should optimize specialty matching', async () => {
+       // Test matching algorithm speed
+       // Verify batch processing
+       // Check memory efficiency
+     })
+   })
+   ``` 
+
+## AWS Deployment Configuration
+1. Infrastructure Setup
+   ```yaml
+   # AWS Infrastructure
+   services:
+     database:
+       type: RDS
+       engine: PostgreSQL
+       version: "15.x"
+       size: t3.micro
+     
+     application:
+       type: ECS
+       cpu: 0.5
+       memory: 1GB
+       autoscaling:
+         min: 1
+         max: 3
+     
+     storage:
+       type: S3
+       buckets:
+         - name: survey-uploads
+         - name: backup-data
+   ```
+
+2. Environment Configuration
+   ```env
+   # Production Environment
+   DATABASE_URL="postgresql://..."
+   AWS_REGION="us-east-1"
+   AWS_S3_BUCKET="survey-uploads"
+   NODE_ENV="production"
+   ```
+
+3. Security Setup
+   - VPC Configuration
+   - Security Groups
+   - IAM Roles and Policies
+   - SSL/TLS Certificates
+
+## CI/CD Pipeline
+1. GitHub Actions Workflow
+   ```yaml
+   name: Deploy to AWS
+   on:
+     push:
+       branches: [main]
+   
+   jobs:
+     test:
+       # Run tests
+     build:
+       # Build application
+     deploy:
+       # Deploy to AWS
+   ```
+
+2. Deployment Stages
+   - Development
+   - Staging
+   - Production
+
+3. Quality Gates
+   - Test Coverage (80%)
+   - Code Quality Checks
+   - Security Scans
+
+## Monitoring and Logging
+1. AWS CloudWatch Setup
+   - Application Logs
+   - Performance Metrics
+   - Custom Dashboards
+
+2. Alert Configuration
+   ```typescript
+   interface AlertThresholds {
+     errorRate: number;
+     responseTime: number;
+     databaseConnections: number;
+     memoryUsage: number;
+   }
+   ```
+
+3. Health Checks
+   - API Endpoints
+   - Database Connection
+   - File Upload Service
+
+## Backup and Recovery
+1. Database Backups
+   - Daily Snapshots
+   - Point-in-Time Recovery
+   - Cross-Region Replication
+
+2. Data Recovery Procedures
+   - Database Restore
+   - Application State Recovery
+   - Migration Rollback
+
+## Documentation Requirements
+1. Technical Documentation
+   - API Documentation
+   - Database Schema
+   - Component Architecture
+
+2. User Documentation
+   - Upload Guidelines
+   - Mapping Instructions
+   - Error Resolution
+
+3. Deployment Documentation
+   - AWS Setup Guide
+   - Environment Configuration
+   - Monitoring Setup
+
+## Code Quality Standards
+1. TypeScript Configuration
+   ```json
+   {
+     "compilerOptions": {
+       "strict": true,
+       "noImplicitAny": true,
+       "noUnusedLocals": true,
+       "noUnusedParameters": true
+     }
+   }
+   ```
+
+2. ESLint Rules
+   ```json
+   {
+     "extends": [
+       "next/core-web-vitals",
+       "plugin:@typescript-eslint/recommended"
+     ],
+     "rules": {
+       "@typescript-eslint/no-explicit-any": "error",
+       "@typescript-eslint/explicit-function-return-type": "error"
+     }
+   }
+   ```
+
+3. Prettier Configuration
+   ```json
+   {
+     "semi": true,
+     "singleQuote": false,
+     "tabWidth": 2,
+     "printWidth": 80
+   }
+   ```
+
+## Performance Requirements
+1. Load Time Targets
+   - First Load: < 2s
+   - Subsequent Loads: < 1s
+   - API Response: < 500ms
+
+2. Resource Optimization
+   - Bundle Size < 250KB
+   - Image Optimization
+   - Code Splitting
+
+3. Database Performance
+   - Query Time < 100ms
+   - Connection Pool: 5-10
+   - Index Optimization
+
+## Error Recovery Procedures
+1. Migration Failures
+   ```typescript
+   interface MigrationRecovery {
+     backupData(): Promise<void>;
+     validateBackup(): Promise<boolean>;
+     restoreFromBackup(): Promise<void>;
+     logRecoveryAttempt(): void;
+   }
+   ```
+
+2. Data Inconsistency
+   - Validation Checks
+   - Repair Procedures
+   - Manual Recovery Steps
+
+3. Service Disruption
+   - Fallback Procedures
+   - Communication Plan
+   - Recovery Checklist
+
+## Accessibility Standards
+1. WCAG Compliance
+   - Level AA Conformance
+   - Keyboard Navigation
+   - Screen Reader Support
+
+2. UI Requirements
+   - Color Contrast: 4.5:1
+   - Focus Indicators
+   - Error Announcements
+
+3. Form Accessibility
+   - Input Labels
+   - Error Messages
+   - Helper Text
+
+@src/app/api/surveys/route.ts
+@src/app/api/specialty-mappings/route.ts
+@src/app/api/templates/route.ts
+@prisma/schema.prisma 
+
+
+

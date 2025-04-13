@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE "survey_templates" ADD COLUMN     "lastUsed" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
